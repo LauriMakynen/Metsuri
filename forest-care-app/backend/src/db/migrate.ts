@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import pool from './pool';
 
 // Database migration script - creates all required tables

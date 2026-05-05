@@ -71,39 +71,108 @@ forest-care-app/
 ## Paikallinen kehitys
 
 ### Vaatimukset
-- Node.js 20+
-- Docker ja Docker Compose (tietokantaa varten)
+- Node.js 20.19+ (tai 22.12+)
+- Docker + Docker Compose
+- npm
 
-### 1. Käynnistä tietokanta (PostgreSQL + PostGIS)
+### Ensimmäinen käyttöönotto
+
+1. Käynnistä tietokanta:
 
 ```bash
 cd forest-care-app
-docker-compose up db -d
+docker compose up -d db
 ```
 
-### 2. Käynnistä backend
+2. Ota backend käyttöön:
 
 ```bash
 cd backend
-cp .env.example .env   # Muokkaa tarvittaessa
+cp .env.example .env
 npm install
-npm run migrate        # Luo tietokantataulut
-npm run dev            # Käynnistä kehityspalvelin portilla 3001
+npm run migrate
 ```
 
-### 3. Käynnistä frontend
+3. Ota frontend käyttöön:
 
 ```bash
-cd frontend
-cp .env.example .env   # Muokkaa tarvittaessa
+cd ../frontend
+cp .env.example .env
 npm install
-npm run dev            # Käynnistä Vite portilla 5173
 ```
 
-### 4. Avaa selaimessa
+4. Käynnistä kehityspalvelimet kahdessa eri terminaalissa:
 
+```bash
+# Terminaali 1
+cd forest-care-app/backend
+npm run dev
+
+# Terminaali 2
+cd forest-care-app/frontend
+npm run dev
+```
+
+5. Avaa selaimessa:
 - Frontend: http://localhost:5173
-- Backend API: http://localhost:3001
+- Backend health: http://localhost:3001/health
+
+### Seuraavan kerran käynnistys (nopea rutiini)
+
+Kun riippuvuudet ja .env-tiedostot on jo tehty, käytä tätä:
+
+```bash
+# Projektin juuressa
+cd forest-care-app
+docker compose up -d db
+
+# Terminaali 1
+cd backend
+npm run migrate
+npm run dev
+
+# Terminaali 2
+cd ../frontend
+npm run dev
+```
+
+Kun lopetat työskentelyn:
+
+```bash
+# Projektin juuressa
+docker compose stop
+```
+
+## Miten jatkan kehitystä
+
+Suositeltu etenemisjärjestys joka kerta:
+
+1. Vedä uusimmat muutokset ja käynnistä sovellus nopealla rutiinilla.
+2. Testaa perusflow heti alussa:
+	 - Rekisteröinti
+	 - Kirjautuminen
+	 - Suojattu datahaku (esim. properties/markings)
+3. Tee muutos pieninä paloina:
+	 - Backend-reitti tai logiikka
+	 - Frontend-kutsu palveluun
+	 - UI-muutos
+4. Aja vähintään nämä tarkistukset ennen committia:
+	 - Backend käynnistyy ilman virheitä
+	 - Frontend käynnistyy ilman virheitä
+	 - Muutettu toiminto toimii selaimessa
+5. Kirjoita commit-viesti muodossa: feat/fix/chore + lyhyt kuvaus.
+
+## Yleisimmät ongelmat
+
+- Jos saat virheen "client password must be a string":
+	- tarkista että backend/.env on olemassa
+	- tarkista että DATABASE_URL on asetettu
+
+- Jos saat virheen "npm not recognized" Windows PowerShellissa:
+	- aja komennot WSL:n puolella (Ubuntu-terminaali)
+
+- Jos frontend build/dev kaatuu Node-versioon:
+	- päivitä Node versioon 20.19+ (tai 22.12+)
 
 ---
 
