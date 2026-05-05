@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth';
 import propertiesRoutes from './routes/properties';
 import markingsRoutes from './routes/markings';
@@ -17,10 +18,28 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Rate limiting for auth endpoints - strict limit to prevent brute-force attacks
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// General API rate limiter for authenticated routes
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300,
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/properties', propertiesRoutes);
-app.use('/api/markings', markingsRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/properties', apiLimiter, propertiesRoutes);
+app.use('/api/markings', apiLimiter, markingsRoutes);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {
