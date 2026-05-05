@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with PostGIS extension for geographic data
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: forest_care_db
+    environment:
+      POSTGRES_DB: forest_care
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Node.js Express backend
+  backend:
+    build: ./backend
+    container_name: forest_care_backend
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:password@db:5432/forest_care
+      JWT_SECRET: change-this-in-production
+      JWT_EXPIRES_IN: 7d
+      FRONTEND_URL: http://localhost:5173
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/src:/app/src
+
+volumes:
+  postgres_data:
