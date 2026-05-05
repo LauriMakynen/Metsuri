@@ -1,12 +1,17 @@
+// Load environment variables first, before any other imports.
+// dotenv/config reads the .env file and injects values into process.env.
+// Without this, DATABASE_URL (and DB_PASSWORD) would be undefined when the
+// pg Pool is created, causing:
+//   "SASL: SCRAM-SERVER-FIRST-MESSAGE: client password must be a string"
+// because pg expects a string password, not undefined.
+import 'dotenv/config';
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth';
 import propertiesRoutes from './routes/properties';
 import markingsRoutes from './routes/markings';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
