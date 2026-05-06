@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import pool from '../db/pool';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { isValidPropertyCode } from '../services/cadastreService';
 
 const router = Router();
 
@@ -11,7 +12,9 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
-      `SELECT id, name, ST_AsGeoJSON(geometry)::json AS geometry, created_at
+      `SELECT id, name, property_code, source, area_ha,
+              ST_AsGeoJSON(geometry)::json AS geometry,
+              created_at, updated_at
        FROM properties
        WHERE user_id = $1
        ORDER BY created_at DESC`,
@@ -36,14 +39,88 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     // Store geometry as PostGIS geometry from GeoJSON
     const result = await pool.query(
-      `INSERT INTO properties (user_id, name, geometry)
-       VALUES ($1, $2, ST_GeomFromGeoJSON($3))
-       RETURNING id, name, ST_AsGeoJSON(geometry)::json AS geometry, created_at`,
+      `INSERT INTO properties (user_id, name, geometry, source)
+       VALUES ($1, $2, ST_GeomFromGeoJSON($3), 'manual')
+       RETURNING id, name, property_code, source, area_ha,
+                 ST_AsGeoJSON(geometry)::json AS geometry,
+                 created_at, updated_at`,
       [req.userId, name, JSON.stringify(geometry)]
     );
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Create property error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/properties/import - Save a cadastre search result as user's property
+router.post('/import', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { name, property_code, geometry, area_ha } = req.body;
+
+  if (!property_code || !geometry) {
+    res.status(400).json({ error: 'Property code and geometry are required' });
+    return;
+  }
+
+  if (!isValidPropertyCode(property_code)) {
+    res.status(400).json({ error: 'Kiinteistötunnus on väärässä muodossa' });
+    return;
+  }
+
+  const resolvedName = typeof name === 'string' && name.trim()
+    ? name.trim()
+    : `Kiinteisto ${property_code}`;
+
+  try {
+    const result = await pool.query(
+      `INSERT INTO properties (user_id, name, property_code, source, area_ha, geometry)
+       VALUES ($1, $2, $3, 'cadastre', $4, ST_GeomFromGeoJSON($5))
+       RETURNING id, name, property_code, source, area_ha,
+                 ST_AsGeoJSON(geometry)::json AS geometry,
+                 created_at, updated_at`,
+      [req.userId, resolvedName, property_code, area_ha || null, JSON.stringify(geometry)]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    const pgError = error as { code?: string };
+    if (pgError.code === '23505') {
+      res.status(409).json({ error: 'Kiinteistö on jo tallennettu omiin kiinteistöihin' });
+      return;
+    }
+    console.error('Import property error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/properties/:id/markings - Get markings for one property the user owns
+router.get('/:id/markings', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  try {
+    const propCheck = await pool.query(
+      'SELECT id FROM properties WHERE id = $1 AND user_id = $2',
+      [id, req.userId]
+    );
+
+    if (propCheck.rows.length === 0) {
+      res.status(404).json({ error: 'Property not found' });
+      return;
+    }
+
+    const result = await pool.query(
+      `SELECT id, property_id, type, geometry_type, title, description,
+              ST_AsGeoJSON(geometry)::json AS geometry,
+              created_at, updated_at
+       FROM markings
+       WHERE user_id = $1 AND property_id = $2
+       ORDER BY created_at DESC`,
+      [req.userId, id]
+    );
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get property markings error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -60,7 +137,7 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
 
   try {
     // Build update query dynamically based on provided fields
-    const updates: string[] = [];
+    const updates: string[] = ['updated_at = NOW()'];
     const values: unknown[] = [];
     let paramCount = 1;
 
@@ -78,7 +155,9 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
     const result = await pool.query(
       `UPDATE properties SET ${updates.join(', ')}
        WHERE id = $${paramCount++} AND user_id = $${paramCount}
-       RETURNING id, name, ST_AsGeoJSON(geometry)::json AS geometry, created_at`,
+       RETURNING id, name, property_code, source, area_ha,
+                 ST_AsGeoJSON(geometry)::json AS geometry,
+                 created_at, updated_at`,
       values
     );
 
@@ -112,6 +191,80 @@ router.delete('/:id', async (req: AuthRequest, res: Response): Promise<void> => 
     res.json({ message: 'Property deleted' });
   } catch (error) {
     console.error('Delete property error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/properties/:id/forest-data - Forest stand data for a property
+// Returns placeholder until Metsäkeskus API integration is connected.
+router.get('/:id/forest-data', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const propCheck = await pool.query(
+      'SELECT id FROM properties WHERE id = $1 AND user_id = $2',
+      [id, req.userId]
+    );
+    if (propCheck.rows.length === 0) {
+      res.status(404).json({ error: 'Property not found' });
+      return;
+    }
+
+    const result = await pool.query(
+      `SELECT * FROM forest_stand_data
+       WHERE property_id = $1 AND user_id = $2
+       ORDER BY created_at DESC LIMIT 1`,
+      [id, req.userId]
+    );
+
+    if (result.rows.length === 0) {
+      res.json({
+        status: 'not_available',
+        message: 'Metsävaratietoja ei ole vielä saatavilla tälle kiinteistölle.',
+        data: null,
+      });
+      return;
+    }
+
+    res.json({ status: 'available', data: result.rows[0] });
+  } catch (error) {
+    console.error('Get forest data error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/properties/:id/valuation - Forest valuation for a property
+// Returns placeholder until timber price data integration is connected.
+router.get('/:id/valuation', async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  try {
+    const propCheck = await pool.query(
+      'SELECT id FROM properties WHERE id = $1 AND user_id = $2',
+      [id, req.userId]
+    );
+    if (propCheck.rows.length === 0) {
+      res.status(404).json({ error: 'Property not found' });
+      return;
+    }
+
+    const result = await pool.query(
+      `SELECT * FROM forest_valuation
+       WHERE property_id = $1 AND user_id = $2
+       ORDER BY created_at DESC LIMIT 1`,
+      [id, req.userId]
+    );
+
+    if (result.rows.length === 0) {
+      res.json({
+        status: 'not_available',
+        message: 'Arviota ei voida laskea ilman puustotietoja.',
+        data: null,
+      });
+      return;
+    }
+
+    res.json({ status: 'available', data: result.rows[0] });
+  } catch (error) {
+    console.error('Get valuation error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

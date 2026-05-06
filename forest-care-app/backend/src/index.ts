@@ -5,6 +5,8 @@ import rateLimit from 'express-rate-limit';
 import authRoutes from './routes/auth';
 import propertiesRoutes from './routes/properties';
 import markingsRoutes from './routes/markings';
+import cadastreRoutes from './routes/cadastre';
+import mapRoutes from './routes/map';
 
 dotenv.config();
 
@@ -36,10 +38,21 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// More strict limiter for external cadastre lookups
+const cadastreLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 80,
+  message: { error: 'Too many cadastre searches, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // API Routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/properties', apiLimiter, propertiesRoutes);
 app.use('/api/markings', apiLimiter, markingsRoutes);
+app.use('/api/cadastre', cadastreLimiter, cadastreRoutes);
+app.use('/api/map', apiLimiter, mapRoutes);
 
 // Health check endpoint
 app.get('/health', (_req, res) => {

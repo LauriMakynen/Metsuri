@@ -55,6 +55,10 @@ forest-care-app/
 |--------|-------|--------|
 | GET | `/api/properties` | Hae kaikki kiinteistöt |
 | POST | `/api/properties` | Luo kiinteistö |
+| POST | `/api/properties/import` | Tuo kiinteistö kiinteistötunnushausta |
+| GET | `/api/properties/:id/markings` | Hae valitun kiinteistön merkinnät |
+| GET | `/api/properties/:id/forest-data` | Metsävaratiedot (placeholder) |
+| GET | `/api/properties/:id/valuation` | Arviolaskenta (placeholder) |
 | PUT | `/api/properties/:id` | Päivitä kiinteistö |
 | DELETE | `/api/properties/:id` | Poista kiinteistö |
 
@@ -62,9 +66,17 @@ forest-care-app/
 | Metodi | Polku | Kuvaus |
 |--------|-------|--------|
 | GET | `/api/markings` | Hae kaikki merkinnät |
+| GET | `/api/markings?propertyId=123` | Hae yhden kiinteistön merkinnät |
 | POST | `/api/markings` | Luo merkintä |
 | PUT | `/api/markings/:id` | Päivitä merkintä |
 | DELETE | `/api/markings/:id` | Poista merkintä |
+
+### Kiinteistötunnushaku ja karttatasot
+| Metodi | Polku | Kuvaus |
+|--------|-------|--------|
+| GET | `/api/cadastre/search/:propertyCode` | Hae kiinteistö kiinteistötunnuksella |
+| GET | `/api/map/layers` | Hae karttatasojen asetukset |
+| GET | `/api/map/tiles/:style/:z/:x/:y` | MML-tiiliproxy (`maastokartta`, `peruskartta`, `ortokuva`) |
 
 ---
 
@@ -168,6 +180,81 @@ Suositeltu etenemisjärjestys joka kerta:
 	- tarkista että backend/.env on olemassa
 	- tarkista että DATABASE_URL on asetettu
 
+## MML API-avain ja mock-data
+
+Backend tukee Maanmittauslaitoksen avainta ilman kovakoodausta.
+
+- Lisää backendiin:
+	- `MML_API_KEY=<avaimesi>`
+	- `MML_CADASTRE_API_URL=<rajapinnan URL, jossa {propertyCode}>`
+- **Jos MML-asetuksia ei ole, kiinteistöhaku palauttaa virheen tuotannossa:**
+  `"Kiinteistöhaku ei ole käytettävissä ilman MML API -asetuksia."`
+- Kehityksessä (`NODE_ENV=development`) haku käyttää automaattisesti mock-geometriaa
+  selkeällä varoituksella lokissa – tämä on vain kehitysaikana, ei tuotantokäyttöön.
+
+Frontendissä voi käyttää vaihtoehtoisesti suoraa MML-tiilikutsua:
+
+- `VITE_MML_API_KEY=<avaimesi>`
+
+Jos backendin MML-avain on asetettu, frontend käyttää ensisijaisesti backendin `/api/map/tiles/...`-proxya, jolloin avain ei näy selaimen tile-URL:issa.
+
+## Karttatasojen vaihto
+
+Map-näkymässä voi vaihtaa tasoa:
+
+- **Maastokartta** – MML maastokartta (tai OSM, jos MML-avainta ei ole)
+- **Ortokuva** – MML ortokuva / Esri World Imagery
+- **Kiinteistörajat** – MML kiinteistörajat ja tunnukset overlay-tasona
+
+Kiinteistörajat-painike näkyy vain, jos MML API -avain on asetettu (backend tai frontend).
+Taso tulee pohjakartan päälle läpinäkyvänä kerroksena — se ei korvaa maastokarttaa tai ortokuvaa.
+
+Tasovalitsin on sijoitettu kartan oikeaan yläkulmaan niin, ettei se peitä alareunan piirtotyökaluja mobiilissa.
+
+## Kiinteistötunnushaku
+
+Tuettu syötemuoto on esimerkiksi `145-410-43-16`.
+
+Käytös:
+
+- virheellinen formaatti: `Kiinteistötunnus on väärässä muodossa`
+- ei tulosta: `Kiinteistöä ei löytynyt`
+- MML-rajapintaa ei ole määritelty: `Kiinteistöhaku ei ole käytettävissä ilman MML API -asetuksia`
+- rajapintavirhe: `Kiinteistön haku epäonnistui`
+
+Hakutuloksen voi tallentaa omiin kiinteistöihin painikkeella `Tallenna omiin kiinteistöihin`.
+Saman tunnuksen tuplistallentaminen estetään (409-virhe näytetään käyttäjälle).
+
+## Metsävaratiedot ja arvio
+
+### forest-data (`GET /api/properties/:id/forest-data`)
+
+Palauttaa kiinteistön puustotiedot (mänty, kuusi, koivu, muut, yhteensä m³).
+
+**Tila:** Ei vielä kytketty Metsäkeskuksen avoimeen metsätietorajapintaan.
+Reitti on olemassa ja tietomalli valmis – integrointia varten katso
+`backend/src/services/forestDataService.ts`.
+
+Vastaus, kun dataa ei ole:
+```json
+{ "status": "not_available", "message": "Metsävaratietoja ei ole vielä saatavilla tälle kiinteistölle.", "data": null }
+```
+
+### valuation (`GET /api/properties/:id/valuation`)
+
+Palauttaa kiinteistön arviolaskennan (puuston arvo, maapohja, yhteensä €).
+
+**Tila:** Ei vielä kytketty. Arviolaskenta vaatii puustotiedot ja alueelliset kantohintaindeksit.
+Tietomalli (`forest_valuation`-taulu) on luotu tulevaa toteutusta varten.
+
+Vastaus, kun dataa ei ole:
+```json
+{ "status": "not_available", "message": "Arviota ei voida laskea ilman puustotietoja.", "data": null }
+```
+
+**Laskennan logiikka (tuleva toteutus):**
+`estimated_value_eur = Σ (puulajikohtainen m³ * alueellinen kantohinta €/m³) + maapohjan arvio €`
+
 - Jos saat virheen "npm not recognized" Windows PowerShellissa:
 	- aja komennot WSL:n puolella (Ubuntu-terminaali)
 
@@ -201,8 +288,27 @@ Suositeltu etenemisjärjestys joka kerta:
 
 ```sql
 users (id, email, password_hash, created_at)
-properties (id, user_id, name, geometry[PostGIS], created_at)
-markings (id, user_id, property_id, type, geometry_type, title, description, geometry[PostGIS], created_at, updated_at)
+
+properties (
+  id, user_id, name,
+  property_code TEXT,          -- kiinteistötunnus, esim. 145-410-43-16
+  source TEXT DEFAULT 'manual',-- 'manual' | 'cadastre'
+  area_ha NUMERIC,             -- pinta-ala hehtaareissa (valinnainen)
+  geometry GEOMETRY(4326),     -- PostGIS-polygoni
+  created_at, updated_at
+)
+-- Uniikki rajoite: sama käyttäjä ei voi tallentaa samaa kiinteistötunnusta kahdesti
+-- UNIQUE INDEX (user_id, property_code) WHERE property_code IS NOT NULL
+
+markings (
+  id, user_id,
+  property_id INTEGER,         -- viittaa properties.id (SET NULL jos kiinteistö poistetaan)
+  type VARCHAR(50),            -- vesakonhoito | istutus | harvennus | avohakkuu | muu_tyo
+  geometry_type VARCHAR(20),   -- point | line | area | note
+  title, description,
+  geometry GEOMETRY(4326),     -- PostGIS-geometria
+  created_at, updated_at
+)
 ```
 
 ---

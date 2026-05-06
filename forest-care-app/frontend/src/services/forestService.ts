@@ -1,5 +1,15 @@
 import api from './api';
-import type { Property, Marking, GeoJSONGeometry, MarkingType, GeometryType } from '../types';
+import type {
+  Property,
+  Marking,
+  GeoJSONGeometry,
+  MarkingType,
+  GeometryType,
+  CadastreFeature,
+  MapLayerConfig,
+  ForestDataResponse,
+  ForestValuationResponse,
+} from '../types';
 
 // Auth API calls
 export const authService = {
@@ -40,12 +50,38 @@ export const propertiesService = {
   delete: async (id: number): Promise<void> => {
     await api.delete(`/api/properties/${id}`);
   },
+
+  importFromCadastre: async (data: {
+    name?: string;
+    property_code: string;
+    geometry: GeoJSONGeometry;
+    area_ha?: number;
+  }): Promise<Property> => {
+    const response = await api.post<Property>('/api/properties/import', data);
+    return response.data;
+  },
+
+  getMarkings: async (propertyId: number): Promise<Marking[]> => {
+    const response = await api.get<Marking[]>(`/api/properties/${propertyId}/markings`);
+    return response.data;
+  },
+
+  getForestData: async (propertyId: number): Promise<ForestDataResponse> => {
+    const response = await api.get<ForestDataResponse>(`/api/properties/${propertyId}/forest-data`);
+    return response.data;
+  },
+
+  getValuation: async (propertyId: number): Promise<ForestValuationResponse> => {
+    const response = await api.get<ForestValuationResponse>(`/api/properties/${propertyId}/valuation`);
+    return response.data;
+  },
 };
 
 // Map markings API calls
 export const markingsService = {
-  getAll: async (): Promise<Marking[]> => {
-    const response = await api.get<Marking[]>('/api/markings');
+  getAll: async (propertyId?: number): Promise<Marking[]> => {
+    const params = propertyId ? { propertyId } : undefined;
+    const response = await api.get<Marking[]>('/api/markings', { params });
     return response.data;
   },
 
@@ -75,5 +111,32 @@ export const markingsService = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/api/markings/${id}`);
+  },
+};
+
+export const cadastreService = {
+  searchByPropertyCode: async (propertyCode: string): Promise<CadastreFeature> => {
+    const response = await api.get<CadastreFeature>(
+      `/api/cadastre/search/${encodeURIComponent(propertyCode)}`
+    );
+    return response.data;
+  },
+
+  searchByCoordinates: async (lat: number, lng: number): Promise<CadastreFeature | null> => {
+    try {
+      const response = await api.get<CadastreFeature>(`/api/cadastre/at?lat=${lat}&lng=${lng}`);
+      return response.data;
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } }).response?.status;
+      if (status === 404 || status === 503) return null;
+      throw err;
+    }
+  },
+};
+
+export const mapService = {
+  getLayerConfig: async (): Promise<MapLayerConfig> => {
+    const response = await api.get<MapLayerConfig>('/api/map/layers');
+    return response.data;
   },
 };

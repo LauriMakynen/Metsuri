@@ -13,15 +13,41 @@ const VALID_GEOMETRY_TYPES = ['point', 'line', 'area', 'note'];
 
 // GET /api/markings - Get all markings for the authenticated user
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
+  const propertyIdQuery = typeof req.query.propertyId === 'string' ? req.query.propertyId : undefined;
+
+  if (propertyIdQuery && !/^\d+$/.test(propertyIdQuery)) {
+    res.status(400).json({ error: 'Invalid propertyId' });
+    return;
+  }
+
   try {
+    if (propertyIdQuery) {
+      const propCheck = await pool.query(
+        'SELECT id FROM properties WHERE id = $1 AND user_id = $2',
+        [propertyIdQuery, req.userId]
+      );
+
+      if (propCheck.rows.length === 0) {
+        res.status(404).json({ error: 'Property not found' });
+        return;
+      }
+    }
+
+    const queryValues: unknown[] = [req.userId];
+    let whereClause = 'WHERE user_id = $1';
+    if (propertyIdQuery) {
+      whereClause += ' AND property_id = $2';
+      queryValues.push(propertyIdQuery);
+    }
+
     const result = await pool.query(
       `SELECT id, property_id, type, geometry_type, title, description,
               ST_AsGeoJSON(geometry)::json AS geometry,
               created_at, updated_at
        FROM markings
-       WHERE user_id = $1
+       ${whereClause}
        ORDER BY created_at DESC`,
-      [req.userId]
+      queryValues
     );
     res.json(result.rows);
   } catch (error) {
