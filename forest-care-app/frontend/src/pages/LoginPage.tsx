@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/forestService';
 import { useAuth } from '../hooks/useAuth';
+import axios from 'axios';
 
 // Login page - authenticates existing users
 export default function LoginPage() {
@@ -10,7 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, loginAsGuest } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: FormEvent) => {
@@ -23,11 +24,15 @@ export default function LoginPage() {
       login(data.token, data.user);
       navigate('/map');
     } catch (err: unknown) {
-      const message =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
-          : undefined;
-      setError(message || 'Kirjautuminen epäonnistui');
+      if (axios.isAxiosError(err)) {
+        if (!err.response) {
+          setError('Ei yhteyttä palvelimeen. Tarkista, että backend on käynnissä.');
+        } else {
+          setError(err.response.data?.error || 'Kirjautuminen epäonnistui');
+        }
+      } else {
+        setError('Kirjautuminen epäonnistui');
+      }
     } finally {
       setLoading(false);
     }
@@ -78,6 +83,18 @@ export default function LoginPage() {
           Ei vielä tiliä?{' '}
           <Link to="/register">Rekisteröidy</Link>
         </p>
+
+        <div className="guest-divider">
+          <span>tai</span>
+        </div>
+
+        <button
+          type="button"
+          className="btn btn-ghost"
+          onClick={() => { loginAsGuest(); navigate('/map'); }}
+        >
+          Jatka kirjautumatta
+        </button>
       </div>
     </div>
   );

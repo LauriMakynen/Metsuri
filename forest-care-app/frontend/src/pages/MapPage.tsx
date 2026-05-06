@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -104,7 +105,8 @@ export default function MapPage() {
   const baseLayersRef = useRef<Record<BaseLayerKey, L.TileLayer> | null>(null);
   const clickedCadastreLayerRef = useRef<L.Layer | null>(null);
 
-  const { user, logout } = useAuth();
+  const { user, logout, isGuest } = useAuth();
+  const navigate = useNavigate();
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
   const [properties, setProperties] = useState<Property[]>([]);
   const [markings, setMarkings] = useState<Marking[]>([]);
@@ -138,16 +140,18 @@ export default function MapPage() {
   );
 
   const loadProperties = useCallback(async () => {
+    if (isGuest) return;
     const props = await propertiesService.getAll();
     setProperties(props);
-  }, []);
+  }, [isGuest]);
 
   const loadMarkings = useCallback(async (propertyId?: number | null) => {
+    if (isGuest) return;
     const marks = propertyId
       ? await propertiesService.getMarkings(propertyId)
       : await markingsService.getAll();
     setMarkings(marks);
-  }, []);
+  }, [isGuest]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -576,7 +580,17 @@ export default function MapPage() {
 
   const handleSaveProperty = async (name: string) => {
     try {
-      const prop = await propertiesService.create(name, pendingGeometry);
+      let prop: Property;
+      if (isGuest) {
+        prop = {
+          id: -Date.now(),
+          name,
+          geometry: pendingGeometry,
+          created_at: new Date().toISOString(),
+        };
+      } else {
+        prop = await propertiesService.create(name, pendingGeometry);
+      }
       setProperties((prev) => [prop, ...prev]);
       setSelectedPropertyId(prop.id);
       setSelectedPropertyGeometry(prop.geometry);
@@ -599,14 +613,29 @@ export default function MapPage() {
     }
 
     try {
-      const marking = await markingsService.create({
-        property_id: selectedPropertyId,
-        type: data.type,
-        geometry_type: pendingGeometryType,
-        title: data.title,
-        description: data.description,
-        geometry: pendingGeometry,
-      });
+      let marking: Marking;
+      if (isGuest) {
+        marking = {
+          id: -Date.now(),
+          property_id: selectedPropertyId,
+          type: data.type,
+          geometry_type: pendingGeometryType,
+          title: data.title,
+          description: data.description || null,
+          geometry: pendingGeometry,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+      } else {
+        marking = await markingsService.create({
+          property_id: selectedPropertyId,
+          type: data.type,
+          geometry_type: pendingGeometryType,
+          title: data.title,
+          description: data.description,
+          geometry: pendingGeometry,
+        });
+      }
       setMarkings((prev) => [marking, ...prev]);
       drawnLayersRef.current?.clearLayers();
       setShowForm(false);
@@ -639,7 +668,17 @@ export default function MapPage() {
   const executeDelete = async () => {
     if (!confirmDelete) return;
     try {
-      if (confirmDelete.type === 'marking') {
+      if (isGuest) {
+        if (confirmDelete.type === 'marking') {
+          setMarkings((prev) => prev.filter((m) => m.id !== confirmDelete.id));
+        } else {
+          setProperties((prev) => prev.filter((p) => p.id !== confirmDelete.id));
+          if (selectedPropertyId === confirmDelete.id) {
+            setSelectedPropertyId(null);
+            setSelectedPropertyGeometry(null);
+          }
+        }
+      } else if (confirmDelete.type === 'marking') {
         await markingsService.delete(confirmDelete.id);
         setMarkings((prev) => prev.filter((m) => m.id !== confirmDelete.id));
       } else {
@@ -666,12 +705,24 @@ export default function MapPage() {
     setSavingSearchResult(true);
     setError('');
     try {
-      const created = await propertiesService.importFromCadastre({
-        name: clickedCadastre.properties.name,
-        property_code: clickedCadastre.properties.propertyCode,
-        geometry: clickedCadastre.geometry,
-        area_ha: clickedCadastre.properties.areaHa,
-      });
+      let created: Property;
+      if (isGuest) {
+        created = {
+          id: -Date.now(),
+          name: clickedCadastre.properties.name,
+          property_code: clickedCadastre.properties.propertyCode,
+          area_ha: clickedCadastre.properties.areaHa,
+          geometry: clickedCadastre.geometry,
+          created_at: new Date().toISOString(),
+        };
+      } else {
+        created = await propertiesService.importFromCadastre({
+          name: clickedCadastre.properties.name,
+          property_code: clickedCadastre.properties.propertyCode,
+          geometry: clickedCadastre.geometry,
+          area_ha: clickedCadastre.properties.areaHa,
+        });
+      }
       setProperties((prev) => [created, ...prev]);
       setSelectedPropertyId(created.id);
       setSelectedPropertyGeometry(created.geometry);
@@ -758,12 +809,24 @@ export default function MapPage() {
     setSavingSearchResult(true);
     setError('');
     try {
-      const created = await propertiesService.importFromCadastre({
-        name: searchResult.properties.name,
-        property_code: searchResult.properties.propertyCode,
-        geometry: searchResult.geometry,
-        area_ha: searchResult.properties.areaHa,
-      });
+      let created: Property;
+      if (isGuest) {
+        created = {
+          id: -Date.now(),
+          name: searchResult.properties.name,
+          property_code: searchResult.properties.propertyCode,
+          area_ha: searchResult.properties.areaHa,
+          geometry: searchResult.geometry,
+          created_at: new Date().toISOString(),
+        };
+      } else {
+        created = await propertiesService.importFromCadastre({
+          name: searchResult.properties.name,
+          property_code: searchResult.properties.propertyCode,
+          geometry: searchResult.geometry,
+          area_ha: searchResult.properties.areaHa,
+        });
+      }
 
       setProperties((prev) => [created, ...prev]);
       setSelectedPropertyId(created.id);
@@ -804,14 +867,33 @@ export default function MapPage() {
           <span className="map-nav-title">🌲 Metsuri</span>
         </div>
         <div className="map-nav-right">
-          <span className="user-email">{user?.email}</span>
-          <button className="btn btn-small" onClick={logout}>
-            Kirjaudu ulos
-          </button>
+          {isGuest ? (
+            <>
+              <span className="user-email guest-label">Vierailija</span>
+              <button className="btn btn-small btn-primary" onClick={() => { logout(); navigate('/login'); }}>
+                Kirjaudu sisään
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="user-email">{user?.email}</span>
+              <button className="btn btn-small" onClick={logout}>
+                Kirjaudu ulos
+              </button>
+            </>
+          )}
         </div>
       </nav>
 
       <div className="map-content">
+        {isGuest && (
+          <div className="guest-banner">
+            <span>⚠️ Vierailija-tila – merkinnät ja kiinteistöt eivät tallennu pysyvästi.</span>
+            <button className="btn btn-small btn-primary" onClick={() => { logout(); navigate('/login'); }}>
+              Kirjaudu tallentaaksesi
+            </button>
+          </div>
+        )}
         <aside className={`map-sidebar ${sidebarOpen ? 'open' : ''}`}>
           <div className="search-panel">
             <h3>Kiinteistöhaku</h3>
