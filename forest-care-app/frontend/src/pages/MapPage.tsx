@@ -131,6 +131,7 @@ export default function MapPage() {
   const [valuation, setValuation] = useState<ForestValuationResponse | null>(null);
   const [tileLoading, setTileLoading] = useState(false);
   const [clickedCadastre, setClickedCadastre] = useState<CadastreFeature | null>(null);
+  const [clickedCadastreCustomName, setClickedCadastreCustomName] = useState('');
   const [cadastreClickLoading, setCadastreClickLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'marking' | 'property'; id: number; label: string } | null>(null);
 
@@ -291,6 +292,7 @@ export default function MapPage() {
       try {
         const result = await cadastreService.searchByCoordinates(e.latlng.lat, e.latlng.lng);
         setClickedCadastre(result);
+        setClickedCadastreCustomName('');
       } catch {
         // Silently ignore – coordinate query is best-effort
       } finally {
@@ -704,12 +706,13 @@ export default function MapPage() {
     if (!clickedCadastre) return;
     setSavingSearchResult(true);
     setError('');
+    const saveName = clickedCadastreCustomName.trim() || clickedCadastre.properties.propertyCode;
     try {
       let created: Property;
       if (isGuest) {
         created = {
           id: -Date.now(),
-          name: clickedCadastre.properties.name,
+          name: saveName,
           property_code: clickedCadastre.properties.propertyCode,
           area_ha: clickedCadastre.properties.areaHa,
           geometry: clickedCadastre.geometry,
@@ -717,7 +720,7 @@ export default function MapPage() {
         };
       } else {
         created = await propertiesService.importFromCadastre({
-          name: clickedCadastre.properties.name,
+          name: saveName,
           property_code: clickedCadastre.properties.propertyCode,
           geometry: clickedCadastre.geometry,
           area_ha: clickedCadastre.properties.areaHa,
@@ -727,6 +730,7 @@ export default function MapPage() {
       setSelectedPropertyId(created.id);
       setSelectedPropertyGeometry(created.geometry);
       setClickedCadastre(null);
+      setClickedCadastreCustomName('');
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } }).response?.status;
       setError(
@@ -1043,10 +1047,21 @@ export default function MapPage() {
               ) : clickedCadastre ? (
                 <>
                   <div className="clicked-cadastre-info">
-                    <strong>{clickedCadastre.properties.name}</strong>
+                    <strong>{clickedCadastre.properties.propertyCode}</strong>
                     {clickedCadastre.properties.areaHa != null && (
                       <span>{Number(clickedCadastre.properties.areaHa).toFixed(2)} ha</span>
                     )}
+                  </div>
+                  <div className="clicked-cadastre-name">
+                    <input
+                      type="text"
+                      className="cadastre-name-input"
+                      placeholder={`Nimi (oletus: ${clickedCadastre.properties.propertyCode})`}
+                      value={clickedCadastreCustomName}
+                      onChange={(e) => setClickedCadastreCustomName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveClickedCadastre(); }}
+                      maxLength={100}
+                    />
                   </div>
                   <div className="clicked-cadastre-actions">
                     <button
@@ -1058,7 +1073,7 @@ export default function MapPage() {
                     </button>
                     <button
                       className="btn-icon"
-                      onClick={() => setClickedCadastre(null)}
+                      onClick={() => { setClickedCadastre(null); setClickedCadastreCustomName(''); }}
                       title="Sulje"
                     >
                       ✕

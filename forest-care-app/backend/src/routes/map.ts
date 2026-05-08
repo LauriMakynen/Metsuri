@@ -16,18 +16,20 @@ const MML_TILE_STYLE_MAP: Record<string, string> = {
 // MML API key being kept server-side only.
 
 router.get('/layers', authMiddleware, (_req: AuthRequest, res: Response) => {
-  const hasMmlKey = Boolean(process.env.MML_API_KEY);
+  const apiKey = process.env.MML_API_KEY;
 
-  if (hasMmlKey) {
+  if (apiKey) {
+    const key = encodeURIComponent(apiKey);
+    const base = 'https://avoin-karttakuva.maanmittauslaitos.fi/avoin/wmts/1.0.0';
     res.json({
-      provider: 'mml-proxy',
+      provider: 'mml-direct',
       layers: {
-        maastokartta: '/api/map/tiles/maastokartta/{z}/{x}/{y}',
-        peruskartta: '/api/map/tiles/peruskartta/{z}/{x}/{y}',
-        ortokuva: '/api/map/tiles/ortokuva/{z}/{x}/{y}',
+        maastokartta: `${base}/maastokartta/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png?api-key=${key}`,
+        peruskartta: `${base}/taustakartta/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png?api-key=${key}`,
+        ortokuva: `${base}/ortokuva/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png?api-key=${key}`,
       },
       overlays: {
-        kiinteistorajat: '/api/map/tiles/kiinteistorajat/{z}/{x}/{y}',
+        kiinteistorajat: `${base}/kiinteistojaotus/default/WGS84_Pseudo-Mercator/{z}/{y}/{x}.png?api-key=${key}`,
       },
       attribution: 'Maanmittauslaitos',
     });

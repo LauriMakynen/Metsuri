@@ -201,29 +201,25 @@ export async function searchCadastreByPropertyCode(propertyCodeRaw: string): Pro
 
   const canonicalPropertyCode = toCanonicalPropertyCode(propertyCode);
   const encodedCanonicalCode = encodeURIComponent(canonicalPropertyCode);
-  // Build URL from template – strip any api-key param already in the template
-  // avoin-paikkatieto.maanmittauslaitos.fi requires Basic auth (api-key as username),
-  // NOT the ?api-key= URL parameter (that causes HTTP 500 on the items endpoint).
+  // Build URL from template – use ?api-key= URL param (Basic auth causes HTTP 500 with Node.js undici/HTTP2)
   let targetUrl = urlTemplate
     .replace('{propertyCode}', encodedCanonicalCode)
-    .replace(/[?&]api-key=[^&]*/i, '')  // remove ?api-key= if present in template
-    .replace(/&&/, '&')                  // clean up double &&
-    .replace(/\?&/, '?');               // clean up ?& edge case
+    .replace(/[?&]api-key=[^&]*/i, '')  // remove existing api-key param if any
+    .replace(/&&/, '&')
+    .replace(/\?&/, '?');
 
   if (!targetUrl.includes(encodedCanonicalCode)) {
     const glue = targetUrl.includes('?') ? '&' : '?';
     targetUrl = `${targetUrl}${glue}kiinteistotunnus=${encodedCanonicalCode}`;
   }
 
-  console.log(`[cadastre] Querying MML: ${targetUrl} (input: ${propertyCode}, canonical: ${canonicalPropertyCode})`);
+  const glue = targetUrl.includes('?') ? '&' : '?';
+  targetUrl = `${targetUrl}${glue}api-key=${encodeURIComponent(apiKey)}`;
 
-  // avoin-paikkatieto uses Basic auth: api-key as username, empty password
-  const basicAuth = Buffer.from(`${apiKey}:`).toString('base64');
+  console.log(`[cadastre] Querying MML: ${targetUrl.replace(apiKey, '***')} (input: ${propertyCode}, canonical: ${canonicalPropertyCode})`);
+
   const response = await fetch(targetUrl, {
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Basic ${basicAuth}`,
-    },
+    headers: { Accept: 'application/geo+json' },
   });
 
   const responseText = await response.text();
@@ -271,22 +267,16 @@ export async function searchCadastreByCoordinates(
   // CRS84 uses lon/lat axis order: bbox=minLon,minLat,maxLon,maxLat
   const delta = 0.00015;
   const bboxStr = `${lng - delta},${lat - delta},${lng + delta},${lat + delta}`;
-  // avoin-paikkatieto.maanmittauslaitos.fi requires Basic auth (api-key as username).
-  // Do NOT append api-key as URL param – that causes HTTP 500 on the items endpoint.
+  // Use ?api-key= URL param — Basic auth causes HTTP 500 with Node.js undici/HTTP2
   const url =
     `https://avoin-paikkatieto.maanmittauslaitos.fi/kiinteisto-avoin/simple-features/v3` +
     `/collections/PalstanSijaintitiedot/items` +
-    `?bbox=${bboxStr}&limit=1`;
-
-  const basicAuth = Buffer.from(`${apiKey}:`).toString('base64');
+    `?bbox=${bboxStr}&limit=1&api-key=${encodeURIComponent(apiKey)}`;
 
   let response: Response;
   try {
     response = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Basic ${basicAuth}`,
-      },
+      headers: { Accept: 'application/geo+json' },
     });
   } catch (err) {
     console.error('[cadastre] Coordinate search network error:', err);
