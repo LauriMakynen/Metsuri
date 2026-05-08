@@ -5,7 +5,7 @@ import type { MarkingType, GeometryType } from '../types';
 interface MarkingFormProps {
   isProperty: boolean;
   geometryType: GeometryType;
-  onSaveMarking: (data: { type: MarkingType; title: string; description: string }) => Promise<void>;
+  onSaveMarking: (data: { type: MarkingType; title: string; description: string; area_ha?: number | null }) => Promise<void>;
   onSaveProperty: (name: string) => Promise<void>;
   onCancel: () => void;
 }

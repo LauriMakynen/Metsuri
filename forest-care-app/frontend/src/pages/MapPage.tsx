@@ -11,6 +11,7 @@ import {
   cadastreService,
   mapService,
 } from '../services/forestService';
+import { calculateAreaHa, formatArea, calculateDistance, formatDistance } from '../utils/measurement';
 import type {
   Property,
   Marking,
@@ -31,7 +32,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-type DrawTool = 'property' | 'point' | 'line' | 'area' | 'note' | null;
+type DrawTool = 'property' | 'point' | 'line' | 'area' | 'note' | 'measure' | null;
 type BaseLayerKey = 'maastokartta' | 'peruskartta' | 'ortokuva';
 
 const MARKING_COLORS: Record<MarkingType, string> = {
@@ -104,6 +105,7 @@ export default function MapPage() {
   const overlayLayerRef = useRef<L.TileLayer | null>(null);
   const baseLayersRef = useRef<Record<BaseLayerKey, L.TileLayer> | null>(null);
   const clickedCadastreLayerRef = useRef<L.Layer | null>(null);
+  const measurementLayerRef = useRef<L.FeatureGroup | null>(null);
 
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
@@ -134,6 +136,10 @@ export default function MapPage() {
   const [clickedCadastreCustomName, setClickedCadastreCustomName] = useState('');
   const [cadastreClickLoading, setCadastreClickLoading] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'marking' | 'property'; id: number; label: string } | null>(null);
+
+  // Measurement tool state
+  const [measurementPoints, setMeasurementPoints] = useState<[number, number][]>([]);
+  const [measurementDistance, setMeasurementDistance] = useState<number | null>(null);
 
   const selectedProperty = useMemo(
     () => properties.find((p) => p.id === selectedPropertyId) ?? null,
@@ -200,6 +206,9 @@ export default function MapPage() {
     const markingsLayer = new L.FeatureGroup();
     map.addLayer(markingsLayer);
     markingsLayerRef.current = markingsLayer;
+
+    // Add scale control (bottom-left corner)
+    L.control.scale({ metric: true, imperial: false, position: 'bottomleft' }).addTo(map);
 
     mapRef.current = map;
 
@@ -390,11 +399,16 @@ export default function MapPage() {
 
       const color = MARKING_COLORS[marking.type] || '#666';
       const label = MARKING_TYPE_LABELS[marking.type] || marking.type;
-      const popupContent = `
+      let popupContent = `
         <strong>${marking.title}</strong><br/>
         <span style="color:${color}">● ${label}</span>
         ${marking.description ? `<br/><em>${marking.description}</em>` : ''}
       `;
+      
+      // Add area for polygon markings
+      if (marking.geometry.type === 'Polygon' && marking.area_ha != null) {
+        popupContent += `<br/><span style="font-weight:500">📐 ${formatArea(marking.area_ha)}</span>`;
+      }
 
       if (marking.geometry.type === 'Point') {
         const coords = marking.geometry.coordinates as [number, number];
@@ -522,6 +536,80 @@ export default function MapPage() {
     }
   }, [selectedPropertyId]);
 
+  const handleMeasurementClick = useCallback((e: L.LeafletMouseEvent) => {
+    if (!mapRef.current || !measurementLayerRef.current) return;
+
+    const latlng = e.latlng;
+    const newPoints = [...measurementPoints, [latlng.lat, latlng.lng] as [number, number]];
+    setMeasurementPoints(newPoints);
+
+    // Add marker
+    L.circleMarker([latlng.lat, latlng.lng], {
+      radius: 6,
+      fillColor: '#ef4444',
+      color: '#fff',
+      weight: 2,
+      fillOpacity: 0.8,
+    }).addTo(measurementLayerRef.current);
+
+    // If we have 2 points, draw line and calculate distance
+    if (newPoints.length === 2) {
+      const dist = calculateDistance(newPoints[0][0], newPoints[0][1], newPoints[1][0], newPoints[1][1]);
+      setMeasurementDistance(dist);
+
+      // Draw line between points
+      L.polyline(newPoints, {
+        color: '#ef4444',
+        weight: 2,
+        opacity: 0.7,
+      }).addTo(measurementLayerRef.current);
+
+      // Add distance label at midpoint
+      const midLat = (newPoints[0][0] + newPoints[1][0]) / 2;
+      const midLng = (newPoints[0][1] + newPoints[1][1]) / 2;
+      const label = formatDistance(dist);
+      L.marker([midLat, midLng], {
+        icon: L.divIcon({
+          className: 'measurement-label',
+          html: `<div style="background:#ef4444;color:white;padding:4px 8px;border-radius:4px;font-size:12px;font-weight:bold;white-space:nowrap;">${label}</div>`,
+          iconSize: [0, 0],
+        }),
+      }).addTo(measurementLayerRef.current);
+    }
+  }, [measurementPoints]);
+
+  const clearMeasurement = useCallback(() => {
+    if (measurementLayerRef.current) {
+      measurementLayerRef.current.clearLayers();
+    }
+    setMeasurementPoints([]);
+    setMeasurementDistance(null);
+  }, []);
+
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // Handle measurement mode
+    if (activeTool === 'measure') {
+      if (!measurementLayerRef.current) {
+        const layer = new L.FeatureGroup();
+        mapRef.current.addLayer(layer);
+        measurementLayerRef.current = layer;
+      }
+      mapRef.current.on('click', handleMeasurementClick);
+      return () => {
+        mapRef.current?.off('click', handleMeasurementClick);
+      };
+    } else {
+      // Clean up measurement mode
+      if (measurementLayerRef.current) {
+        mapRef.current.removeLayer(measurementLayerRef.current);
+        measurementLayerRef.current = null;
+      }
+      clearMeasurement();
+    }
+  }, [activeTool, handleMeasurementClick, clearMeasurement]);
+
   useEffect(() => {
     if (!mapRef.current) return;
 
@@ -608,10 +696,17 @@ export default function MapPage() {
     type: MarkingType;
     title: string;
     description: string;
+    area_ha?: number | null;
   }) => {
     if (!selectedPropertyId) {
       setError('Valitse ensin kiinteistö, johon merkintä liitetään.');
       return;
+    }
+
+    // Calculate area for polygons
+    let areaHa: number | null = null;
+    if (pendingGeometryType === 'area' && pendingGeometry?.type === 'Polygon') {
+      areaHa = calculateAreaHa(pendingGeometry);
     }
 
     try {
@@ -625,6 +720,7 @@ export default function MapPage() {
           title: data.title,
           description: data.description || null,
           geometry: pendingGeometry,
+          area_ha: areaHa,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1129,7 +1225,45 @@ export default function MapPage() {
             >
               📝<span>Muistio</span>
             </button>
+            <button
+              className={`tool-btn ${activeTool === 'measure' ? 'active' : ''}`}
+              onClick={() => (activeTool === 'measure' ? startDraw(null) : startDraw('measure'))}
+              title="Mittaa etäisyys"
+            >
+              📐<span>Mittaa</span>
+            </button>
           </div>
+
+          {activeTool === 'measure' && measurementPoints.length > 0 && (
+            <div className="measurement-panel">
+              <div className="measurement-info">
+                <span className="measurement-label">Mittaus</span>
+                {measurementDistance != null && (
+                  <span className="measurement-value">{formatDistance(measurementDistance)}</span>
+                )}
+                <span className="measurement-points">Pisteet: {measurementPoints.length}</span>
+              </div>
+              <div className="measurement-actions">
+                <button
+                  className="btn btn-small"
+                  onClick={() => {
+                    clearMeasurement();
+                    startDraw('measure');
+                  }}
+                  title="Tyhjennä mittaus"
+                >
+                  Tyhjennä
+                </button>
+                <button
+                  className="btn btn-primary btn-small"
+                  onClick={() => startDraw(null)}
+                  title="Lopeta mittaus"
+                >
+                  Valmis
+                </button>
+              </div>
+            </div>
+          )}
 
           {error && (
             <div className="map-error" onClick={() => setError('')}>

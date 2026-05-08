@@ -7,11 +7,12 @@ Metsänhoitokarttasovellus web- ja mobiilikäyttöön.
 | Kerros | Teknologia |
 |--------|-----------|
 | Frontend | React 19 + TypeScript + Vite |
-| Kartta | Leaflet + leaflet-draw |
+| Kartta | Leaflet + leaflet-draw + Turf.js |
 | Backend | Node.js + Express + TypeScript |
 | Tietokanta | PostgreSQL + PostGIS |
 | Tiedonsiirto | GeoJSON |
 | Autentikointi | JWT (jsonwebtoken + bcryptjs) |
+| Mittaukset | Turf.js (etäisyys, pinta-ala) |
 
 ---
 
@@ -77,6 +78,62 @@ forest-care-app/
 | GET | `/api/cadastre/search/:propertyCode` | Hae kiinteistö kiinteistötunnuksella |
 | GET | `/api/map/layers` | Hae karttatasojen asetukset |
 | GET | `/api/map/tiles/:style/:z/:x/:y` | MML-tiiliproxy (`maastokartta`, `peruskartta`, `ortokuva`) |
+
+---
+
+## Ominaisuudet
+
+### Karta ja navigaatio
+- ✅ **Maanmittauslaitoksen (MML) karttatasot** – maastokartta, peruskartta, ortokuva, kiinteistörajat
+- ✅ **Mittakaavaviiva** – kartan vasemmassa alakulmassa
+- ✅ **Responsiiviinen zoomihallinnan** – mobiilissa helppokäyttöinen
+
+### Etäisyyden mittaus
+- ✅ **Mittanauhatyökalu (📐 Mittaa)** – klikkaa kaksi pistettä
+- ✅ **Automaattinen etäisyyden laskenta** – Turf.js + WGS84-geographia
+- ✅ **Etäisyyden näyttö** – metreinä (<1 km) tai kilometreinä (≥1 km)
+  - Esimerkki: "245 m" tai "1.42 km"
+- ✅ **Visuaalinen merkintä** – punainen viiva ja pisteet kartalla
+- ✅ **Mittaus-paneeli** – näyttää pisteiden määrän ja etäisyyden
+- ✅ **Mittauksen tyhjennys/reset** – uusi mittaus samalla työkalulla
+
+### Pinta-alalaskenta
+- ✅ **Automaattinen pinta-ala polygoneille** – kun merkintä tallennetaan
+- ✅ **Turf.js-laskenta** – oikea maantieteellinen pinta-ala WGS84-koordinaateilla
+- ✅ **Hehtaari-yksikkö** – 1 ha = 10 000 m²
+- ✅ **Tietokantaan tallennus** – `area_ha`-sarake markings-taulussa
+- ✅ **Merkintöjen tiedoissa näkyvä pinta-ala**
+  - Polygonimerkintä: "📐 0.52 ha"
+  - Pisteille/viivoille: ei näytetään (NULL)
+
+### Metsänhoitomerkinnät
+- ✅ **Viisi merkintätyyppiä**
+  - Vesakonhoito (🟨 keltainen)
+  - Istutus (🟩 vihreä)
+  - Harvennus (🟦 sininen)
+  - Avohakkuu (🟥 punainen)
+  - Muu työ (🟪 violetti)
+- ✅ **Geometrian valinta** – piste, viiva, alue
+- ✅ **Merkinnän nimeäminen ja kuvaus**
+- ✅ **Pinta-alan näyttö aluemerkinnöille**
+
+### Kiinteistöhallinta
+- ✅ **Kiinteistöjen haku kiinteistötunnuksella** – MML-integraatio
+- ✅ **Kiinteistöjen tuominen kartasta** – klikkaa rajaa ja nimeä
+- ✅ **Kiinteistöjen luominen kartalla** – piirräväline
+- ✅ **Kiinteistöjen valinta ja korostus**
+
+### Autentikointi ja tietoturva
+- ✅ **Käyttäjärekisteröinti** – email + salasana
+- ✅ **JWT-autentikointi** – turvallinen sessio
+- ✅ **Vierailijamoodi** – testaus ilman kirjautumista (väliaikainen data)
+- ✅ **Salasanakryptiikka** – bcryptjs
+
+### Mobiilikäyttö
+- ✅ **Kosketusnäyttöjen tuki** – klikkaus → painallus
+- ✅ **Responsiivinen käyttöliittymä** – tabletti ja puhelin
+- ✅ **Sivupalkki responsiivisena** – slide-in bottom sheet mobiilissa
+- ✅ **Zoomihallinnan** – kaksoissormi zoomaus
 
 ---
 

@@ -324,6 +324,66 @@ html, body, #root {
 .tool-btn:hover { background: var(--forest-green-bg); border-color: var(--accent); }
 .tool-btn.active { background: var(--forest-green-bg); border-color: var(--forest-green); color: var(--forest-green); }
 .tool-btn.active span { color: var(--forest-green); }
+
+.measurement-panel {
+  position: absolute;
+  bottom: 6.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  background: rgba(255,255,255,0.97);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 200px;
+}
+
+.measurement-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  text-align: center;
+}
+
+.measurement-info .measurement-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-light);
+  letter-spacing: 0.05em;
+}
+
+.measurement-info .measurement-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #ef4444;
+}
+
+.measurement-info .measurement-points {
+  font-size: 0.8rem;
+  color: var(--text-light);
+}
+
+.measurement-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.measurement-actions .btn {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.measurement-label {
+  pointer-events: none;
+  user-select: none;
+}
+
 @media (max-width: 400px) {
   .tool-btn { min-width: 44px; padding: 0.4rem 0.4rem; }
   .tool-btn span { font-size: 0.55rem; }

@@ -42,6 +42,7 @@ export interface Marking {
   title: string;
   description: string | null;
   geometry: GeoJSONGeometry;
+  area_ha?: number | null;
   created_at: string;
   updated_at: string;
 }
