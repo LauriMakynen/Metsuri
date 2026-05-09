@@ -12,6 +12,8 @@ import {
   mapService,
 } from '../services/forestService';
 import { calculateAreaHa, formatArea, calculateDistance, formatDistance } from '../utils/measurement';
+import { formatDate, formatDateRange } from '../utils/dateFormatting';
+import { getFollowUpRecommendation } from '../utils/followUpRecommendation';
 import type {
   Property,
   Marking,
@@ -145,6 +147,16 @@ export default function MapPage() {
     () => properties.find((p) => p.id === selectedPropertyId) ?? null,
     [properties, selectedPropertyId]
   );
+
+  const formatYearRange = (start?: string | null, end?: string | null): string => {
+    if (!start && !end) return '-';
+    const startYear = start ? new Date(`${start}T00:00:00`).getFullYear() : null;
+    const endYear = end ? new Date(`${end}T00:00:00`).getFullYear() : null;
+    if (startYear && endYear && startYear !== endYear) return `${startYear}-${endYear}`;
+    if (startYear) return `${startYear}`;
+    if (endYear) return `${endYear}`;
+    return '-';
+  };
 
   const loadProperties = useCallback(async () => {
     if (isGuest) return;
@@ -410,6 +422,21 @@ export default function MapPage() {
         popupContent += `<br/><span style="font-weight:500">📐 ${formatArea(marking.area_ha)}</span>`;
       }
 
+      if (marking.operation_date) {
+        popupContent += `<br/><span>Toimenpide tehty: ${formatDate(marking.operation_date)}</span>`;
+      }
+
+      if (marking.follow_up_note) {
+        popupContent += `<br/><span>${marking.follow_up_note}</span>`;
+      }
+
+      if (marking.follow_up_date_start || marking.follow_up_date_end) {
+        popupContent += `<br/><span>Seuraava tarkastus: ${formatDateRange(
+          marking.follow_up_date_start ?? '',
+          marking.follow_up_date_end ?? ''
+        )}</span>`;
+      }
+
       if (marking.geometry.type === 'Point') {
         const coords = marking.geometry.coordinates as [number, number];
         const marker = L.circleMarker([coords[1], coords[0]], {
@@ -540,43 +567,46 @@ export default function MapPage() {
     if (!mapRef.current || !measurementLayerRef.current) return;
 
     const latlng = e.latlng;
-    const newPoints = [...measurementPoints, [latlng.lat, latlng.lng] as [number, number]];
-    setMeasurementPoints(newPoints);
+    setMeasurementPoints((prevPoints) => {
+      const newPoints = [...prevPoints, [latlng.lat, latlng.lng] as [number, number]];
 
-    // Add marker
-    L.circleMarker([latlng.lat, latlng.lng], {
-      radius: 6,
-      fillColor: '#ef4444',
-      color: '#fff',
-      weight: 2,
-      fillOpacity: 0.8,
-    }).addTo(measurementLayerRef.current);
-
-    // If we have 2 points, draw line and calculate distance
-    if (newPoints.length === 2) {
-      const dist = calculateDistance(newPoints[0][0], newPoints[0][1], newPoints[1][0], newPoints[1][1]);
-      setMeasurementDistance(dist);
-
-      // Draw line between points
-      L.polyline(newPoints, {
-        color: '#ef4444',
+      // Add marker
+      L.circleMarker([latlng.lat, latlng.lng], {
+        radius: 6,
+        fillColor: '#ef4444',
+        color: '#fff',
         weight: 2,
-        opacity: 0.7,
-      }).addTo(measurementLayerRef.current);
+        fillOpacity: 0.8,
+      }).addTo(measurementLayerRef.current!);
 
-      // Add distance label at midpoint
-      const midLat = (newPoints[0][0] + newPoints[1][0]) / 2;
-      const midLng = (newPoints[0][1] + newPoints[1][1]) / 2;
-      const label = formatDistance(dist);
-      L.marker([midLat, midLng], {
-        icon: L.divIcon({
-          className: 'measurement-label',
-          html: `<div style="background:#ef4444;color:white;padding:4px 8px;border-radius:4px;font-size:12px;font-weight:bold;white-space:nowrap;">${label}</div>`,
-          iconSize: [0, 0],
-        }),
-      }).addTo(measurementLayerRef.current);
-    }
-  }, [measurementPoints]);
+      // If we have 2 points, draw line and calculate distance
+      if (newPoints.length === 2) {
+        const dist = calculateDistance(newPoints[0][0], newPoints[0][1], newPoints[1][0], newPoints[1][1]);
+        setMeasurementDistance(dist);
+
+        // Draw line between points
+        L.polyline(newPoints, {
+          color: '#ef4444',
+          weight: 2,
+          opacity: 0.7,
+        }).addTo(measurementLayerRef.current!);
+
+        // Add distance label at midpoint
+        const midLat = (newPoints[0][0] + newPoints[1][0]) / 2;
+        const midLng = (newPoints[0][1] + newPoints[1][1]) / 2;
+        const label = formatDistance(dist);
+        L.marker([midLat, midLng], {
+          icon: L.divIcon({
+            className: 'measurement-label',
+            html: `<div style="background:#ef4444;color:white;padding:4px 8px;border-radius:4px;font-size:12px;font-weight:bold;white-space:nowrap;">${label}</div>`,
+            iconSize: [0, 0],
+          }),
+        }).addTo(measurementLayerRef.current!);
+      }
+
+      return newPoints;
+    });
+  }, []);
 
   const clearMeasurement = useCallback(() => {
     if (measurementLayerRef.current) {
@@ -696,6 +726,7 @@ export default function MapPage() {
     type: MarkingType;
     title: string;
     description: string;
+    operation_date: string;
     area_ha?: number | null;
   }) => {
     if (!selectedPropertyId) {
@@ -709,6 +740,8 @@ export default function MapPage() {
       areaHa = calculateAreaHa(pendingGeometry);
     }
 
+    const followUp = getFollowUpRecommendation(data.type, data.operation_date);
+
     try {
       let marking: Marking;
       if (isGuest) {
@@ -721,6 +754,10 @@ export default function MapPage() {
           description: data.description || null,
           geometry: pendingGeometry,
           area_ha: areaHa,
+          operation_date: data.operation_date,
+          follow_up_date_start: followUp.followUpDateStart,
+          follow_up_date_end: followUp.followUpDateEnd,
+          follow_up_note: followUp.followUpNote,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -732,14 +769,20 @@ export default function MapPage() {
           title: data.title,
           description: data.description,
           geometry: pendingGeometry,
+          area_ha: areaHa,
+          operation_date: data.operation_date,
         });
       }
       setMarkings((prev) => [marking, ...prev]);
       drawnLayersRef.current?.clearLayers();
       setShowForm(false);
       setActiveTool(null);
-    } catch {
-      setError('Merkinnän tallennus epäonnistui');
+    } catch (err: unknown) {
+      const backendMessage =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+          : undefined;
+      setError(backendMessage || 'Merkinnän tallennus epäonnistui');
     }
   };
 
@@ -1070,6 +1113,17 @@ export default function MapPage() {
                   <span className="marking-dot" style={{ color: MARKING_COLORS[m.type] }}>●</span>
                   <span>{m.title}</span>
                   <small className="marking-type">{MARKING_TYPE_LABELS[m.type]}</small>
+                  {m.area_ha != null && m.geometry?.type === 'Polygon' && (
+                    <small className="marking-meta">{formatArea(m.area_ha)}</small>
+                  )}
+                  {m.operation_date && (
+                    <small className="marking-meta">Tehty: {formatDate(m.operation_date)}</small>
+                  )}
+                  {(m.follow_up_date_start || m.follow_up_date_end) && (
+                    <small className="marking-meta">
+                      Tarkastus: {formatYearRange(m.follow_up_date_start, m.follow_up_date_end)}
+                    </small>
+                  )}
                 </div>
                 <button
                   className="btn-icon delete"

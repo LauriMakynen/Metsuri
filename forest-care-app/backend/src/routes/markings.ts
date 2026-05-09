@@ -1,6 +1,10 @@
 import { Router, Response } from 'express';
 import pool from '../db/pool';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import {
+  getFollowUpRecommendation,
+  type BackendMarkingType,
+} from '../services/followUpRecommendationService';
 
 const router = Router();
 
@@ -10,6 +14,16 @@ router.use(authMiddleware);
 // Valid marking types as defined in the database schema
 const VALID_TYPES = ['vesakonhoito', 'istutus', 'harvennus', 'avohakkuu', 'muu_tyo'];
 const VALID_GEOMETRY_TYPES = ['point', 'line', 'area', 'note'];
+
+function isValidIsoDate(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function getLocalIsoDate(): string {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+}
 
 // GET /api/markings - Get all markings for the authenticated user
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
@@ -41,8 +55,9 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
     }
 
     const result = await pool.query(
-      `SELECT id, property_id, type, geometry_type, title, description,
-              ST_AsGeoJSON(geometry)::json AS geometry,
+          `SELECT id, user_id, property_id, type, geometry_type, title, description,
+            ST_AsGeoJSON(geometry)::json AS geometry, area_ha,
+            operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
               created_at, updated_at
        FROM markings
        ${whereClause}
@@ -58,7 +73,7 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
 
 // POST /api/markings - Create a new map marking
 router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
-  const { property_id, type, geometry_type, title, description, geometry } = req.body;
+  const { property_id, type, geometry_type, title, description, geometry, area_ha, operation_date } = req.body;
 
   if (!type || !geometry_type || !title) {
     res.status(400).json({ error: 'Type, geometry_type, and title are required' });
@@ -77,6 +92,17 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
     return;
   }
 
+  if (operation_date !== undefined && operation_date !== null && !isValidIsoDate(operation_date)) {
+    res.status(400).json({ error: 'operation_date must be in YYYY-MM-DD format' });
+    return;
+  }
+
+  const normalizedOperationDate = isValidIsoDate(operation_date)
+    ? operation_date
+    : getLocalIsoDate();
+
+  const recommendation = getFollowUpRecommendation(type as BackendMarkingType, normalizedOperationDate);
+
   try {
     // If property_id is given, verify the user owns it
     if (property_id) {
@@ -93,21 +119,54 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
     let result;
     if (geometry) {
       result = await pool.query(
-        `INSERT INTO markings (user_id, property_id, type, geometry_type, title, description, geometry)
-         VALUES ($1, $2, $3, $4, $5, $6, ST_GeomFromGeoJSON($7))
-         RETURNING id, property_id, type, geometry_type, title, description,
-                   ST_AsGeoJSON(geometry)::json AS geometry,
+        `INSERT INTO markings (
+           user_id, property_id, type, geometry_type, title, description, geometry,
+           area_ha, operation_date, follow_up_date_start, follow_up_date_end, follow_up_note
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, ST_GeomFromGeoJSON($7), $8, $9, $10, $11, $12)
+         RETURNING id, user_id, property_id, type, geometry_type, title, description,
+                   ST_AsGeoJSON(geometry)::json AS geometry, area_ha,
+                   operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
                    created_at, updated_at`,
-        [req.userId, property_id || null, type, geometry_type, title, description || null, JSON.stringify(geometry)]
+        [
+          req.userId,
+          property_id || null,
+          type,
+          geometry_type,
+          title,
+          description || null,
+          JSON.stringify(geometry),
+          area_ha ?? null,
+          normalizedOperationDate,
+          recommendation.followUpDateStart,
+          recommendation.followUpDateEnd,
+          recommendation.followUpNote,
+        ]
       );
     } else {
       result = await pool.query(
-        `INSERT INTO markings (user_id, property_id, type, geometry_type, title, description)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, property_id, type, geometry_type, title, description,
-                   geometry,
+        `INSERT INTO markings (
+           user_id, property_id, type, geometry_type, title, description,
+           area_ha, operation_date, follow_up_date_start, follow_up_date_end, follow_up_note
+         )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         RETURNING id, user_id, property_id, type, geometry_type, title, description,
+                   geometry, area_ha,
+                   operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
                    created_at, updated_at`,
-        [req.userId, property_id || null, type, geometry_type, title, description || null]
+        [
+          req.userId,
+          property_id || null,
+          type,
+          geometry_type,
+          title,
+          description || null,
+          area_ha ?? null,
+          normalizedOperationDate,
+          recommendation.followUpDateStart,
+          recommendation.followUpDateEnd,
+          recommendation.followUpNote,
+        ]
       );
     }
 
@@ -121,9 +180,36 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
 // PUT /api/markings/:id - Update a marking (user must own it)
 router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { type, geometry_type, title, description, geometry, property_id } = req.body;
+  const {
+    type,
+    geometry_type,
+    title,
+    description,
+    geometry,
+    property_id,
+    area_ha,
+    operation_date,
+    follow_up_date_start,
+    follow_up_date_end,
+    follow_up_note,
+  } = req.body;
 
   try {
+    const currentResult = await pool.query(
+      'SELECT type, operation_date FROM markings WHERE id = $1 AND user_id = $2',
+      [id, req.userId]
+    );
+
+    if (currentResult.rows.length === 0) {
+      res.status(404).json({ error: 'Marking not found' });
+      return;
+    }
+
+    if (operation_date !== undefined && operation_date !== null && !isValidIsoDate(operation_date)) {
+      res.status(400).json({ error: 'operation_date must be in YYYY-MM-DD format' });
+      return;
+    }
+
     const updates: string[] = ['updated_at = NOW()'];
     const values: unknown[] = [];
     let paramCount = 1;
@@ -154,10 +240,53 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
       updates.push(`description = $${paramCount++}`);
       values.push(description);
     }
+    if (area_ha !== undefined) {
+      updates.push(`area_ha = $${paramCount++}`);
+      values.push(area_ha ?? null);
+    }
     if (geometry) {
       updates.push(`geometry = ST_GeomFromGeoJSON($${paramCount++})`);
       values.push(JSON.stringify(geometry));
     }
+    if (operation_date !== undefined) {
+      updates.push(`operation_date = $${paramCount++}`);
+      values.push(operation_date ?? null);
+    }
+
+    const nextType = (type ?? currentResult.rows[0].type) as BackendMarkingType;
+    const nextOperationDate =
+      operation_date === undefined
+        ? (currentResult.rows[0].operation_date as string | null)
+        : (operation_date as string | null);
+
+    const hasManualFollowUpOverride =
+      follow_up_date_start !== undefined ||
+      follow_up_date_end !== undefined ||
+      follow_up_note !== undefined;
+
+    if (hasManualFollowUpOverride) {
+      if (follow_up_date_start !== undefined) {
+        updates.push(`follow_up_date_start = $${paramCount++}`);
+        values.push(follow_up_date_start || null);
+      }
+      if (follow_up_date_end !== undefined) {
+        updates.push(`follow_up_date_end = $${paramCount++}`);
+        values.push(follow_up_date_end || null);
+      }
+      if (follow_up_note !== undefined) {
+        updates.push(`follow_up_note = $${paramCount++}`);
+        values.push(follow_up_note || null);
+      }
+    } else if (nextOperationDate) {
+      const recommendation = getFollowUpRecommendation(nextType, nextOperationDate);
+      updates.push(`follow_up_date_start = $${paramCount++}`);
+      values.push(recommendation.followUpDateStart);
+      updates.push(`follow_up_date_end = $${paramCount++}`);
+      values.push(recommendation.followUpDateEnd);
+      updates.push(`follow_up_note = $${paramCount++}`);
+      values.push(recommendation.followUpNote);
+    }
+
     if (property_id !== undefined) {
       updates.push(`property_id = $${paramCount++}`);
       values.push(property_id);
@@ -168,8 +297,9 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
     const result = await pool.query(
       `UPDATE markings SET ${updates.join(', ')}
        WHERE id = $${paramCount++} AND user_id = $${paramCount}
-       RETURNING id, property_id, type, geometry_type, title, description,
-                 ST_AsGeoJSON(geometry)::json AS geometry,
+       RETURNING id, user_id, property_id, type, geometry_type, title, description,
+                 ST_AsGeoJSON(geometry)::json AS geometry, area_ha,
+                 operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
                  created_at, updated_at`,
       values
     );

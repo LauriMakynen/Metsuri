@@ -2,23 +2,35 @@
  * Markings Service - Backend business logic for managing forest markings
  */
 
-import { pool } from '../db/pool';
-import type { RequestQuery } from 'express-serve-static-core';
+import pool from '../db/pool';
 
 export interface CreateMarkingRequest {
   property_id?: number | null;
+  user_id: number;
   type: string;
   geometry_type: string;
   title: string;
   description?: string;
-  geometry: GeoJSON.Geometry;
+  geometry?: unknown;
   area_ha?: number | null;
+  operation_date?: string | null;
+  follow_up_date_start?: string | null;
+  follow_up_date_end?: string | null;
+  follow_up_note?: string | null;
 }
 
 export interface UpdateMarkingRequest {
+  type?: string;
+  geometry_type?: string;
   title?: string;
   description?: string;
+  geometry?: unknown;
+  property_id?: number | null;
   area_ha?: number | null;
+  operation_date?: string | null;
+  follow_up_date_start?: string | null;
+  follow_up_date_end?: string | null;
+  follow_up_note?: string | null;
 }
 
 /**
@@ -26,6 +38,7 @@ export interface UpdateMarkingRequest {
  */
 export async function createMarking(data: CreateMarkingRequest) {
   const {
+    user_id,
     property_id,
     type,
     geometry_type,
@@ -33,23 +46,43 @@ export async function createMarking(data: CreateMarkingRequest) {
     description,
     geometry,
     area_ha,
+    operation_date,
+    follow_up_date_start,
+    follow_up_date_end,
+    follow_up_note,
   } = data;
 
   const query = `
-    INSERT INTO markings (property_id, type, geometry_type, title, description, geometry, area_ha, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, $5, ST_GeomFromGeoJSON($6), $7, NOW(), NOW())
-    RETURNING id, property_id, type, geometry_type, title, description, 
-              ST_AsGeoJSON(geometry)::jsonb AS geometry, area_ha, created_at, updated_at
+    INSERT INTO markings (
+      user_id, property_id, type, geometry_type, title, description,
+      geometry, area_ha, operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
+      created_at, updated_at
+    )
+    VALUES (
+      $1, $2, $3, $4, $5, $6,
+      CASE WHEN $7::text IS NULL THEN NULL ELSE ST_GeomFromGeoJSON($7::text) END,
+      $8, $9, $10, $11, $12,
+      NOW(), NOW()
+    )
+    RETURNING id, user_id, property_id, type, geometry_type, title, description,
+              ST_AsGeoJSON(geometry)::jsonb AS geometry, area_ha,
+              operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
+              created_at, updated_at
   `;
 
   const result = await pool.query(query, [
+    user_id,
     property_id,
     type,
     geometry_type,
     title,
     description || null,
-    JSON.stringify(geometry),
-    area_ha || null,
+    geometry ? JSON.stringify(geometry) : null,
+    area_ha ?? null,
+    operation_date ?? null,
+    follow_up_date_start ?? null,
+    follow_up_date_end ?? null,
+    follow_up_note ?? null,
   ]);
 
   return result.rows[0];
@@ -60,8 +93,10 @@ export async function createMarking(data: CreateMarkingRequest) {
  */
 export async function getMarkingsByProperty(propertyId: number) {
   const query = `
-    SELECT id, property_id, type, geometry_type, title, description,
-           ST_AsGeoJSON(geometry)::jsonb AS geometry, area_ha, created_at, updated_at
+    SELECT id, user_id, property_id, type, geometry_type, title, description,
+      ST_AsGeoJSON(geometry)::jsonb AS geometry, area_ha,
+      operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
+      created_at, updated_at
     FROM markings
     WHERE property_id = $1
     ORDER BY created_at DESC
@@ -76,12 +111,13 @@ export async function getMarkingsByProperty(propertyId: number) {
  */
 export async function getAllMarkings(userId: number) {
   const query = `
-    SELECT m.id, m.property_id, m.type, m.geometry_type, m.title, m.description,
-           ST_AsGeoJSON(m.geometry)::jsonb AS geometry, m.area_ha, m.created_at, m.updated_at
-    FROM markings m
-    JOIN properties p ON m.property_id = p.id
-    WHERE p.user_id = $1
-    ORDER BY m.created_at DESC
+    SELECT id, user_id, property_id, type, geometry_type, title, description,
+      ST_AsGeoJSON(geometry)::jsonb AS geometry, area_ha,
+      operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
+      created_at, updated_at
+    FROM markings
+    WHERE user_id = $1
+    ORDER BY created_at DESC
   `;
 
   const result = await pool.query(query, [userId]);
@@ -93,10 +129,9 @@ export async function getAllMarkings(userId: number) {
  */
 export async function deleteMarking(id: number, userId: number) {
   const query = `
-    DELETE FROM markings m
-    USING properties p
-    WHERE m.id = $1 AND m.property_id = p.id AND p.user_id = $2
-    RETURNING m.id
+    DELETE FROM markings
+    WHERE id = $1 AND user_id = $2
+    RETURNING id
   `;
 
   const result = await pool.query(query, [id, userId]);
@@ -108,8 +143,20 @@ export async function deleteMarking(id: number, userId: number) {
  */
 export async function updateMarking(id: number, userId: number, data: UpdateMarkingRequest) {
   const updates: string[] = [];
-  const values: (string | number | null)[] = [];
+  const values: unknown[] = [];
   let paramCount = 1;
+
+  if (data.type !== undefined) {
+    updates.push(`type = $${paramCount}`);
+    values.push(data.type);
+    paramCount++;
+  }
+
+  if (data.geometry_type !== undefined) {
+    updates.push(`geometry_type = $${paramCount}`);
+    values.push(data.geometry_type);
+    paramCount++;
+  }
 
   if (data.title !== undefined) {
     updates.push(`title = $${paramCount}`);
@@ -123,9 +170,45 @@ export async function updateMarking(id: number, userId: number, data: UpdateMark
     paramCount++;
   }
 
+  if (data.geometry !== undefined) {
+    updates.push(`geometry = CASE WHEN $${paramCount}::text IS NULL THEN NULL ELSE ST_GeomFromGeoJSON($${paramCount}::text) END`);
+    values.push(data.geometry ? JSON.stringify(data.geometry) : null);
+    paramCount++;
+  }
+
+  if (data.property_id !== undefined) {
+    updates.push(`property_id = $${paramCount}`);
+    values.push(data.property_id ?? null);
+    paramCount++;
+  }
+
   if (data.area_ha !== undefined) {
     updates.push(`area_ha = $${paramCount}`);
-    values.push(data.area_ha);
+    values.push(data.area_ha ?? null);
+    paramCount++;
+  }
+
+  if (data.operation_date !== undefined) {
+    updates.push(`operation_date = $${paramCount}`);
+    values.push(data.operation_date ?? null);
+    paramCount++;
+  }
+
+  if (data.follow_up_date_start !== undefined) {
+    updates.push(`follow_up_date_start = $${paramCount}`);
+    values.push(data.follow_up_date_start ?? null);
+    paramCount++;
+  }
+
+  if (data.follow_up_date_end !== undefined) {
+    updates.push(`follow_up_date_end = $${paramCount}`);
+    values.push(data.follow_up_date_end ?? null);
+    paramCount++;
+  }
+
+  if (data.follow_up_note !== undefined) {
+    updates.push(`follow_up_note = $${paramCount}`);
+    values.push(data.follow_up_note ?? null);
     paramCount++;
   }
 
@@ -139,12 +222,13 @@ export async function updateMarking(id: number, userId: number, data: UpdateMark
   values.push(userId);
 
   const query = `
-    UPDATE markings m
+    UPDATE markings
     SET ${updates.join(', ')}
-    FROM properties p
-    WHERE m.id = $${paramCount} AND m.property_id = p.id AND p.user_id = $${paramCount + 1}
-    RETURNING m.id, m.property_id, m.type, m.geometry_type, m.title, m.description,
-              ST_AsGeoJSON(m.geometry)::jsonb AS geometry, m.area_ha, m.created_at, m.updated_at
+    WHERE id = $${paramCount} AND user_id = $${paramCount + 1}
+    RETURNING id, user_id, property_id, type, geometry_type, title, description,
+              ST_AsGeoJSON(geometry)::jsonb AS geometry, area_ha,
+              operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
+              created_at, updated_at
   `;
 
   const result = await pool.query(query, values);

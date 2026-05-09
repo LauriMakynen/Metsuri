@@ -36,6 +36,7 @@ export interface Property {
 
 export interface Marking {
   id: number;
+  user_id?: number;
   property_id: number | null;
   type: MarkingType;
   geometry_type: GeometryType;
@@ -43,6 +44,10 @@ export interface Marking {
   description: string | null;
   geometry: GeoJSONGeometry;
   area_ha?: number | null;
+  operation_date?: string | null;
+  follow_up_date_start?: string | null;
+  follow_up_date_end?: string | null;
+  follow_up_note?: string | null;
   created_at: string;
   updated_at: string;
 }

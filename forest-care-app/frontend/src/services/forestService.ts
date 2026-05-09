@@ -11,6 +11,55 @@ import type {
   ForestValuationResponse,
 } from '../types';
 
+function normalizeDate(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    return value.length >= 10 ? value.slice(0, 10) : value;
+  }
+  return null;
+}
+
+function normalizeNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeGeometry(value: unknown): GeoJSONGeometry {
+  if (!value) return null;
+
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as GeoJSONGeometry;
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof value === 'object') {
+    return value as GeoJSONGeometry;
+  }
+
+  return null;
+}
+
+function normalizeMarking(marking: Marking): Marking {
+  return {
+    ...marking,
+    geometry: normalizeGeometry(marking.geometry),
+    area_ha: normalizeNumber(marking.area_ha),
+    operation_date: normalizeDate(marking.operation_date),
+    follow_up_date_start: normalizeDate(marking.follow_up_date_start),
+    follow_up_date_end: normalizeDate(marking.follow_up_date_end),
+  };
+}
+
 // Auth API calls
 export const authService = {
   register: async (email: string, password: string) => {
@@ -63,7 +112,7 @@ export const propertiesService = {
 
   getMarkings: async (propertyId: number): Promise<Marking[]> => {
     const response = await api.get<Marking[]>(`/api/properties/${propertyId}/markings`);
-    return response.data;
+    return response.data.map(normalizeMarking);
   },
 
   getForestData: async (propertyId: number): Promise<ForestDataResponse> => {
@@ -82,7 +131,7 @@ export const markingsService = {
   getAll: async (propertyId?: number): Promise<Marking[]> => {
     const params = propertyId ? { propertyId } : undefined;
     const response = await api.get<Marking[]>('/api/markings', { params });
-    return response.data;
+    return response.data.map(normalizeMarking);
   },
 
   create: async (data: {
@@ -92,9 +141,11 @@ export const markingsService = {
     title: string;
     description?: string;
     geometry?: GeoJSONGeometry;
+    area_ha?: number | null;
+    operation_date: string;
   }): Promise<Marking> => {
     const response = await api.post<Marking>('/api/markings', data);
-    return response.data;
+    return normalizeMarking(response.data);
   },
 
   update: async (id: number, data: Partial<{
@@ -104,9 +155,14 @@ export const markingsService = {
     description: string;
     geometry: GeoJSONGeometry;
     property_id: number;
+    area_ha: number | null;
+    operation_date: string | null;
+    follow_up_note: string | null;
+    follow_up_date_start: string | null;
+    follow_up_date_end: string | null;
   }>): Promise<Marking> => {
     const response = await api.put<Marking>(`/api/markings/${id}`, data);
-    return response.data;
+    return normalizeMarking(response.data);
   },
 
   delete: async (id: number): Promise<void> => {

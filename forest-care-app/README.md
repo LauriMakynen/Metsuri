@@ -117,6 +117,16 @@ forest-care-app/
 - ✅ **Merkinnän nimeäminen ja kuvaus**
 - ✅ **Pinta-alan näyttö aluemerkinnöille**
 
+### Toimenpiteen päivämäärä ja seurantasuositus
+- ✅ Käyttäjä valitsee merkinnälle toimenpiteen päivämäärän (YYYY-MM-DD)
+- ✅ Sovellus laskee automaattisesti suuntaa-antavan tarkastusvälin merkintätyypin perusteella
+- ✅ Merkinnän tiedoissa näytetään:
+  - Toimenpiteen päivämäärä
+  - Seurantasuosituksen teksti
+  - Seuraavan tarkastuksen aikaväli
+- ℹ️ Suositukset ovat alustavia oletuksia, eivät virallinen metsäarvio
+- 🔧 Jatkossa suosituksia voidaan tarkentaa metsätyypin, puulajin, kasvupaikan ja metsävaratiedon perusteella
+
 ### Kiinteistöhallinta
 - ✅ **Kiinteistöjen haku kiinteistötunnuksella** – MML-integraatio
 - ✅ **Kiinteistöjen tuominen kartasta** – klikkaa rajaa ja nimeä

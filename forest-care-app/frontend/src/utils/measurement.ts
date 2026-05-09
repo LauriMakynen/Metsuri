@@ -66,7 +66,13 @@ export function formatArea(hectares: number | null | undefined): string {
   if (hectares === null || hectares === undefined) {
     return 'N/A';
   }
-  return `${hectares.toFixed(2)} ha`;
+
+  const value = typeof hectares === 'number' ? hectares : Number.parseFloat(String(hectares));
+  if (!Number.isFinite(value)) {
+    return 'N/A';
+  }
+
+  return `${value.toFixed(2)} ha`;
 }
 
 /**

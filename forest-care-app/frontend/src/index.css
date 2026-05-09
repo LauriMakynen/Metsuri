@@ -239,6 +239,12 @@ html, body, #root {
 .property-select small { color: var(--text-light); font-size: 0.75rem; }
 .marking-dot { font-size: 0.75rem; margin-right: 0.25rem; }
 .marking-type { color: var(--text-light); font-size: 0.75rem; }
+.marking-meta {
+  display: block;
+  color: var(--text-light);
+  font-size: 0.75rem;
+  margin-left: 1rem;
+}
 .sidebar-empty {
   color: var(--text-light);
   font-size: 0.85rem;

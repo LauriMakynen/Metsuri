@@ -2,10 +2,22 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import type { MarkingType, GeometryType } from '../types';
 
+function getLocalIsoDate(): string {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
 interface MarkingFormProps {
   isProperty: boolean;
   geometryType: GeometryType;
-  onSaveMarking: (data: { type: MarkingType; title: string; description: string; area_ha?: number | null }) => Promise<void>;
+  onSaveMarking: (data: {
+    type: MarkingType;
+    title: string;
+    description: string;
+    operation_date: string;
+    area_ha?: number | null;
+  }) => Promise<void>;
   onSaveProperty: (name: string) => Promise<void>;
   onCancel: () => void;
 }
@@ -37,6 +49,7 @@ export default function MarkingForm({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [type, setType] = useState<MarkingType>('muu_tyo');
+  const [operationDate, setOperationDate] = useState(getLocalIsoDate);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -53,7 +66,13 @@ export default function MarkingForm({
       if (isProperty) {
         await onSaveProperty(title.trim());
       } else {
-        await onSaveMarking({ type, title: title.trim(), description: description.trim() });
+        const normalizedOperationDate = operationDate || getLocalIsoDate();
+        await onSaveMarking({
+          type,
+          title: title.trim(),
+          description: description.trim(),
+          operation_date: normalizedOperationDate,
+        });
       }
     } catch {
       setError('Tallennus epäonnistui');
@@ -114,6 +133,17 @@ export default function MarkingForm({
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Lisätietoja..."
                   rows={3}
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="operationDate">Toimenpiteen päivämäärä</label>
+                <input
+                  id="operationDate"
+                  type="date"
+                  value={operationDate}
+                  onChange={(e) => setOperationDate(e.target.value)}
+                  required
                 />
               </div>
             </>

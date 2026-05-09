@@ -43,6 +43,11 @@ CREATE TABLE IF NOT EXISTS markings (
     )),
     title VARCHAR(255) NOT NULL,
     description TEXT,
+    area_ha NUMERIC(10, 2),
+    operation_date DATE,
+    follow_up_date_start DATE,
+    follow_up_date_end DATE,
+    follow_up_note TEXT,
     geometry GEOMETRY(GEOMETRY, 4326),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

@@ -76,6 +76,20 @@ async function migrate() {
     await client.query(
       'CREATE INDEX IF NOT EXISTS markings_user_id_idx ON markings(user_id)'
     );
+
+    // Backfill newer markings fields for older databases.
+    await client.query('ALTER TABLE markings ADD COLUMN IF NOT EXISTS area_ha NUMERIC(10,2)');
+    await client.query('ALTER TABLE markings ADD COLUMN IF NOT EXISTS operation_date DATE');
+    await client.query('ALTER TABLE markings ADD COLUMN IF NOT EXISTS follow_up_date_start DATE');
+    await client.query('ALTER TABLE markings ADD COLUMN IF NOT EXISTS follow_up_date_end DATE');
+    await client.query('ALTER TABLE markings ADD COLUMN IF NOT EXISTS follow_up_note TEXT');
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS markings_operation_date_idx ON markings(operation_date)'
+    );
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS markings_follow_up_start_idx ON markings(follow_up_date_start)'
+    );
+
     await client.query(
       'CREATE INDEX IF NOT EXISTS properties_property_code_idx ON properties(property_code)'
     );
