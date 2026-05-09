@@ -26,6 +26,8 @@ import type {
   ForestValuationResponse,
 } from '../types';
 import MarkingForm from '../components/MarkingForm';
+import Sidebar from '../components/Sidebar';
+import Toast from '../components/Toast';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -118,6 +120,7 @@ export default function MapPage() {
   const [pendingGeometry, setPendingGeometry] = useState<GeoJSONGeometry>(null);
   const [pendingGeometryType, setPendingGeometryType] = useState<GeometryType>('point');
   const [error, setError] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
@@ -996,6 +999,70 @@ export default function MapPage() {
     }
   };
 
+  const handleOnSearch = async (propertyCode: string): Promise<CadastreFeature | null> => {
+    const code = propertyCode.trim();
+    if (!PROPERTY_CODE_REGEX.test(code)) {
+      setError('Kiinteistötunnus on väärässä muodossa');
+      return null;
+    }
+
+    setSearchLoading(true);
+    setError('');
+    try {
+      const feature = await cadastreService.searchByPropertyCode(code);
+      setSearchResult(feature);
+
+      if (cadastreLayerRef.current && mapRef.current) {
+        mapRef.current.removeLayer(cadastreLayerRef.current);
+      }
+
+      const layer = L.geoJSON(feature.geometry as GeoJSON.Geometry, {
+        style: {
+          color: '#0369a1',
+          weight: 3,
+          fillColor: '#38bdf8',
+          fillOpacity: 0.2,
+        },
+      });
+      layer.bindPopup(`<strong>${feature.properties.name}</strong><br/>${feature.properties.propertyCode}`);
+      layer.addTo(mapRef.current!);
+      cadastreLayerRef.current = layer;
+
+      const bounds = layer.getBounds();
+      if (bounds.isValid()) {
+        mapRef.current?.fitBounds(bounds, { padding: [40, 40] });
+      }
+
+      renderSelectedHighlight(feature.geometry, '#0369a1');
+      return feature;
+    } catch (err: unknown) {
+      const status =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { status?: number; data?: { error?: string } } }).response?.status
+          : undefined;
+      const backendMessage =
+        err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
+          : undefined;
+
+      if (status === 404) {
+        setError('Kiinteistöä ei löytynyt');
+      } else if (backendMessage) {
+        setError(backendMessage);
+      } else {
+        setError('Kiinteistön haku epäonnistui');
+      }
+      setSearchResult(null);
+      return null;
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleToggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
+
   return (
     <div className="map-page">
       <nav className="map-nav">
@@ -1037,105 +1104,22 @@ export default function MapPage() {
             </button>
           </div>
         )}
-        <aside className={`map-sidebar ${sidebarOpen ? 'open' : ''}`}>
-          <div className="search-panel">
-            <h3>Kiinteistöhaku</h3>
-            <div className="search-row">
-              <input
-                value={propertyCodeInput}
-                onChange={(e) => setPropertyCodeInput(e.target.value)}
-                placeholder="145-410-43-16"
-                inputMode="numeric"
-                className="property-search-input"
-              />
-              <button
-                className="btn btn-primary search-button"
-                onClick={handleSearchCadastre}
-                disabled={searchLoading}
-              >
-                {searchLoading ? 'Haetaan...' : 'Hae'}
-              </button>
-            </div>
-
-            {searchResult && (
-              <div className="search-result-card">
-                <strong>{searchResult.properties.name}</strong>
-                <div>Tunnus: {searchResult.properties.propertyCode}</div>
-                {searchResult.properties.areaHa !== undefined && (
-                  <div>Pinta-ala: {Number(searchResult.properties.areaHa).toFixed(2)} ha</div>
-                )}
-                <button
-                  className="btn btn-secondary save-cadastre-btn"
-                  onClick={handleSaveCadastreToProperties}
-                  disabled={savingSearchResult}
-                >
-                  {savingSearchResult ? 'Tallennetaan...' : 'Tallenna omiin kiinteistöihin'}
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="sidebar-header">
-            <h3>Kiinteistöt ({properties.length})</h3>
-          </div>
-          <ul className="sidebar-list">
-            {properties.map((p) => (
-              <li
-                key={p.id}
-                className={`sidebar-item property-item ${selectedPropertyId === p.id ? 'selected' : ''}`}
-              >
-                <button className="property-select" onClick={() => handleSelectProperty(p)}>
-                  <span>🌳 {p.name}</span>
-                  {p.property_code && <small>{p.property_code}</small>}
-                </button>
-                <button
-                  className="btn-icon delete"
-                  onClick={() => handleDeleteProperty(p.id)}
-                  title="Poista"
-                >
-                  🗑
-                </button>
-              </li>
-            ))}
-          </ul>
-
-          <div className="sidebar-header">
-            <h3>Aktiivisen kiinteistön merkinnät ({selectedPropertyId ? markings.length : 0})</h3>
-          </div>
-          <ul className="sidebar-list">
-            {!selectedPropertyId && <li className="sidebar-empty">Valitse kiinteistö nähdäksesi merkinnät.</li>}
-            {selectedPropertyId && markings.length === 0 && (
-              <li className="sidebar-empty">Ei merkintöjä valitulla kiinteistöllä.</li>
-            )}
-            {selectedPropertyId && markings.map((m) => (
-              <li key={m.id} className="sidebar-item">
-                <div>
-                  <span className="marking-dot" style={{ color: MARKING_COLORS[m.type] }}>●</span>
-                  <span>{m.title}</span>
-                  <small className="marking-type">{MARKING_TYPE_LABELS[m.type]}</small>
-                  {m.area_ha != null && m.geometry?.type === 'Polygon' && (
-                    <small className="marking-meta">{formatArea(m.area_ha)}</small>
-                  )}
-                  {m.operation_date && (
-                    <small className="marking-meta">Tehty: {formatDate(m.operation_date)}</small>
-                  )}
-                  {(m.follow_up_date_start || m.follow_up_date_end) && (
-                    <small className="marking-meta">
-                      Tarkastus: {formatYearRange(m.follow_up_date_start, m.follow_up_date_end)}
-                    </small>
-                  )}
-                </div>
-                <button
-                  className="btn-icon delete"
-                  onClick={() => handleDeleteMarking(m.id)}
-                  title="Poista"
-                >
-                  🗑
-                </button>
-              </li>
-            ))}
-          </ul>
-        </aside>
+        <Sidebar
+          isOpen={sidebarOpen}
+          onToggle={handleToggleSidebar}
+          properties={properties}
+          markings={markings}
+          selectedPropertyId={selectedPropertyId}
+          selectedProperty={selectedProperty}
+          forestData={forestData}
+          valuation={valuation}
+          isSearching={searchLoading}
+          onSearch={handleOnSearch}
+          onSelectResult={handleSaveCadastreToProperties}
+          onSelectProperty={handleSelectProperty}
+          onDeleteProperty={handleDeleteProperty}
+          onDeleteMarking={handleDeleteMarking}
+        />
 
         <div className="map-wrapper">
           <div ref={mapContainerRef} className="leaflet-map" />
