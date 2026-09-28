@@ -282,6 +282,7 @@ html, body, #root {
 .bid-best-value { font-size: 1.2rem; color: var(--forest-green); font-variant-numeric: tabular-nums; }
 .bid-best-meta { font-size: 0.8rem; color: var(--text-light); }
 .bid-none { font-size: 0.85rem; color: var(--text-light); }
+.bid-target { font-size: 0.88rem; color: var(--text); }
 .bid-mine { font-size: 0.85rem; font-weight: 600; color: #075985; }
 .bid-note { font-size: 0.8rem; color: var(--text-light); line-height: 1.4; }
 .bid-error { font-size: 0.82rem; color: var(--error); }
@@ -305,6 +306,7 @@ html, body, #root {
 }
 .pricing-option.selected { border-color: var(--forest-green); background: #f0fdf4; }
 .pricing-option input { margin-top: 0.2rem; accent-color: var(--forest-green); }
+.pricing-option-text,
 .sidebar-item .pricing-option-text { display: flex; flex-direction: column; gap: 0.1rem; white-space: normal; overflow: visible; }
 .pricing-option-text strong { font-size: 0.85rem; }
 .pricing-option-text small { font-size: 0.78rem; color: var(--text-light); }
@@ -624,6 +626,21 @@ html, body, #root {
 .activity-mode .active-property-info,
 .activity-mode .guest-banner,
 .activity-mode .map-sidebar { display: none !important; }
+
+/* Work request: toolbar button, drawing hint, publish form, sidebar list */
+.tool-btn-request span { color: #c2410c; }
+.draw-hint {
+  position: absolute; bottom: 6.5rem; left: 50%; transform: translateX(-50%); z-index: 960;
+  width: min(420px, calc(100% - 1.5rem)); background: #fff7ed; color: #9a3412;
+  border: 1px solid #fed7aa; border-radius: 12px; padding: 0.7rem 0.9rem;
+  font-size: 0.9rem; font-weight: 600; box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+.request-form-sub { color: var(--text-light); font-size: 0.9rem; margin: -0.5rem 0 0.75rem; }
+.request-form-fieldset { border: none; }
+.request-form-fieldset legend { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.4rem; }
+.request-form-hint { color: var(--text-light); font-size: 0.8rem; }
+.request-new { padding: 0.6rem 1rem 0; }
+.request-new .btn { width: 100%; }
 
 /* Shown on the map when a logged-in owner has no parcels yet */
 .empty-parcel-notice {

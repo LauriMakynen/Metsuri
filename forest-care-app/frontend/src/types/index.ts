@@ -64,26 +64,39 @@ export interface BidSummary {
   latest_bid_at: string | null;
 }
 
-// A forest owner's own work request for one marking
-export interface WorkRequest extends BidSummary {
+// Planned work the owner asks offers for (markings, in contrast, record done work)
+interface WorkRequestBase extends BidSummary {
   id: number;
-  marking_id: number;
+  type: MarkingType;
+  title: string;
+  geometry_type: GeometryType;
+  geometry: GeoJSONGeometry;
+  area_ha: number | null;
   note: string | null;
-  status: 'open' | 'closed';
+  // Service: what the owner is willing to pay. Timber sale: the owner's asking price.
+  target_price_eur: number | null;
   created_at: string;
+}
+
+// A forest owner's own work request
+export interface WorkRequest extends WorkRequestBase {
+  property_id: number | null;
+  status: 'open' | 'closed';
   updated_at: string;
 }
 
-// Open work request as shown publicly to work providers (no owner or bidder details)
-export interface PublicWorkRequest extends BidSummary {
-  id: number;
-  note: string | null;
-  created_at: string;
+export interface NewWorkRequest {
+  property_id: number;
   type: MarkingType;
-  geometry_type: GeometryType;
   title: string;
-  area_ha: number | null;
   geometry: GeoJSONGeometry;
+  note: string;
+  pricing: Pricing;
+  target_price_eur: number;
+}
+
+// Open work request as shown publicly to work providers (no owner or bidder details)
+export interface PublicWorkRequest extends WorkRequestBase {
   lat: number;
   lng: number;
   // Only meaningful for a logged-in viewer

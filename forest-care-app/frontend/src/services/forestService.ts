@@ -11,7 +11,7 @@ import type {
   ForestValuationResponse,
   WorkRequest,
   PublicWorkRequest,
-  Pricing,
+  NewWorkRequest,
 } from '../types';
 
 function normalizeDate(value: unknown): string | null {
@@ -187,13 +187,20 @@ function normalizePublicRequest(r: PublicWorkRequest): PublicWorkRequest {
   return {
     ...r,
     area_ha: normalizeNumber(r.area_ha),
+    target_price_eur: normalizeNumber(r.target_price_eur),
     best_bid_eur: normalizeNumber(r.best_bid_eur),
     my_bid_eur: normalizeNumber(r.my_bid_eur),
   };
 }
 
 function normalizeOwnRequest(r: WorkRequest): WorkRequest {
-  return { ...r, bid_count: r.bid_count ?? 0, best_bid_eur: normalizeNumber(r.best_bid_eur) };
+  return {
+    ...r,
+    area_ha: normalizeNumber(r.area_ha),
+    target_price_eur: normalizeNumber(r.target_price_eur),
+    bid_count: r.bid_count ?? 0,
+    best_bid_eur: normalizeNumber(r.best_bid_eur),
+  };
 }
 
 export const workRequestsService = {
@@ -208,12 +215,8 @@ export const workRequestsService = {
     const response = await api.get<WorkRequest[]>('/api/work-requests/mine');
     return response.data.map(normalizeOwnRequest);
   },
-  create: async (markingId: number, note: string, pricing: Pricing): Promise<WorkRequest> => {
-    const response = await api.post<WorkRequest>('/api/work-requests', {
-      marking_id: markingId,
-      note,
-      pricing,
-    });
+  create: async (data: NewWorkRequest): Promise<WorkRequest> => {
+    const response = await api.post<WorkRequest>('/api/work-requests', data);
     return normalizeOwnRequest(response.data);
   },
   // Offer a total price in euros; returns the request with its updated bid summary

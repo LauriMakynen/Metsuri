@@ -28,11 +28,13 @@ import type {
   ForestDataResponse,
   ForestValuationResponse,
   WorkRequest,
-  Pricing,
 } from '../types';
 import MarkingForm from '../components/MarkingForm';
 import Sidebar from '../components/Sidebar';
 import ActivityTracker from '../components/ActivityTracker';
+import WorkRequestForm from '../components/WorkRequestForm';
+import type { WorkRequestFormData } from '../components/WorkRequestForm';
+import { bidSummaryText } from '../utils/bids';
 import type { ActivityResult } from '../components/ActivityTracker';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -42,7 +44,7 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-type DrawTool = 'property' | 'point' | 'line' | 'area' | 'note' | 'measure' | null;
+type DrawTool = 'property' | 'point' | 'line' | 'area' | 'note' | 'measure' | 'request' | null;
 type BaseLayerKey = 'maastokartta' | 'peruskartta' | 'ortokuva';
 
 const PROPERTY_CODE_REGEX = /^\d{3}-\d{3}-\d{2}-\d{1,4}$/;
@@ -101,6 +103,7 @@ export default function MapPage() {
   const clickedCadastreLayerRef = useRef<L.Layer | null>(null);
   const measurementLayerRef = useRef<L.FeatureGroup | null>(null);
   const autoSelectedRef = useRef(false);
+  const requestsLayerRef = useRef<L.FeatureGroup | null>(null);
 
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
@@ -134,7 +137,7 @@ export default function MapPage() {
   const [clickedCadastre, setClickedCadastre] = useState<CadastreFeature | null>(null);
   const [clickedCadastreCustomName, setClickedCadastreCustomName] = useState('');
   const [cadastreClickLoading, setCadastreClickLoading] = useState(false);
-  const [workRequests, setWorkRequests] = useState<Record<number, WorkRequest>>({});
+  const [workRequests, setWorkRequests] = useState<WorkRequest[]>([]);
   const [activityOpen, setActivityOpen] = useState(false);
   const [propertiesLoaded, setPropertiesLoaded] = useState(false);
   const [emptyNoticeDismissed, setEmptyNoticeDismissed] = useState(false);
@@ -359,34 +362,69 @@ export default function MapPage() {
     loadMarkings(selectedPropertyId).catch(() => setError('Tietojen lataaminen epäonnistui'));
   }, [selectedPropertyId, loadMarkings]);
 
-  // Own work requests, keyed by marking id (not available in guest mode)
+  // Own work requests = planned work (not available in guest mode)
   useEffect(() => {
     if (isGuest) return;
     workRequestsService
       .getMine()
-      .then((requests) => setWorkRequests(Object.fromEntries(requests.map((r) => [r.marking_id, r]))))
+      .then(setWorkRequests)
       .catch(() => setError('Työpyyntöjen lataaminen epäonnistui'));
   }, [isGuest]);
 
-  const handleRequestWork = async (markingId: number, note: string, pricing: Pricing) => {
-    try {
-      const request = await workRequestsService.create(markingId, note, pricing);
-      setWorkRequests((prev) => ({ ...prev, [markingId]: request }));
-    } catch {
-      setError('Työpyynnön julkaisu epäonnistui');
-    }
+  // Publish the area just drawn with the "Työpyyntö" tool
+  const handleCreateWorkRequest = async (data: WorkRequestFormData) => {
+    if (!selectedPropertyId || !pendingGeometry) return;
+    const request = await workRequestsService.create({
+      ...data,
+      property_id: selectedPropertyId,
+      geometry: pendingGeometry,
+    });
+    setWorkRequests((prev) => [request, ...prev]);
+    drawnLayersRef.current?.clearLayers();
+    setShowForm(false);
+    setActiveTool(null);
+    setSidebarOpen(true);
   };
 
   const handleWithdrawWorkRequest = async (requestId: number) => {
     try {
       await workRequestsService.withdraw(requestId);
-      setWorkRequests((prev) =>
-        Object.fromEntries(Object.entries(prev).filter(([, r]) => r.id !== requestId))
-      );
+      setWorkRequests((prev) => prev.filter((r) => r.id !== requestId));
     } catch {
       setError('Työpyynnön peruminen epäonnistui');
     }
   };
+
+  // Planned work on the map: dashed outline so it stands apart from done work
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    // Recreate if missing or attached to an earlier map instance (StrictMode remounts the map)
+    if (!requestsLayerRef.current || !map.hasLayer(requestsLayerRef.current)) {
+      requestsLayerRef.current = new L.FeatureGroup().addTo(map);
+    }
+    const group = requestsLayerRef.current;
+    group.clearLayers();
+    workRequests
+      .filter((r) => r.property_id === selectedPropertyId && r.geometry)
+      .forEach((r) => {
+        const color = MARKING_COLORS[r.type];
+        const layer = L.geoJSON(r.geometry as GeoJSON.Geometry, {
+          style: { color, weight: 3, dashArray: '8 6', fillColor: color, fillOpacity: 0.12 },
+          pointToLayer: (_f, latlng) =>
+            L.circleMarker(latlng, { radius: 9, color, weight: 3, dashArray: '4 3', fillOpacity: 0.2 }),
+        });
+        // textContent: titles are user input
+        const popup = document.createElement('div');
+        const title = document.createElement('strong');
+        title.textContent = `📢 ${r.title}`;
+        const info = document.createElement('div');
+        info.textContent = `Työpyyntö · ${bidSummaryText(r)}`;
+        popup.append(title, info);
+        layer.bindPopup(popup);
+        group.addLayer(layer);
+      });
+  }, [workRequests, selectedPropertyId]);
 
   const renderSelectedHighlight = useCallback((geometry: GeoJSONGeometry, color: string) => {
     if (!mapRef.current || !geometry) return;
@@ -523,6 +561,10 @@ export default function MapPage() {
       setError('Valitse ensin kiinteistö ennen merkinnän tallentamista');
       return;
     }
+    if (tool === 'request' && isGuest) {
+      setError('Kirjaudu sisään julkaistaksesi työpyynnön');
+      return;
+    }
 
     if (drawControlRef.current) {
       mapRef.current.removeControl(drawControlRef.current);
@@ -534,10 +576,11 @@ export default function MapPage() {
 
     let drawOptions: L.Control.DrawConstructorOptions;
 
-    if (tool === 'property' || tool === 'area') {
+    if (tool === 'property' || tool === 'area' || tool === 'request') {
+      const colors = { property: '#166534', area: '#3b82f6', request: '#ea580c' };
       drawOptions = {
         draw: {
-          polygon: { shapeOptions: { color: tool === 'property' ? '#166534' : '#3b82f6' } },
+          polygon: { shapeOptions: { color: colors[tool], dashArray: tool === 'request' ? '8 6' : undefined } },
           polyline: false,
           marker: false,
           circle: false,
@@ -579,6 +622,7 @@ export default function MapPage() {
     const handlers: Record<string, string> = {
       property: 'polygon',
       area: 'polygon',
+      request: 'polygon',
       line: 'polyline',
       point: 'marker',
       note: 'marker',
@@ -593,7 +637,7 @@ export default function MapPage() {
         modes?.[handlerName]?.handler.enable();
       }, 100);
     }
-  }, [selectedPropertyId]);
+  }, [selectedPropertyId, isGuest]);
 
   const handleMeasurementClick = useCallback((e: L.LeafletMouseEvent) => {
     if (!mapRef.current || !measurementLayerRef.current) return;
@@ -816,6 +860,11 @@ export default function MapPage() {
           : undefined;
       setError(backendMessage || 'Merkinnän tallennus epäonnistui');
     }
+  };
+
+  const openNewWorkRequest = () => {
+    setSidebarOpen(false);
+    startDraw('request');
   };
 
   const openActivity = () => {
@@ -1147,8 +1196,8 @@ export default function MapPage() {
           onDeleteProperty={handleDeleteProperty}
           onDeleteMarking={handleDeleteMarking}
           workRequests={workRequests}
-          canRequestWork={!isGuest}
-          onRequestWork={handleRequestWork}
+          canPublishRequests={!isGuest}
+          onNewWorkRequest={openNewWorkRequest}
           onWithdrawWorkRequest={handleWithdrawWorkRequest}
         />
 
@@ -1332,6 +1381,13 @@ export default function MapPage() {
               🗺️<span>Alue</span>
             </button>
             <button
+              className={`tool-btn tool-btn-request ${activeTool === 'request' ? 'active' : ''}`}
+              onClick={() => (activeTool === 'request' ? startDraw(null) : openNewWorkRequest())}
+              title="Tee työpyyntö: piirrä alue ja pyydä hintatarjouksia"
+            >
+              📢<span>Työpyyntö</span>
+            </button>
+            <button
               className={`tool-btn ${activeTool === 'note' ? 'active' : ''}`}
               onClick={() => (activeTool === 'note' ? startDraw(null) : startDraw('note'))}
               title="Lisää muistiinpano"
@@ -1346,6 +1402,12 @@ export default function MapPage() {
               📐<span>Mittaa</span>
             </button>
           </div>
+
+          {activeTool === 'request' && !showForm && (
+            <div className="draw-hint" role="status">
+              📢 Piirrä kartalle alue, jolle työ tehdään. Napauta kulmapisteet ja lopuksi ensimmäistä pistettä.
+            </div>
+          )}
 
           {activeTool === 'measure' && measurementPoints.length > 0 && (
             <div className="measurement-panel">
@@ -1386,7 +1448,16 @@ export default function MapPage() {
         </div>
       </div>
 
-      {showForm && (
+      {showForm && activeTool === 'request' && (
+        <WorkRequestForm
+          parcelName={selectedProperty?.name ?? 'Palsta'}
+          areaHa={pendingGeometry?.type === 'Polygon' ? calculateAreaHa(pendingGeometry) : null}
+          onSubmit={handleCreateWorkRequest}
+          onCancel={handleCancelForm}
+        />
+      )}
+
+      {showForm && activeTool !== 'request' && (
         <MarkingForm
           isProperty={activeTool === 'property'}
           geometryType={pendingGeometryType}

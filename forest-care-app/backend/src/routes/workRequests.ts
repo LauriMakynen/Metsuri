@@ -5,24 +5,36 @@ import { authMiddleware, optionalAuthMiddleware, AuthRequest } from '../middlewa
 const router = Router();
 
 const VALID_TYPES = ['vesakonhoito', 'istutus', 'harvennus', 'avohakkuu', 'muu_tyo'];
+const VALID_GEOMETRIES = ['Polygon', 'MultiPolygon', 'Point'];
 const MAX_NOTE_LENGTH = 1000;
-const MAX_BID_EUR = 10_000_000;
+const MAX_TITLE_LENGTH = 255;
+const MAX_EUR = 10_000_000;
 
 // Chosen by the owner when publishing:
 // owner_receives = timber sale (the buyer pays the owner) → highest offer is best,
 // owner_pays = service (the owner pays the doer) → lowest offer is best.
 const VALID_PRICING = ['owner_receives', 'owner_pays'];
-const PRICING_SQL = 'wr.pricing';
 
 // Bid summary for a work request row aliased wr
 const BID_SUMMARY_JOIN = `
   LEFT JOIN LATERAL (
     SELECT COUNT(*)::int AS bid_count,
-           CASE WHEN ${PRICING_SQL} = 'owner_receives' THEN MAX(amount_eur) ELSE MIN(amount_eur) END AS best_bid_eur,
+           CASE WHEN wr.pricing = 'owner_receives' THEN MAX(amount_eur) ELSE MIN(amount_eur) END AS best_bid_eur,
            MAX(created_at) AS latest_bid_at
     FROM work_request_bids
     WHERE work_request_id = wr.id
   ) b ON true`;
+
+// Columns describing the requested work itself
+const REQUEST_COLUMNS = `
+  wr.id, wr.note, wr.created_at, wr.type, wr.title, wr.area_ha, wr.pricing, wr.target_price_eur,
+  CASE WHEN GeometryType(wr.geometry) = 'POINT' THEN 'point' ELSE 'area' END AS geometry_type,
+  ST_AsGeoJSON(wr.geometry)::json AS geometry,
+  b.bid_count, b.best_bid_eur, b.latest_bid_at`;
+
+function isValidEur(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= MAX_EUR;
+}
 
 /**
  * Open work requests as shown to work providers. Owner and bidder identities are never
@@ -30,10 +42,10 @@ const BID_SUMMARY_JOIN = `
  */
 async function fetchPublicRequests(viewerId: number | null, filters: { type?: string; id?: number }) {
   const values: unknown[] = [viewerId];
-  let where = `wr.status = 'open' AND m.geometry IS NOT NULL`;
+  let where = `wr.status = 'open'`;
   if (filters.type) {
     values.push(filters.type);
-    where += ` AND m.type = $${values.length}`;
+    where += ` AND wr.type = $${values.length}`;
   }
   if (filters.id) {
     values.push(filters.id);
@@ -41,17 +53,12 @@ async function fetchPublicRequests(viewerId: number | null, filters: { type?: st
   }
 
   const result = await pool.query(
-    `SELECT wr.id, wr.note, wr.created_at,
-            m.type, m.geometry_type, m.title, m.area_ha,
-            ST_AsGeoJSON(m.geometry)::json AS geometry,
-            ST_Y(ST_PointOnSurface(m.geometry)) AS lat,
-            ST_X(ST_PointOnSurface(m.geometry)) AS lng,
-            ${PRICING_SQL} AS pricing,
-            b.bid_count, b.best_bid_eur, b.latest_bid_at,
+    `SELECT ${REQUEST_COLUMNS},
+            ST_Y(ST_PointOnSurface(wr.geometry)) AS lat,
+            ST_X(ST_PointOnSurface(wr.geometry)) AS lng,
             COALESCE(wr.user_id = $1, false) AS is_own,
             mine.my_bid_eur
      FROM work_requests wr
-     JOIN markings m ON m.id = wr.marking_id
      ${BID_SUMMARY_JOIN}
      LEFT JOIN LATERAL (
        SELECT amount_eur AS my_bid_eur
@@ -63,6 +70,24 @@ async function fetchPublicRequests(viewerId: number | null, filters: { type?: st
      WHERE ${where}
      ORDER BY wr.created_at DESC
      LIMIT 200`,
+    values
+  );
+  return result.rows;
+}
+
+async function fetchOwnRequests(userId: number, id?: number) {
+  const values: unknown[] = [userId];
+  let where = 'wr.user_id = $1';
+  if (id) {
+    values.push(id);
+    where += ' AND wr.id = $2';
+  }
+  const result = await pool.query(
+    `SELECT ${REQUEST_COLUMNS}, wr.property_id, wr.status, wr.updated_at
+     FROM work_requests wr
+     ${BID_SUMMARY_JOIN}
+     WHERE ${where}
+     ORDER BY wr.created_at DESC`,
     values
   );
   return result.rows;
@@ -88,19 +113,74 @@ router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response):
 // GET /api/work-requests/mine - The authenticated owner's own work requests with bid summary
 router.get('/mine', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const result = await pool.query(
-      `SELECT wr.id, wr.marking_id, wr.note, wr.status, wr.created_at, wr.updated_at,
-              ${PRICING_SQL} AS pricing, b.bid_count, b.best_bid_eur, b.latest_bid_at
-       FROM work_requests wr
-       JOIN markings m ON m.id = wr.marking_id
-       ${BID_SUMMARY_JOIN}
-       WHERE wr.user_id = $1
-       ORDER BY wr.created_at DESC`,
-      [req.userId]
-    );
-    res.json(result.rows);
+    res.json(await fetchOwnRequests(req.userId as number));
   } catch (error) {
     console.error('Get own work requests error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/work-requests - Publish planned work on one of the user's parcels
+router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { property_id, type, title, geometry, note, pricing, target_price_eur } = req.body ?? {};
+
+  if (!Number.isInteger(property_id)) {
+    res.status(400).json({ error: 'property_id is required' });
+    return;
+  }
+  if (!VALID_TYPES.includes(type)) {
+    res.status(400).json({ error: `Invalid type. Must be one of: ${VALID_TYPES.join(', ')}` });
+    return;
+  }
+  if (typeof title !== 'string' || !title.trim() || title.length > MAX_TITLE_LENGTH) {
+    res.status(400).json({ error: 'Anna työpyynnölle otsikko' });
+    return;
+  }
+  if (!geometry || !VALID_GEOMETRIES.includes(geometry.type)) {
+    res.status(400).json({ error: 'Merkitse työn alue kartalle' });
+    return;
+  }
+  if (note !== undefined && note !== null && (typeof note !== 'string' || note.length > MAX_NOTE_LENGTH)) {
+    res.status(400).json({ error: `note must be a string of at most ${MAX_NOTE_LENGTH} characters` });
+    return;
+  }
+  if (!VALID_PRICING.includes(pricing)) {
+    res.status(400).json({ error: 'Valitse, onko kyse puukaupasta vai palvelutyöstä' });
+    return;
+  }
+  if (!isValidEur(target_price_eur)) {
+    res.status(400).json({ error: `Anna hinta euroina (0–${MAX_EUR} €)` });
+    return;
+  }
+
+  try {
+    const propCheck = await pool.query('SELECT id FROM properties WHERE id = $1 AND user_id = $2', [
+      property_id,
+      req.userId,
+    ]);
+    if (propCheck.rows.length === 0) {
+      res.status(404).json({ error: 'Property not found' });
+      return;
+    }
+
+    // Area is computed on the server from the geometry (geodesic), not trusted from the client
+    const inserted = await pool.query(
+      `INSERT INTO work_requests (user_id, property_id, type, title, geometry, area_ha, note, pricing, target_price_eur)
+       VALUES ($1, $2, $3, $4, ST_GeomFromGeoJSON($5),
+               CASE WHEN GeometryType(ST_GeomFromGeoJSON($5)) = 'POINT' THEN NULL
+                    ELSE ROUND((ST_Area(ST_GeomFromGeoJSON($5)::geography) / 10000)::numeric, 2) END,
+               $6, $7, $8)
+       RETURNING id`,
+      [
+        req.userId, property_id, type, title.trim(), JSON.stringify(geometry),
+        typeof note === 'string' && note.trim() ? note.trim() : null,
+        pricing, Math.round(target_price_eur * 100) / 100,
+      ]
+    );
+    const [created] = await fetchOwnRequests(req.userId as number, inserted.rows[0].id);
+    res.status(201).json(created);
+  } catch (error) {
+    console.error('Create work request error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -114,8 +194,8 @@ router.post('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response)
     res.status(400).json({ error: 'Invalid id' });
     return;
   }
-  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_BID_EUR) {
-    res.status(400).json({ error: `Tarjouksen pitää olla 0–${MAX_BID_EUR} €` });
+  if (!isValidEur(amount)) {
+    res.status(400).json({ error: `Tarjouksen pitää olla 0–${MAX_EUR} €` });
     return;
   }
 
@@ -139,53 +219,6 @@ router.post('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response)
     res.status(201).json(updated);
   } catch (error) {
     console.error('Create bid error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-// POST /api/work-requests - Publish (or re-open) a work request for one of the user's markings
-router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { marking_id, note, pricing } = req.body;
-
-  if (!Number.isInteger(marking_id)) {
-    res.status(400).json({ error: 'marking_id is required' });
-    return;
-  }
-  if (note !== undefined && note !== null && (typeof note !== 'string' || note.length > MAX_NOTE_LENGTH)) {
-    res.status(400).json({ error: `note must be a string of at most ${MAX_NOTE_LENGTH} characters` });
-    return;
-  }
-  if (!VALID_PRICING.includes(pricing)) {
-    res.status(400).json({ error: 'Valitse, onko kyse puukaupasta vai palvelutyöstä' });
-    return;
-  }
-
-  try {
-    const markingCheck = await pool.query(
-      'SELECT id, geometry IS NOT NULL AS has_geometry FROM markings WHERE id = $1 AND user_id = $2',
-      [marking_id, req.userId]
-    );
-    if (markingCheck.rows.length === 0) {
-      res.status(404).json({ error: 'Marking not found' });
-      return;
-    }
-    if (!markingCheck.rows[0].has_geometry) {
-      res.status(400).json({ error: 'Work requests need a marking with a location on the map' });
-      return;
-    }
-
-    const result = await pool.query(
-      `INSERT INTO work_requests (user_id, marking_id, note, pricing)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (marking_id)
-       DO UPDATE SET note = EXCLUDED.note, pricing = EXCLUDED.pricing, status = 'open', updated_at = NOW()
-       RETURNING id, marking_id, note, status, pricing, created_at, updated_at,
-                 0 AS bid_count, NULL AS best_bid_eur, NULL AS latest_bid_at`,
-      [req.userId, marking_id, note?.trim() || null, pricing]
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error('Create work request error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

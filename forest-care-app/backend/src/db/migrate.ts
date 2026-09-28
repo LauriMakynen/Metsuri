@@ -170,6 +170,38 @@ async function migrate() {
     `);
     await client.query('ALTER TABLE work_requests ALTER COLUMN pricing SET NOT NULL');
 
+    // Work requests are planned work, independent of markings (which record done work):
+    // own parcel, type, title, area and the owner's price. Older rows are backfilled from
+    // the marking they were published from.
+    await client.query(`
+      ALTER TABLE work_requests
+        ADD COLUMN IF NOT EXISTS property_id INTEGER REFERENCES properties(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS type VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS title VARCHAR(255),
+        ADD COLUMN IF NOT EXISTS geometry GEOMETRY(GEOMETRY, 4326),
+        ADD COLUMN IF NOT EXISTS area_ha NUMERIC(10,2),
+        ADD COLUMN IF NOT EXISTS target_price_eur NUMERIC(12,2) CHECK (target_price_eur > 0)
+    `);
+    await client.query(`
+      UPDATE work_requests wr
+      SET type = m.type, title = m.title, geometry = m.geometry, area_ha = m.area_ha, property_id = m.property_id
+      FROM markings m
+      WHERE m.id = wr.marking_id AND wr.type IS NULL
+    `);
+    await client.query('ALTER TABLE work_requests ALTER COLUMN marking_id DROP NOT NULL');
+    await client.query('ALTER TABLE work_requests ALTER COLUMN type SET NOT NULL');
+    await client.query('ALTER TABLE work_requests ALTER COLUMN title SET NOT NULL');
+    await client.query('ALTER TABLE work_requests ALTER COLUMN geometry SET NOT NULL');
+    // Deleting a done-work marking must no longer delete a work request made from it
+    await client.query('ALTER TABLE work_requests DROP CONSTRAINT IF EXISTS work_requests_marking_id_fkey');
+    await client.query(`
+      ALTER TABLE work_requests ADD CONSTRAINT work_requests_marking_id_fkey
+        FOREIGN KEY (marking_id) REFERENCES markings(id) ON DELETE SET NULL
+    `);
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS work_requests_property_id_idx ON work_requests(property_id)'
+    );
+
     // Price offers on work requests. Bidder identity is never shown publicly.
     await client.query(`
       CREATE TABLE IF NOT EXISTS work_request_bids (

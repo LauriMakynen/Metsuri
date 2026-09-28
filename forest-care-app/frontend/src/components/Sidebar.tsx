@@ -5,12 +5,12 @@ import type {
   ForestDataResponse,
   ForestValuationResponse,
   WorkRequest,
-  Pricing,
 } from '../types';
 import PropertySearch from './PropertySearch';
 import ActivePropertyCard from './ActivePropertyCard';
 import PropertyList from './PropertyList';
 import MarkingList from './MarkingList';
+import WorkRequestList from './WorkRequestList';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -26,9 +26,9 @@ interface SidebarProps {
   onSelectProperty: (property: Property) => void;
   onDeleteProperty: (id: number) => void;
   onDeleteMarking: (id: number) => void;
-  workRequests: Record<number, WorkRequest>;
-  canRequestWork: boolean;
-  onRequestWork: (markingId: number, note: string, pricing: Pricing) => Promise<void>;
+  workRequests: WorkRequest[];
+  canPublishRequests: boolean;
+  onNewWorkRequest: () => void;
   onWithdrawWorkRequest: (requestId: number) => Promise<void>;
 }
 
@@ -47,8 +47,8 @@ export default function Sidebar({
   onDeleteProperty,
   onDeleteMarking,
   workRequests,
-  canRequestWork,
-  onRequestWork,
+  canPublishRequests,
+  onNewWorkRequest,
   onWithdrawWorkRequest,
 }: SidebarProps) {
   return (
@@ -69,14 +69,18 @@ export default function Sidebar({
           onDelete={onDeleteProperty}
         />
 
+        <WorkRequestList
+          requests={workRequests}
+          selectedPropertyId={selectedPropertyId}
+          canPublish={canPublishRequests}
+          onNewRequest={onNewWorkRequest}
+          onWithdraw={onWithdrawWorkRequest}
+        />
+
         <MarkingList
           markings={markings}
           selectedPropertyId={selectedPropertyId}
           onDelete={onDeleteMarking}
-          workRequests={workRequests}
-          canRequestWork={canRequestWork}
-          onRequestWork={onRequestWork}
-          onWithdrawWorkRequest={onWithdrawWorkRequest}
         />
       </div>
     </aside>

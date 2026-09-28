@@ -4,7 +4,7 @@ import { workRequestsService } from '../services/forestService';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { formatArea } from '../utils/measurement';
 import { formatDate } from '../utils/dateFormatting';
-import { BEST_BID_LABEL, PRICING_HINT, formatEur } from '../utils/bids';
+import { BEST_BID_LABEL, PRICING_HINT, TARGET_PRICE_LABEL, formatEur } from '../utils/bids';
 import type { PublicWorkRequest } from '../types';
 
 interface WorkRequestCardProps {
@@ -76,6 +76,11 @@ export default function WorkRequestCard({
       </button>
 
       <div className="bid-box">
+        {request.target_price_eur !== null && (
+          <span className="bid-target">
+            {TARGET_PRICE_LABEL[request.pricing]}: <strong>{formatEur(request.target_price_eur)}</strong>
+          </span>
+        )}
         {hasBids ? (
           <div className="bid-best">
             <span className="bid-best-label">{BEST_BID_LABEL[request.pricing]}</span>

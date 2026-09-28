@@ -31,6 +31,18 @@ export const BEST_BID_LABEL: Record<Pricing, string> = {
   owner_pays: 'Edullisin tarjous',
 };
 
+// The owner's own price as shown to others
+export const TARGET_PRICE_LABEL: Record<Pricing, string> = {
+  owner_receives: 'Omistajan hintatoive',
+  owner_pays: 'Omistaja valmis maksamaan',
+};
+
+// The owner's own price in the publish form
+export const TARGET_PRICE_QUESTION: Record<Pricing, string> = {
+  owner_receives: 'Mikä on hintatoiveesi puusta?',
+  owner_pays: 'Paljonko olet valmis maksamaan työstä?',
+};
+
 export const PRICING_HINT: Record<Pricing, string> = {
   owner_receives: 'Puukauppa – tarjoa hinta, jonka maksat metsänomistajalle puusta.',
   owner_pays: 'Palvelutyö – tarjoa hinta, jolla teet työn.',
