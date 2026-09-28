@@ -577,6 +577,24 @@ html, body, #root {
 .activity-mode .guest-banner,
 .activity-mode .map-sidebar { display: none !important; }
 
+/* Shown on the map when a logged-in owner has no parcels yet */
+.empty-parcel-notice {
+  position: absolute; bottom: 6.5rem; left: 50%; transform: translateX(-50%); z-index: 960;
+  width: min(420px, calc(100% - 1.5rem));
+  background: var(--white); border-radius: 16px; padding: 1rem 1.1rem;
+  box-shadow: 0 10px 30px rgba(5,46,22,0.25); border-top: 4px solid var(--forest-green);
+  display: flex; flex-direction: column; gap: 0.5rem;
+}
+.empty-parcel-notice strong { font-size: 1.02rem; padding-right: 1.5rem; }
+.empty-parcel-notice p { color: var(--text-light); font-size: 0.9rem; line-height: 1.45; }
+.empty-parcel-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.25rem; }
+.empty-parcel-actions .btn { flex: 1; white-space: nowrap; }
+.empty-parcel-close {
+  position: absolute; top: 0.5rem; right: 0.5rem; width: 32px; height: 32px;
+  background: none; border: none; font-size: 1rem; color: var(--text-light); cursor: pointer; border-radius: 50%;
+}
+.empty-parcel-close:hover { background: var(--forest-green-bg); }
+
 .activity-fab {
   position: absolute; left: 50%; transform: translateX(-50%); bottom: 6.5rem; z-index: 960;
   background: var(--forest-green); color: var(--white); border: 3px solid var(--white);

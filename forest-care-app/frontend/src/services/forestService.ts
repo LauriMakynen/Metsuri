@@ -62,6 +62,15 @@ function normalizeMarking(marking: Marking): Marking {
   };
 }
 
+// PostgreSQL NUMERIC (area_ha) arrives as a string
+function normalizeProperty(property: Property): Property {
+  return {
+    ...property,
+    geometry: normalizeGeometry(property.geometry),
+    area_ha: normalizeNumber(property.area_ha),
+  };
+}
+
 // Auth API calls
 export const authService = {
   register: async (email: string, password: string) => {
@@ -85,17 +94,17 @@ export const authService = {
 export const propertiesService = {
   getAll: async (): Promise<Property[]> => {
     const response = await api.get<Property[]>('/api/properties');
-    return response.data;
+    return response.data.map(normalizeProperty);
   },
 
   create: async (name: string, geometry: GeoJSONGeometry): Promise<Property> => {
     const response = await api.post<Property>('/api/properties', { name, geometry });
-    return response.data;
+    return normalizeProperty(response.data);
   },
 
   update: async (id: number, data: Partial<{ name: string; geometry: GeoJSONGeometry }>): Promise<Property> => {
     const response = await api.put<Property>(`/api/properties/${id}`, data);
-    return response.data;
+    return normalizeProperty(response.data);
   },
 
   delete: async (id: number): Promise<void> => {
@@ -109,7 +118,7 @@ export const propertiesService = {
     area_ha?: number;
   }): Promise<Property> => {
     const response = await api.post<Property>('/api/properties/import', data);
-    return response.data;
+    return normalizeProperty(response.data);
   },
 
   getMarkings: async (propertyId: number): Promise<Marking[]> => {

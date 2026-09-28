@@ -99,6 +99,7 @@ export default function MapPage() {
   const baseLayersRef = useRef<Record<BaseLayerKey, L.TileLayer> | null>(null);
   const clickedCadastreLayerRef = useRef<L.Layer | null>(null);
   const measurementLayerRef = useRef<L.FeatureGroup | null>(null);
+  const autoSelectedRef = useRef(false);
 
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
@@ -134,6 +135,8 @@ export default function MapPage() {
   const [cadastreClickLoading, setCadastreClickLoading] = useState(false);
   const [workRequests, setWorkRequests] = useState<Record<number, WorkRequest>>({});
   const [activityOpen, setActivityOpen] = useState(false);
+  const [propertiesLoaded, setPropertiesLoaded] = useState(false);
+  const [emptyNoticeDismissed, setEmptyNoticeDismissed] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'marking' | 'property'; id: number; label: string } | null>(null);
 
   // Measurement tool state
@@ -149,6 +152,13 @@ export default function MapPage() {
     if (isGuest) return;
     const props = await propertiesService.getAll();
     setProperties(props);
+    setPropertiesLoaded(true);
+    // "Avaa oma metsäpalsta" should land on the parcel, not on the whole of Finland
+    if (props.length > 0 && !autoSelectedRef.current) {
+      autoSelectedRef.current = true;
+      setSelectedPropertyId((current) => current ?? props[0].id);
+      setSelectedPropertyGeometry((current) => current ?? props[0].geometry);
+    }
   }, [isGuest]);
 
   const loadMarkings = useCallback(async (propertyId?: number | null) => {
@@ -1235,6 +1245,33 @@ export default function MapPage() {
                   </div>
                 </>
               ) : null}
+            </div>
+          )}
+
+          {!isGuest && propertiesLoaded && properties.length === 0 && !emptyNoticeDismissed
+            && !activeTool && !showForm && !activityOpen && (
+            <div className="empty-parcel-notice" role="status">
+              <button
+                className="empty-parcel-close"
+                onClick={() => setEmptyNoticeDismissed(true)}
+                title="Sulje"
+                aria-label="Sulje"
+              >
+                ✕
+              </button>
+              <strong>🌲 Sinulla ei ole vielä lisättyä palstaa</strong>
+              <p>Lisää oma metsäpalstasi, niin voit tehdä merkintöjä ja aloittaa aktiviteetin. Karttaa voit selata jo nyt.</p>
+              <div className="empty-parcel-actions">
+                <button
+                  className="btn btn-primary btn-compact"
+                  onClick={() => { setEmptyNoticeDismissed(true); setSidebarOpen(true); }}
+                >
+                  🔍 Hae kiinteistötunnuksella
+                </button>
+                <button className="btn btn-secondary btn-compact" onClick={() => startDraw('property')}>
+                  ✏️ Piirrä kartalle
+                </button>
+              </div>
             </div>
           )}
 
