@@ -154,6 +154,25 @@ forest-care-app/
 - Docker + Docker Compose
 - npm
 
+### Pikakäynnistys (suositeltu)
+
+Aja WSL:n / Linuxin terminaalissa:
+
+```bash
+cd forest-care-app
+./start.sh
+```
+
+Skripti tarkistaa Dockerin ja Node-version, luo puuttuvat `.env`-tiedostot esimerkeistä (satunnaisella `JWT_SECRET`illä), asentaa riippuvuudet tarvittaessa, käynnistää tietokannan, ajaa migraatiot ja käynnistää backendin ja frontendin samaan terminaaliin. `Ctrl+C` sammuttaa palvelimet.
+
+| Komento | Kuvaus |
+|---------|--------|
+| `./start.sh` | Käynnistä kaikki |
+| `./start.sh stop` | Pysäytä tietokantakontti |
+| `./start.sh reset-db` | Poista tietokanta ja sen data (kysyy vahvistuksen) |
+
+Alla samat vaiheet käsin.
+
 ### Ensimmäinen käyttöönotto
 
 1. Käynnistä tietokanta:
