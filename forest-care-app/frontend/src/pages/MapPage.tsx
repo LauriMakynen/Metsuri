@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -10,10 +10,12 @@ import {
   markingsService,
   cadastreService,
   mapService,
+  workRequestsService,
 } from '../services/forestService';
 import { calculateAreaHa, formatArea, calculateDistance, formatDistance } from '../utils/measurement';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { getFollowUpRecommendation } from '../utils/followUpRecommendation';
+import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import type {
   Property,
   Marking,
@@ -24,6 +26,7 @@ import type {
   MapLayerConfig,
   ForestDataResponse,
   ForestValuationResponse,
+  WorkRequest,
 } from '../types';
 import MarkingForm from '../components/MarkingForm';
 import Sidebar from '../components/Sidebar';
@@ -37,22 +40,6 @@ L.Icon.Default.mergeOptions({
 
 type DrawTool = 'property' | 'point' | 'line' | 'area' | 'note' | 'measure' | null;
 type BaseLayerKey = 'maastokartta' | 'peruskartta' | 'ortokuva';
-
-const MARKING_COLORS: Record<MarkingType, string> = {
-  vesakonhoito: '#f59e0b',
-  istutus: '#10b981',
-  harvennus: '#3b82f6',
-  avohakkuu: '#ef4444',
-  muu_tyo: '#8b5cf6',
-};
-
-const MARKING_TYPE_LABELS: Record<MarkingType, string> = {
-  vesakonhoito: 'Vesakonhoito',
-  istutus: 'Istutus',
-  harvennus: 'Harvennus',
-  avohakkuu: 'Avohakkuu',
-  muu_tyo: 'Muu työ',
-};
 
 const PROPERTY_CODE_REGEX = /^\d{3}-\d{3}-\d{2}-\d{1,4}$/;
 
@@ -137,6 +124,7 @@ export default function MapPage() {
   const [clickedCadastre, setClickedCadastre] = useState<CadastreFeature | null>(null);
   const [clickedCadastreCustomName, setClickedCadastreCustomName] = useState('');
   const [cadastreClickLoading, setCadastreClickLoading] = useState(false);
+  const [workRequests, setWorkRequests] = useState<Record<number, WorkRequest>>({});
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'marking' | 'property'; id: number; label: string } | null>(null);
 
   // Measurement tool state
@@ -350,6 +338,35 @@ export default function MapPage() {
   useEffect(() => {
     loadMarkings(selectedPropertyId).catch(() => setError('Tietojen lataaminen epäonnistui'));
   }, [selectedPropertyId, loadMarkings]);
+
+  // Own work requests, keyed by marking id (not available in guest mode)
+  useEffect(() => {
+    if (isGuest) return;
+    workRequestsService
+      .getMine()
+      .then((requests) => setWorkRequests(Object.fromEntries(requests.map((r) => [r.marking_id, r]))))
+      .catch(() => setError('Työpyyntöjen lataaminen epäonnistui'));
+  }, [isGuest]);
+
+  const handleRequestWork = async (markingId: number, note: string) => {
+    try {
+      const request = await workRequestsService.create(markingId, note);
+      setWorkRequests((prev) => ({ ...prev, [markingId]: request }));
+    } catch {
+      setError('Työpyynnön julkaisu epäonnistui');
+    }
+  };
+
+  const handleWithdrawWorkRequest = async (requestId: number) => {
+    try {
+      await workRequestsService.withdraw(requestId);
+      setWorkRequests((prev) =>
+        Object.fromEntries(Object.entries(prev).filter(([, r]) => r.id !== requestId))
+      );
+    } catch {
+      setError('Työpyynnön peruminen epäonnistui');
+    }
+  };
 
   const renderSelectedHighlight = useCallback((geometry: GeoJSONGeometry, color: string) => {
     if (!mapRef.current || !geometry) return;
@@ -1004,7 +1021,7 @@ export default function MapPage() {
           >
             ☰
           </button>
-          <span className="map-nav-title">🌲 Metsuri</span>
+          <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä">🌲 Metsuri</Link>
         </div>
         <div className="map-nav-right">
           {isGuest ? (
@@ -1048,6 +1065,10 @@ export default function MapPage() {
           onSelectProperty={handleSelectProperty}
           onDeleteProperty={handleDeleteProperty}
           onDeleteMarking={handleDeleteMarking}
+          workRequests={workRequests}
+          canRequestWork={!isGuest}
+          onRequestWork={handleRequestWork}
+          onWithdrawWorkRequest={handleWithdrawWorkRequest}
         />
 
         <div className="map-wrapper">

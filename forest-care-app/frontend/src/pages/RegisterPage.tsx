@@ -21,7 +21,7 @@ export default function RegisterPage() {
     try {
       const data = await authService.register(email, password);
       login(data.token, data.user);
-      navigate('/map');
+      navigate('/start');
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'response' in err

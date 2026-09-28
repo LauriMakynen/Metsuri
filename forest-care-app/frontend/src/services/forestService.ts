@@ -9,6 +9,8 @@ import type {
   MapLayerConfig,
   ForestDataResponse,
   ForestValuationResponse,
+  WorkRequest,
+  PublicWorkRequest,
 } from '../types';
 
 function normalizeDate(value: unknown): string | null {
@@ -167,6 +169,34 @@ export const markingsService = {
 
   delete: async (id: number): Promise<void> => {
     await api.delete(`/api/markings/${id}`);
+  },
+};
+
+export const workRequestsService = {
+  // Public: open requests for work providers (works without login)
+  getOpen: async (type?: MarkingType): Promise<PublicWorkRequest[]> => {
+    const response = await api.get<PublicWorkRequest[]>('/api/work-requests', {
+      params: type ? { type } : undefined,
+    });
+    // PostgreSQL NUMERIC arrives as a string
+    return response.data.map((r) => ({
+      ...r,
+      area_ha: r.area_ha === null ? null : Number(r.area_ha),
+    }));
+  },
+  getMine: async (): Promise<WorkRequest[]> => {
+    const response = await api.get<WorkRequest[]>('/api/work-requests/mine');
+    return response.data;
+  },
+  create: async (markingId: number, note: string): Promise<WorkRequest> => {
+    const response = await api.post<WorkRequest>('/api/work-requests', {
+      marking_id: markingId,
+      note,
+    });
+    return response.data;
+  },
+  withdraw: async (id: number): Promise<void> => {
+    await api.delete(`/api/work-requests/${id}`);
   },
 };
 

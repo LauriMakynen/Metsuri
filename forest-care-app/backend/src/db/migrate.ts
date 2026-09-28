@@ -139,6 +139,23 @@ async function migrate() {
       'CREATE INDEX IF NOT EXISTS forest_valuation_property_id_idx ON forest_valuation(property_id)'
     );
 
+    // Work requests – forest owners publish a marking as work that needs a doer.
+    // One request per marking; withdrawing deletes the row.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS work_requests (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        marking_id INTEGER NOT NULL UNIQUE REFERENCES markings(id) ON DELETE CASCADE,
+        note TEXT,
+        status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS work_requests_status_idx ON work_requests(status)'
+    );
+
     await client.query('COMMIT');
     console.log('Migration completed successfully');
   } catch (error) {

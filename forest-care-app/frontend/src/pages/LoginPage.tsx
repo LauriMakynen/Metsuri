@@ -22,7 +22,7 @@ export default function LoginPage() {
     try {
       const data = await authService.login(email, password);
       login(data.token, data.user);
-      navigate('/map');
+      navigate('/start');
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         if (!err.response) {
@@ -91,7 +91,7 @@ export default function LoginPage() {
         <button
           type="button"
           className="btn btn-ghost"
-          onClick={() => { loginAsGuest(); navigate('/map'); }}
+          onClick={() => { loginAsGuest(); navigate('/start'); }}
         >
           Jatka kirjautumatta
         </button>

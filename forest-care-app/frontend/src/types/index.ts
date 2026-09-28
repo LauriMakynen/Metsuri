@@ -52,6 +52,30 @@ export interface Marking {
   updated_at: string;
 }
 
+// A forest owner's own work request for one marking
+export interface WorkRequest {
+  id: number;
+  marking_id: number;
+  note: string | null;
+  status: 'open' | 'closed';
+  created_at: string;
+  updated_at: string;
+}
+
+// Open work request as shown publicly to work providers (no owner details)
+export interface PublicWorkRequest {
+  id: number;
+  note: string | null;
+  created_at: string;
+  type: MarkingType;
+  geometry_type: GeometryType;
+  title: string;
+  area_ha: number | null;
+  geometry: GeoJSONGeometry;
+  lat: number;
+  lng: number;
+}
+
 export interface CadastreFeatureProperties {
   propertyCode: string;
   name: string;

@@ -1,4 +1,11 @@
-import type { Property, Marking, CadastreFeature, ForestDataResponse, ForestValuationResponse } from '../types';
+import type {
+  Property,
+  Marking,
+  CadastreFeature,
+  ForestDataResponse,
+  ForestValuationResponse,
+  WorkRequest,
+} from '../types';
 import PropertySearch from './PropertySearch';
 import ActivePropertyCard from './ActivePropertyCard';
 import PropertyList from './PropertyList';
@@ -18,6 +25,10 @@ interface SidebarProps {
   onSelectProperty: (property: Property) => void;
   onDeleteProperty: (id: number) => void;
   onDeleteMarking: (id: number) => void;
+  workRequests: Record<number, WorkRequest>;
+  canRequestWork: boolean;
+  onRequestWork: (markingId: number, note: string) => Promise<void>;
+  onWithdrawWorkRequest: (requestId: number) => Promise<void>;
 }
 
 export default function Sidebar({
@@ -34,6 +45,10 @@ export default function Sidebar({
   onSelectProperty,
   onDeleteProperty,
   onDeleteMarking,
+  workRequests,
+  canRequestWork,
+  onRequestWork,
+  onWithdrawWorkRequest,
 }: SidebarProps) {
   return (
     <aside className={`map-sidebar ${isOpen ? 'open' : ''}`}>
@@ -53,7 +68,15 @@ export default function Sidebar({
           onDelete={onDeleteProperty}
         />
 
-        <MarkingList markings={markings} selectedPropertyId={selectedPropertyId} onDelete={onDeleteMarking} />
+        <MarkingList
+          markings={markings}
+          selectedPropertyId={selectedPropertyId}
+          onDelete={onDeleteMarking}
+          workRequests={workRequests}
+          canRequestWork={canRequestWork}
+          onRequestWork={onRequestWork}
+          onWithdrawWorkRequest={onWithdrawWorkRequest}
+        />
       </div>
     </aside>
   );
