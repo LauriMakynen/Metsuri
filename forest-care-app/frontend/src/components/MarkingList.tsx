@@ -83,7 +83,7 @@ export default function MarkingList({
                     <small style={{ color: '#6b7280', display: 'block' }}>
                       {MARKING_TYPE_LABELS[m.type]}
                     </small>
-                    {m.geometry?.type === 'Polygon' && m.area_ha !== undefined && (
+                    {(m.geometry?.type === 'Polygon' || m.geometry?.type === 'MultiPolygon') && m.area_ha != null && (
                       <small style={{ color: '#6b7280', display: 'block' }}>
                         📐 {formatArea(m.area_ha)}
                       </small>

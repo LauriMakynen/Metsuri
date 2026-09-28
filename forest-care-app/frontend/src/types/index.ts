@@ -15,6 +15,7 @@ export type GeoJSONGeometry =
   | { type: 'Point'; coordinates: [number, number] }
   | { type: 'LineString'; coordinates: [number, number][] }
   | { type: 'Polygon'; coordinates: [number, number][][] }
+  | { type: 'MultiPolygon'; coordinates: [number, number][][][] }
   | null;
 
 // Marking types for forest management activities

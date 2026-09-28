@@ -30,6 +30,8 @@ import type {
 } from '../types';
 import MarkingForm from '../components/MarkingForm';
 import Sidebar from '../components/Sidebar';
+import ActivityTracker from '../components/ActivityTracker';
+import type { ActivityResult } from '../components/ActivityTracker';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -125,6 +127,7 @@ export default function MapPage() {
   const [clickedCadastreCustomName, setClickedCadastreCustomName] = useState('');
   const [cadastreClickLoading, setCadastreClickLoading] = useState(false);
   const [workRequests, setWorkRequests] = useState<Record<number, WorkRequest>>({});
+  const [activityOpen, setActivityOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<{ type: 'marking' | 'property'; id: number; label: string } | null>(null);
 
   // Measurement tool state
@@ -430,7 +433,7 @@ export default function MapPage() {
       `;
       
       // Add area for polygon markings
-      if (marking.geometry.type === 'Polygon' && marking.area_ha != null) {
+      if ((marking.geometry.type === 'Polygon' || marking.geometry.type === 'MultiPolygon') && marking.area_ha != null) {
         popupContent += `<br/><span style="font-weight:500">📐 ${formatArea(marking.area_ha)}</span>`;
       }
 
@@ -798,6 +801,67 @@ export default function MapPage() {
     }
   };
 
+  const openActivity = () => {
+    if (!selectedPropertyId) {
+      setError('Valitse ensin palsta, jolla aktiviteetti tehdään.');
+      setSidebarOpen(true);
+      return;
+    }
+    startDraw(null);
+    setSidebarOpen(false);
+    setActivityOpen(true);
+  };
+
+  // Save a finished GPS activity as an area marking on the selected parcel
+  const handleSaveActivity = async (result: ActivityResult) => {
+    if (!selectedPropertyId) return;
+    const today = new Date();
+    const operationDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const minutes = Math.max(1, Math.round(result.durationS / 60));
+    const title = `${MARKING_TYPE_LABELS[result.type]} ${today.toLocaleDateString('fi-FI')}`;
+    const description = `GPS-aktiviteetti: ${minutes} min, ${formatDistance(result.distanceM)} kävelty.`;
+    const geometry = result.geometry as GeoJSONGeometry;
+    const areaHa = Math.round(result.areaHa * 100) / 100;
+
+    try {
+      let marking: Marking;
+      if (isGuest) {
+        const followUp = getFollowUpRecommendation(result.type, operationDate);
+        marking = {
+          id: -Date.now(),
+          property_id: selectedPropertyId,
+          type: result.type,
+          geometry_type: 'area',
+          title,
+          description,
+          geometry,
+          area_ha: areaHa,
+          operation_date: operationDate,
+          follow_up_date_start: followUp.followUpDateStart,
+          follow_up_date_end: followUp.followUpDateEnd,
+          follow_up_note: followUp.followUpNote,
+          created_at: today.toISOString(),
+          updated_at: today.toISOString(),
+        };
+      } else {
+        marking = await markingsService.create({
+          property_id: selectedPropertyId,
+          type: result.type,
+          geometry_type: 'area',
+          title,
+          description,
+          geometry,
+          area_ha: areaHa,
+          operation_date: operationDate,
+        });
+      }
+      setMarkings((prev) => [marking, ...prev]);
+    } catch {
+      setError('Aktiviteetin tallennus epäonnistui');
+      throw new Error('save failed');
+    }
+  };
+
   const handleCancelForm = () => {
     drawnLayersRef.current?.clearLayers();
     setShowForm(false);
@@ -1011,7 +1075,7 @@ export default function MapPage() {
   };
 
   return (
-    <div className="map-page">
+    <div className={`map-page ${activityOpen ? 'activity-mode' : ''}`}>
       <nav className="map-nav">
         <div className="map-nav-left">
           <button
@@ -1166,6 +1230,23 @@ export default function MapPage() {
                 </>
               ) : null}
             </div>
+          )}
+
+          {activityOpen ? (
+            <ActivityTracker
+              mapRef={mapRef}
+              parcel={selectedPropertyGeometry}
+              parcelName={selectedProperty?.name ?? 'Valittu palsta'}
+              isGuest={isGuest}
+              onSave={handleSaveActivity}
+              onClose={() => setActivityOpen(false)}
+            />
+          ) : (
+            selectedPropertyId && !activeTool && !showForm && (
+              <button className="activity-fab" onClick={openActivity}>
+                ▶ Aloita aktiviteetti
+              </button>
+            )
           )}
 
           <div className="draw-toolbar">
