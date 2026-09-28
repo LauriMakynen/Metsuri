@@ -388,3 +388,85 @@ docker-compose up
 ```
 
 Tämä käynnistää tietokannan ja backendin. Frontend käynnistetään erikseen `npm run dev`:llä kehitysvaiheessa.
+
+---
+
+## Vercel & Production Deployment
+
+### Yleiskatsaus
+
+Metsuri-sovellus voidaan deployata tuotantoon seuraavalla tavalla:
+
+- **Frontend**: [Vercel](https://vercel.com) (React + Vite)
+- **Backend**: [Railway](https://railway.app), [Render](https://render.com), tai [Fly.io](https://fly.io) (Node.js + Express)
+- **Database**: [Neon](https://neon.tech), [Supabase](https://supabase.com), tai [AWS RDS](https://aws.amazon.com/rds/) (PostgreSQL + PostGIS)
+
+**Katso yksityiskohtaiset ohjeet**: [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+### Yleisimmät Vercel-ongelmat
+
+| Ongelma | Syy | Ratkaisu |
+|---------|-----|----------|
+| **404 /map ja muista React Router -reiteistä** | Vercel ei tiedä SPA-rewritingistä | Tarkista `frontend/vercel.json` on olemassa ja sisältää rewrite-säännöt |
+| **"VITE_API_URL is missing" konsolissa** | Environment variable ei asetettu | Lisää `VITE_API_URL` Vercelin Environment Variables -kohtaan |
+| **Frontend latautuu mutta API-kutsut eivät toimi** | Väärä backend URL tai backend pois käytöstä | Varmista `VITE_API_URL` osoittaa oikeaan backendiin (ei localhost:3001) |
+| **Kirjautuminen epäonnistuu** | Backend ei ole julkisesti saavutettavissa tai CORS-virhe | Varmista backend-palvelun URL on olemassa ja `FRONTEND_URL` backendissa osoittaa Vercel-domainiin |
+| **"Cannot read property 'token'" login jälkeen** | Backend API ei vastaa | Tarkista backend-palvelun status: `curl https://your-backend-url/api/health` |
+| **CORS-virhe: "Not allowed by CORS"** | Backend ei tunne Vercel-domainia | Aseta backendissa `FRONTEND_URL=https://your-domain.vercel.app` |
+| **Frontend build epäonnistuu Vercelissä** | TypeScript-virhe tai väärä build-komento | Varmista `npm run build` onnistuu paikallisesti (`npm run build` → `tsc -b && vite build`) |
+
+### Quick Start – Deployment Checklist
+
+**Frontend (Vercel)**:
+1. Yhdistä GitHub repository Verceliin
+2. Root Directory: `frontend`
+3. Framework: `Vite`
+4. Build Command: `npm run build`
+5. Environment Variable: `VITE_API_URL=https://your-backend-url.com`
+6. Deploy ✓
+
+**Backend (Railway/Render/Fly.io)**:
+1. Yhdistä GitHub repository palveluun
+2. Root Directory: `backend`
+3. Build Command: `npm install && npm run build`
+4. Start Command: `npm start`
+5. Environment Variables:
+   - `DATABASE_URL` (production PostgreSQL + PostGIS)
+   - `JWT_SECRET` (vahva salasana)
+   - `FRONTEND_URL` (Vercel-domain)
+   - `MML_API_KEY` (valinnainen)
+6. Deploy ✓
+
+**Database**:
+1. Luo PostgreSQL-instanssi (PostgreSQL 13+)
+2. Ota PostGIS-extension käyttöön: `CREATE EXTENSION postgis;`
+3. Aja migraatiot: `npm run migrate`
+4. Kopioi connection string → `DATABASE_URL` backendissa
+
+### Production Best Practices
+
+1. **Salasanaturvallisuus**:
+   - Käytä vahvoja salasanoja (JWT_SECRET vähintään 32 merkkiä)
+   - Älä laita salasanoja version controliin
+   - Kierrätä salasanoja säännöllisesti
+
+2. **HTTPS**:
+   - Vercel tarjoaa HTTPS automaattisesti
+   - Backend-palvelun pitää käyttää HTTPS:ää
+   - Database-yhteys suojaa SSL-sertifikaatilla
+
+3. **Monitoring**:
+   - Seuraa backend-logia deployment-palvelun dashboardissa
+   - Tarkista database-logi säännöllisesti
+   - Ota error tracking käyttöön (esim. Sentry)
+
+4. **Backups**:
+   - Database-backup päivittäin (useimmat pilvipalvelut tekevät tämän automaattisesti)
+   - Testaa restoration säännöllisesti
+
+5. **Seuranta**:
+   - Frontend: Vercel Analytics (automaattinen)
+   - Backend: Deployment-palvelun CPU/memory -seuranta
+   - Database: Connection pooling ja query performance
+
+Yksityiskohtaisemmat ohjeet: **[DEPLOYMENT.md](./DEPLOYMENT.md)**

@@ -62,8 +62,13 @@ app.use('/api/markings', apiLimiter, markingsRoutes);
 app.use('/api/cadastre', cadastreLimiter, cadastreRoutes);
 app.use('/api/map', apiLimiter, mapRoutes);
 
-// Health check endpoint
+// Health check endpoints
 app.get('/health', (_req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// API health check (for deployment verification)
+app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
