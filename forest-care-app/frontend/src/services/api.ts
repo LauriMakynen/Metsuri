@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Configure the base API URL - defaults to local backend
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Backend URL. Empty = same origin: in development the Vite proxy forwards /api to the
+// backend, so the app also works when opened from a phone. Set VITE_API_URL in production.
+const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 
 const api = axios.create({
   baseURL: API_BASE_URL,

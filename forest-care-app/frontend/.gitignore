@@ -11,6 +11,8 @@ node_modules
 dist
 dist-ssr
 *.local
+# Self-signed dev certificate for phone testing (start.sh phone)
+.cert
 
 # Editor directories and files
 .vscode/*

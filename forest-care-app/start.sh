@@ -2,8 +2,10 @@
 # Metsuri – koko sovelluksen käynnistys yhdellä komennolla.
 #
 #   ./start.sh          Käynnistä tietokanta, backend ja frontend (Ctrl+C sammuttaa)
+#   ./start.sh phone    Sama, mutta avattavissa puhelimella samasta WLANista (HTTPS, GPS toimii)
 #   ./start.sh stop     Pysäytä tietokantakontti
-#   ./start.sh reset-db Poista tietokanta ja sen data kokonaan (kysyy vahvistuksen)
+#   ./start.sh seed     Luo testitunnukset admin@metsuri.test ja yrittaja@metsuri.test
+#   ./start.sh reset-db Tyhjennä tietokanta ja luo testitunnukset (kysyy vahvistuksen)
 #
 # Ensimmäisellä ajokerralla skripti luo .env-tiedostot esimerkeistä,
 # asentaa npm-riippuvuudet ja ajaa migraatiot.
@@ -102,7 +104,49 @@ migrate() {
   (cd "$BACKEND" && npm run --silent migrate)
 }
 
+ensure_seed_password() {
+  # Testitunnusten salasana backend/.env:iin (SEED_PASSWORD), arvotaan jos puuttuu.
+  if ! grep -qE '^SEED_PASSWORD=.{8,}' "$BACKEND/.env"; then
+    local password
+    password="$(head -c 12 /dev/urandom | base64 | tr -d '/+=\n' | head -c 12)"
+    if grep -q '^SEED_PASSWORD=' "$BACKEND/.env"; then
+      sed -i "s|^SEED_PASSWORD=.*|SEED_PASSWORD=$password|" "$BACKEND/.env"
+    else
+      printf '\nSEED_PASSWORD=%s\n' "$password" >> "$BACKEND/.env"
+    fi
+    info "Arvottiin testitunnusten salasana backend/.env-tiedostoon (SEED_PASSWORD)"
+  fi
+}
+
+seed() {
+  ensure_seed_password
+  info "Luodaan testitunnukset..."
+  (cd "$BACKEND" && npm run --silent seed)
+  echo "    Salasana: grep SEED_PASSWORD backend/.env  (vaihda halutessasi ja aja ./start.sh seed)"
+}
+
+# Koneen osoite WLANissa. WSL2:n oletusverkossa (NAT) näkyy vain sisäinen 172.x-osoite,
+# jolloin puhelin ei tavoita konetta – silloin tarvitaan mirrored-verkkotila.
+lan_ip() {
+  # 10.255.255.254 on WSL:n sisäinen DNS-osoite, ei koneen verkko-osoite
+  hostname -I | tr ' ' '\n' | grep -E '^(192\.168\.|10\.)' | grep -v '^10\.255\.255\.254$' | head -1 || true
+}
+
+ensure_dev_cert() {
+  local ip="$1" dir="$FRONTEND/.cert"
+  if [[ -f "$dir/cert.pem" && "$(cat "$dir/ip" 2>/dev/null)" == "$ip" ]]; then return; fi
+  command -v openssl >/dev/null 2>&1 || fail "openssl puuttuu (sudo apt install openssl)."
+  mkdir -p "$dir"
+  info "Luodaan HTTPS-kehityssertifikaatti osoitteelle $ip..."
+  openssl req -x509 -newkey rsa:2048 -nodes -days 365 -subj "/CN=metsuri-dev" \
+    -addext "subjectAltName=IP:$ip,IP:127.0.0.1,DNS:localhost" \
+    -keyout "$dir/key.pem" -out "$dir/cert.pem" >/dev/null 2>&1
+  echo "$ip" > "$dir/ip"
+}
+
 run_servers() {
+  # Lisäargumentit välitetään Vitelle (esim. --host puhelintilassa)
+  local vite_args=("$@")
   local pids=()
   cleanup() {
     trap - INT TERM EXIT
@@ -116,12 +160,17 @@ run_servers() {
 
   (cd "$BACKEND"  && npm run dev 2>&1 | sed -u 's/^/\x1b[0;36m[backend]\x1b[0m  /') &
   pids+=($!)
-  (cd "$FRONTEND" && npm run dev -- --strictPort 2>&1 | sed -u 's/^/\x1b[0;35m[frontend]\x1b[0m /') &
+  (cd "$FRONTEND" && npm run dev -- --strictPort "${vite_args[@]}" 2>&1 | sed -u 's/^/\x1b[0;35m[frontend]\x1b[0m /') &
   pids+=($!)
 
   echo
   info "Sovellus käynnistyy:"
-  echo "    Frontend: http://localhost:5173"
+  if [[ -n "${PHONE_URL:-}" ]]; then
+    echo "    Puhelimella: $PHONE_URL   (sama WLAN; hyväksy selaimen varoitus itse tehdystä sertifikaatista)"
+    echo "    Koneella:    https://localhost:5173"
+  else
+    echo "    Frontend: http://localhost:5173"
+  fi
   echo "    Backend:  http://localhost:3001/health"
   echo "    Sammuta:  Ctrl+C"
   echo
@@ -133,9 +182,8 @@ run_servers() {
 
 # --- Komennot --------------------------------------------------------------
 
-cmd_start() {
+prepare() {
   check_docker
-  check_ports
   load_node
   ensure_env "$BACKEND"
   ensure_env "$FRONTEND"
@@ -143,7 +191,33 @@ cmd_start() {
   ensure_deps "$FRONTEND"
   start_db
   migrate
+}
+
+cmd_start() {
+  check_ports
+  prepare
   run_servers
+}
+
+cmd_phone() {
+  check_ports
+  local ip
+  ip="$(lan_ip)"
+  if [[ -z "$ip" ]]; then
+    warn "Koneen WLAN-osoitetta ei näy WSL:ssä, joten puhelin ei tavoita sovellusta."
+    echo "    Ota WSL:n mirrored-verkkotila käyttöön (kerran), ks. README: 'Testaus puhelimella'."
+    exit 1
+  fi
+  ensure_dev_cert "$ip"
+  export METSURI_DEV_CERT_DIR="$FRONTEND/.cert"
+  PHONE_URL="https://$ip:5173"
+  prepare
+  run_servers --host 0.0.0.0
+}
+
+cmd_seed() {
+  prepare
+  seed
 }
 
 cmd_stop() {
@@ -154,16 +228,20 @@ cmd_stop() {
 
 cmd_reset_db() {
   check_docker
-  read -r -p "Poistetaanko tietokanta ja KAIKKI sen data? Kirjoita 'kyllä': " answer
+  read -r -p "Poistetaanko tietokanta ja KAIKKI sen data (kaikki käyttäjät, palstat, merkinnät)? Kirjoita 'kyllä': " answer
   [[ "$answer" == "kyllä" ]] || { info "Peruttu."; exit 0; }
   compose down -v
-  info "Tietokanta poistettu. Seuraava ./start.sh luo sen uudelleen."
+  info "Tietokanta tyhjennetty."
+  prepare
+  seed
 }
 
 case "${1:-start}" in
   start)    cmd_start ;;
+  phone)    cmd_phone ;;
   stop)     cmd_stop ;;
+  seed)     cmd_seed ;;
   reset-db) cmd_reset_db ;;
-  -h|--help|help) sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//' ;;
-  *) fail "Tuntematon komento: $1 (käytä: start | stop | reset-db)" ;;
+  -h|--help|help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) fail "Tuntematon komento: $1 (käytä: start | phone | stop | seed | reset-db)" ;;
 esac

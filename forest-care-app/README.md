@@ -168,8 +168,42 @@ Skripti tarkistaa Dockerin ja Node-version, luo puuttuvat `.env`-tiedostot esime
 | Komento | Kuvaus |
 |---------|--------|
 | `./start.sh` | Käynnistä kaikki |
+| `./start.sh phone` | Käynnistä niin, että sovelluksen voi avata puhelimella (HTTPS) |
 | `./start.sh stop` | Pysäytä tietokantakontti |
-| `./start.sh reset-db` | Poista tietokanta ja sen data (kysyy vahvistuksen) |
+| `./start.sh seed` | Luo testitunnukset (ei poista mitään) |
+| `./start.sh reset-db` | Tyhjennä tietokanta ja luo testitunnukset (kysyy vahvistuksen) |
+
+### Testitunnukset
+
+`./start.sh seed` (tai `reset-db`) luo tunnukset:
+
+- `admin@metsuri.test` – metsänomistaja, jolla valmis Testipalsta, merkinnät ja avoin työpyyntö
+- `yrittaja@metsuri.test` – työn tarjoaja
+
+Salasana on `backend/.env`-tiedostossa kohdassa `SEED_PASSWORD` (arvotaan automaattisesti).
+Voit vaihtaa sen ja ajaa `./start.sh seed` uudelleen.
+
+### Testaus puhelimella
+
+Puhelimen pitää olla samassa WLANissa kuin kone. GPS toimii puhelimen selaimessa vain HTTPS:llä,
+joten `phone`-tila käyttää itse tehtyä sertifikaattia – selain varoittaa siitä, ja varoitus hyväksytään
+("Lisätiedot" → "Siirry sivustolle").
+
+**Kerran tehtävät Windows-asetukset** (WSL2 näkyy muuten vain koneen sisällä):
+
+1. Luo tiedosto `%USERPROFILE%\.wslconfig`, sisältö:
+   ```ini
+   [wsl2]
+   networkingMode=mirrored
+   ```
+2. Käynnistä WSL uudelleen PowerShellissä: `wsl --shutdown` (myös Docker Desktop käynnistyy uudelleen).
+3. Salli yhteydet porttiin 5173 – PowerShell **järjestelmänvalvojana**:
+   ```powershell
+   New-NetFirewallHyperVRule -Name Metsuri5173 -DisplayName "Metsuri dev 5173" -Direction Inbound -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' -Protocol TCP -LocalPorts 5173
+   ```
+4. Varmista, että WLAN-verkon profiili on Windowsissa **Yksityinen** (ei Julkinen).
+
+Sen jälkeen: `./start.sh phone` ja avaa puhelimella skriptin tulostama osoite (`https://192.168.x.x:5173`).
 
 Alla samat vaiheet käsin.
 
