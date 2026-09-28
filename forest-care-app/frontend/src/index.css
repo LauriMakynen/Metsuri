@@ -142,11 +142,20 @@ html, body, #root {
 .btn-small.btn-primary:hover { background: rgba(255,255,255,0.4); }
 
 .guest-banner {
-  position: absolute; top: 0; left: 0; right: 0; z-index: 900;
-  background: #fef3c7; color: #92400e; padding: 0.5rem 1rem;
-  display: flex; align-items: center; justify-content: center; gap: 1rem;
-  font-size: 0.875rem; border-bottom: 1px solid #fde68a;
+  position: absolute; top: 0; left: 0; right: 0; z-index: 1001; height: 40px;
+  background: #fef3c7; color: #92400e; padding: 0 0.75rem;
+  display: flex; align-items: center; justify-content: center; gap: 0.75rem;
+  font-size: 0.875rem; font-weight: 600; border-bottom: 1px solid #fde68a; white-space: nowrap;
 }
+.guest-banner span { overflow: hidden; text-overflow: ellipsis; }
+.guest-banner-btn {
+  flex-shrink: 0; background: #92400e; color: #fff; border: none; border-radius: 999px;
+  padding: 0.25rem 0.8rem; font-size: 0.8rem; font-weight: 700; font-family: inherit; cursor: pointer;
+}
+/* Keep map controls below the guest banner */
+.has-guest-banner .leaflet-top { top: 40px; }
+.has-guest-banner .layer-switcher { margin-top: 40px; }
+.has-guest-banner .active-property-info { margin-top: 40px; }
 
 .nav-home-link { color: var(--white); text-decoration: none; }
 .nav-home-link:hover { opacity: 0.85; }
@@ -599,6 +608,7 @@ html, body, #root {
   font-size: 1.2rem; font-weight: 800; font-family: inherit; cursor: pointer;
 }
 .activity-start-btn:hover { background: var(--forest-green-light); }
+.activity-real-gps { align-self: center; font-weight: 500; color: var(--text-light); }
 .activity-gps { font-size: 0.78rem; font-weight: 600; color: var(--forest-green); background: var(--forest-green-bg); padding: 0.2rem 0.5rem; border-radius: 999px; }
 .activity-gps.weak { color: #92400e; background: #fef3c7; }
 .activity-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; text-align: center; }

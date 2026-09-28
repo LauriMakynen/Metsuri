@@ -7,6 +7,7 @@ import {
   MAX_ACCURACY_M,
   MIN_STEP_M,
   boundaryStatus,
+  demoWalk,
   paintTrack,
   paintedAreaHa,
   stepDistanceM,
@@ -71,9 +72,11 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
   });
   const [gpsError, setGpsError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [simulated, setSimulated] = useState(false);
 
   const phaseRef = useRef<Phase>('setup');
   const watchIdRef = useRef<number | null>(null);
+  const simIntervalRef = useRef<number | null>(null);
   const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
   // Track is split into segments: leaving the parcel or pausing starts a new one
   const segmentsRef = useRef<TrackPoint[][]>([[]]);
@@ -98,6 +101,10 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
   };
 
   const stopWatching = () => {
+    if (simIntervalRef.current !== null) {
+      window.clearInterval(simIntervalRef.current);
+      simIntervalRef.current = null;
+    }
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
@@ -214,6 +221,27 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
     wakeLockRef.current = await requestWakeLock();
   };
 
+  // Demo: replay a simulated walk on the parcel instead of real GPS
+  const startSimulation = () => {
+    const path = demoWalk(parcel);
+    if (path.length === 0) {
+      setGpsError('Esimerkkikävelyä ei voi näyttää tälle palstalle.');
+      return;
+    }
+    setSimulated(true);
+    setPhaseBoth('tracking');
+    let i = 0;
+    simIntervalRef.current = window.setInterval(() => {
+      if (i >= path.length) {
+        if (simIntervalRef.current !== null) window.clearInterval(simIntervalRef.current);
+        simIntervalRef.current = null;
+        return;
+      }
+      const [longitude, latitude] = path[i++];
+      handlePosition({ coords: { latitude, longitude, accuracy: 4 }, timestamp: Date.now() } as GeolocationPosition);
+    }, 90);
+  };
+
   const pause = () => {
     startNewSegment();
     setPhaseBoth('paused');
@@ -269,9 +297,18 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
             </button>
           ))}
         </div>
-        {isGuest && <p className="activity-note">Demotilassa aktiviteettia ei tallenneta pysyvästi.</p>}
         {gpsError && <p className="activity-alert activity-alert-danger">{gpsError}</p>}
-        <button className="activity-start-btn" onClick={start}>▶ Aloita</button>
+        {isGuest ? (
+          <>
+            <button className="activity-start-btn" onClick={startSimulation}>🎬 Katso esimerkkikävely</button>
+            <button className="btn-link activity-real-gps" onClick={start}>
+              tai aloita oikealla GPS:llä (vaatii, että olet palstalla)
+            </button>
+            <p className="activity-note">Demossa mitään ei tallenneta pysyvästi.</p>
+          </>
+        ) : (
+          <button className="activity-start-btn" onClick={start}>▶ Aloita</button>
+        )}
       </div>
     );
   }
@@ -287,7 +324,8 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
           {' · '}
           <span style={{ color }}>{MARKING_TYPE_LABELS[activityType]}</span>
         </strong>
-        {accuracyM !== null && phase !== 'finished' && (
+        {simulated && phase !== 'finished' && <span className="activity-gps">Esimerkki</span>}
+        {!simulated && accuracyM !== null && phase !== 'finished' && (
           <span className={`activity-gps ${accuracyM > MAX_ACCURACY_M ? 'weak' : ''}`}>
             GPS ±{Math.round(accuracyM)} m
           </span>

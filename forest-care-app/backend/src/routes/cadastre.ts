@@ -1,5 +1,4 @@
-import { Router, Response } from 'express';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { Router, Request, Response } from 'express';
 import {
   isValidPropertyCode,
   searchCadastreByPropertyCode,
@@ -9,9 +8,9 @@ import {
 
 const router = Router();
 
-router.use(authMiddleware);
-
-router.get('/search/:propertyCode', async (req: AuthRequest, res: Response): Promise<void> => {
+// Public: cadastre data is MML open data, and guests need it to try the demo on their own
+// parcel. Abuse is limited by the cadastre rate limiter in index.ts.
+router.get('/search/:propertyCode', async (req: Request, res: Response): Promise<void> => {
   const { propertyCode } = req.params;
 
   if (!isValidPropertyCode(propertyCode)) {
@@ -41,7 +40,7 @@ router.get('/search/:propertyCode', async (req: AuthRequest, res: Response): Pro
 });
 
 // Search for a property by map coordinates (WGS84 lat/lng)
-router.get('/at', async (req: AuthRequest, res: Response): Promise<void> => {
+router.get('/at', async (req: Request, res: Response): Promise<void> => {
   const lat = parseFloat(req.query.lat as string);
   const lng = parseFloat(req.query.lng as string);
 

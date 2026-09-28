@@ -16,6 +16,7 @@ import { calculateAreaHa, formatArea, calculateDistance, formatDistance } from '
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { getFollowUpRecommendation } from '../utils/followUpRecommendation';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
+import { DEMO_MARKINGS, DEMO_PROPERTY } from '../utils/demoData';
 import type {
   Property,
   Marking,
@@ -102,16 +103,21 @@ export default function MapPage() {
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [markings, setMarkings] = useState<Marking[]>([]);
+  // Guests start on an example parcel so the demo has something to try right away
+  const [properties, setProperties] = useState<Property[]>(() => (isGuest ? [DEMO_PROPERTY] : []));
+  const [markings, setMarkings] = useState<Marking[]>(() => (isGuest ? DEMO_MARKINGS : []));
   const [showForm, setShowForm] = useState(false);
   const [pendingGeometry, setPendingGeometry] = useState<GeoJSONGeometry>(null);
   const [pendingGeometryType, setPendingGeometryType] = useState<GeometryType>('point');
   const [error, setError] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
-  const [selectedPropertyGeometry, setSelectedPropertyGeometry] = useState<GeoJSONGeometry>(null);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(() =>
+    isGuest ? DEMO_PROPERTY.id : null
+  );
+  const [selectedPropertyGeometry, setSelectedPropertyGeometry] = useState<GeoJSONGeometry>(() =>
+    isGuest ? DEMO_PROPERTY.geometry : null
+  );
 
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResult, setSearchResult] = useState<CadastreFeature | null>(null);
@@ -1106,12 +1112,12 @@ export default function MapPage() {
         </div>
       </nav>
 
-      <div className="map-content">
+      <div className={`map-content ${isGuest ? 'has-guest-banner' : ''}`}>
         {isGuest && (
           <div className="guest-banner">
-            <span>⚠️ Vierailija-tila – merkinnät ja kiinteistöt eivät tallennu pysyvästi.</span>
-            <button className="btn btn-small btn-primary" onClick={() => { logout(); navigate('/login'); }}>
-              Kirjaudu tallentaaksesi
+            <span>Demotila – mitään ei tallenneta</span>
+            <button className="guest-banner-btn" onClick={() => { logout(); navigate('/login'); }}>
+              Kirjaudu
             </button>
           </div>
         )}

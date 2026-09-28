@@ -9,6 +9,7 @@ import {
   distance,
   multiLineString,
   point,
+  pointOnFeature,
   pointToPolygonDistance,
   simplify,
 } from '@turf/turf';
@@ -60,6 +61,43 @@ export function trackLengthM(segments: TrackPoint[][]): number {
     for (let i = 1; i < s.length; i++) len += stepDistanceM(s[i - 1], s[i]);
     return sum + len;
   }, 0);
+}
+
+/**
+ * Simulated walk for the guest demo: back-and-forth rows inside the parcel
+ * (like clearing a stand), then a walk east across the boundary to show the warning.
+ */
+export function demoWalk(parcel: GeoJSONGeometry): TrackPoint[] {
+  if (!parcel || (parcel.type !== 'Polygon' && parcel.type !== 'MultiPolygon')) return [];
+  const [startLng, startLat] = pointOnFeature(parcel as Polygon | MultiPolygon).geometry.coordinates;
+  const mPerDegLat = 111320;
+  const mPerDegLng = 111320 * Math.cos((startLat * Math.PI) / 180);
+
+  const ROWS = 10;
+  const ROW_SPACING_M = 3.5; // under the 4 m swath so the rows paint one solid block
+  const ROW_LENGTH_M = 50;
+  const STEP_M = 2;
+
+  const path: TrackPoint[] = [];
+  for (let row = 0; row < ROWS; row++) {
+    const lat = startLat + (row * ROW_SPACING_M) / mPerDegLat;
+    for (let m = 0; m <= ROW_LENGTH_M; m += STEP_M) {
+      const along = row % 2 === 0 ? m : ROW_LENGTH_M - m;
+      const candidate: TrackPoint = [startLng + along / mPerDegLng, lat];
+      if (boundaryStatus(candidate, parcel).status !== 'outside') path.push(candidate);
+    }
+  }
+
+  // Head east until clearly outside the parcel
+  const [lastLng, lat] = path[path.length - 1] ?? [startLng, startLat];
+  let lng = lastLng;
+  for (let i = 0; i < 400; i++) {
+    lng += 4 / mPerDegLng;
+    path.push([lng, lat]);
+    const { status, edgeDistanceM } = boundaryStatus([lng, lat], parcel);
+    if (status === 'outside' && (edgeDistanceM ?? 0) > 20) break;
+  }
+  return path;
 }
 
 /** Where the position is relative to the own parcel boundary, and how far the edge is. */
