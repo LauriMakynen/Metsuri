@@ -6,7 +6,6 @@ import MarkingList from './MarkingList';
 
 interface SidebarProps {
   isOpen: boolean;
-  onToggle: () => void;
   properties: Property[];
   markings: Marking[];
   selectedPropertyId: number | null;
@@ -23,7 +22,6 @@ interface SidebarProps {
 
 export default function Sidebar({
   isOpen,
-  onToggle,
   properties,
   markings,
   selectedPropertyId,

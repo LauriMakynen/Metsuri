@@ -17,11 +17,13 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Redirect to login on 401/403 errors
+// Redirect to login on 401/403 errors when a logged-in session has expired.
+// Guest requests carry no token, so they must not trigger the redirect.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    const sentToken = Boolean(error.config?.headers?.Authorization);
+    if (sentToken && (error.response?.status === 401 || error.response?.status === 403)) {
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';

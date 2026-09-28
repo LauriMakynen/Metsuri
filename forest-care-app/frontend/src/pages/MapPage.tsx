@@ -27,7 +27,6 @@ import type {
 } from '../types';
 import MarkingForm from '../components/MarkingForm';
 import Sidebar from '../components/Sidebar';
-import Toast from '../components/Toast';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -120,13 +119,11 @@ export default function MapPage() {
   const [pendingGeometry, setPendingGeometry] = useState<GeoJSONGeometry>(null);
   const [pendingGeometryType, setPendingGeometryType] = useState<GeometryType>('point');
   const [error, setError] = useState('');
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
   const [selectedPropertyGeometry, setSelectedPropertyGeometry] = useState<GeoJSONGeometry>(null);
 
-  const [propertyCodeInput, setPropertyCodeInput] = useState('');
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchResult, setSearchResult] = useState<CadastreFeature | null>(null);
   const [savingSearchResult, setSavingSearchResult] = useState(false);
@@ -150,16 +147,6 @@ export default function MapPage() {
     () => properties.find((p) => p.id === selectedPropertyId) ?? null,
     [properties, selectedPropertyId]
   );
-
-  const formatYearRange = (start?: string | null, end?: string | null): string => {
-    if (!start && !end) return '-';
-    const startYear = start ? new Date(`${start}T00:00:00`).getFullYear() : null;
-    const endYear = end ? new Date(`${end}T00:00:00`).getFullYear() : null;
-    if (startYear && endYear && startYear !== endYear) return `${startYear}-${endYear}`;
-    if (startYear) return `${startYear}`;
-    if (endYear) return `${endYear}`;
-    return '-';
-  };
 
   const loadProperties = useCallback(async () => {
     if (isGuest) return;
@@ -236,6 +223,11 @@ export default function MapPage() {
 
   useEffect(() => {
     const applyConfig = async () => {
+      // The layer config endpoint requires auth, so guests use the env/fallback config directly.
+      if (isGuest) {
+        setLayerConfig(getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG);
+        return;
+      }
       try {
         const serverConfig = await mapService.getLayerConfig();
         setLayerConfig(serverConfig);
@@ -246,7 +238,7 @@ export default function MapPage() {
     };
 
     applyConfig();
-  }, []);
+  }, [isGuest]);
 
   useEffect(() => {
     if (!baseLayersRef.current) return;
@@ -891,64 +883,6 @@ export default function MapPage() {
     setSidebarOpen(true);
   };
 
-  const handleSearchCadastre = async () => {
-    const code = propertyCodeInput.trim();
-    if (!PROPERTY_CODE_REGEX.test(code)) {
-      setError('Kiinteistötunnus on väärässä muodossa');
-      return;
-    }
-
-    setSearchLoading(true);
-    setError('');
-    try {
-      const feature = await cadastreService.searchByPropertyCode(code);
-      setSearchResult(feature);
-
-      if (cadastreLayerRef.current && mapRef.current) {
-        mapRef.current.removeLayer(cadastreLayerRef.current);
-      }
-
-      const layer = L.geoJSON(feature.geometry as GeoJSON.Geometry, {
-        style: {
-          color: '#0369a1',
-          weight: 3,
-          fillColor: '#38bdf8',
-          fillOpacity: 0.2,
-        },
-      });
-      layer.bindPopup(`<strong>${feature.properties.name}</strong><br/>${feature.properties.propertyCode}`);
-      layer.addTo(mapRef.current!);
-      cadastreLayerRef.current = layer;
-
-      const bounds = layer.getBounds();
-      if (bounds.isValid()) {
-        mapRef.current?.fitBounds(bounds, { padding: [40, 40] });
-      }
-
-      renderSelectedHighlight(feature.geometry, '#0369a1');
-    } catch (err: unknown) {
-      const status =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { status?: number; data?: { error?: string } } }).response?.status
-          : undefined;
-      const backendMessage =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
-          : undefined;
-
-      if (status === 404) {
-        setError('Kiinteistöä ei löytynyt');
-      } else if (backendMessage) {
-        setError(backendMessage);
-      } else {
-        setError('Kiinteistön haku epäonnistui');
-      }
-      setSearchResult(null);
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
   const handleSaveCadastreToProperties = async () => {
     if (!searchResult) return;
 
@@ -1059,10 +993,6 @@ export default function MapPage() {
     }
   };
 
-  const handleToggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-  };
-
   return (
     <div className="map-page">
       <nav className="map-nav">
@@ -1106,7 +1036,6 @@ export default function MapPage() {
         )}
         <Sidebar
           isOpen={sidebarOpen}
-          onToggle={handleToggleSidebar}
           properties={properties}
           markings={markings}
           selectedPropertyId={selectedPropertyId}

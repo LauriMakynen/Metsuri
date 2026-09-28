@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../types';
 
@@ -16,21 +16,17 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 // Provides authentication state throughout the app
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [isGuest, setIsGuest] = useState(false);
-
-  // Restore session from localStorage / sessionStorage on mount
-  useEffect(() => {
-    const storedToken = localStorage.getItem('token');
+  // Restore session synchronously so PrivateRoute doesn't redirect before it is known
+  const [token, setToken] = useState<string | null>(() =>
+    localStorage.getItem('user') ? localStorage.getItem('token') : null
+  );
+  const [user, setUser] = useState<User | null>(() => {
     const storedUser = localStorage.getItem('user');
-    if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
-    } else if (sessionStorage.getItem('guest') === 'true') {
-      setIsGuest(true);
-    }
-  }, []);
+    return storedUser && localStorage.getItem('token') ? JSON.parse(storedUser) : null;
+  });
+  const [isGuest, setIsGuest] = useState(
+    () => !token && sessionStorage.getItem('guest') === 'true'
+  );
 
   const login = (newToken: string, newUser: User) => {
     localStorage.setItem('token', newToken);
