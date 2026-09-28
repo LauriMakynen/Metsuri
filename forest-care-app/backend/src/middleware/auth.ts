@@ -5,6 +5,20 @@ export interface AuthRequest extends Request {
   userId?: number;
 }
 
+// Optional auth for public routes: sets req.userId when a valid token is sent, never rejects
+export function optionalAuthMiddleware(req: AuthRequest, _res: Response, next: NextFunction): void {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (token) {
+    try {
+      const secret = process.env.JWT_SECRET || 'fallback-secret';
+      req.userId = (jwt.verify(token, secret) as { userId: number }).userId;
+    } catch {
+      // Invalid token on a public route: continue anonymously
+    }
+  }
+  next();
+}
+
 // JWT authentication middleware - validates the Bearer token in Authorization header
 export function authMiddleware(
   req: AuthRequest,

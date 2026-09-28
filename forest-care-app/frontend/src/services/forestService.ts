@@ -11,6 +11,7 @@ import type {
   ForestValuationResponse,
   WorkRequest,
   PublicWorkRequest,
+  Pricing,
 } from '../types';
 
 function normalizeDate(value: unknown): string | null {
@@ -181,28 +182,46 @@ export const markingsService = {
   },
 };
 
+// PostgreSQL NUMERIC columns (area, euros) arrive as strings
+function normalizePublicRequest(r: PublicWorkRequest): PublicWorkRequest {
+  return {
+    ...r,
+    area_ha: normalizeNumber(r.area_ha),
+    best_bid_eur: normalizeNumber(r.best_bid_eur),
+    my_bid_eur: normalizeNumber(r.my_bid_eur),
+  };
+}
+
+function normalizeOwnRequest(r: WorkRequest): WorkRequest {
+  return { ...r, bid_count: r.bid_count ?? 0, best_bid_eur: normalizeNumber(r.best_bid_eur) };
+}
+
 export const workRequestsService = {
   // Public: open requests for work providers (works without login)
   getOpen: async (type?: MarkingType): Promise<PublicWorkRequest[]> => {
     const response = await api.get<PublicWorkRequest[]>('/api/work-requests', {
       params: type ? { type } : undefined,
     });
-    // PostgreSQL NUMERIC arrives as a string
-    return response.data.map((r) => ({
-      ...r,
-      area_ha: r.area_ha === null ? null : Number(r.area_ha),
-    }));
+    return response.data.map(normalizePublicRequest);
   },
   getMine: async (): Promise<WorkRequest[]> => {
     const response = await api.get<WorkRequest[]>('/api/work-requests/mine');
-    return response.data;
+    return response.data.map(normalizeOwnRequest);
   },
-  create: async (markingId: number, note: string): Promise<WorkRequest> => {
+  create: async (markingId: number, note: string, pricing: Pricing): Promise<WorkRequest> => {
     const response = await api.post<WorkRequest>('/api/work-requests', {
       marking_id: markingId,
       note,
+      pricing,
     });
-    return response.data;
+    return normalizeOwnRequest(response.data);
+  },
+  // Offer a total price in euros; returns the request with its updated bid summary
+  placeBid: async (requestId: number, amountEur: number): Promise<PublicWorkRequest> => {
+    const response = await api.post<PublicWorkRequest>(`/api/work-requests/${requestId}/bids`, {
+      amount_eur: amountEur,
+    });
+    return normalizePublicRequest(response.data);
   },
   withdraw: async (id: number): Promise<void> => {
     await api.delete(`/api/work-requests/${id}`);

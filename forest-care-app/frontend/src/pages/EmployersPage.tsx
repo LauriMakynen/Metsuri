@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import TopNav from '../components/TopNav';
+import WorkRequestCard from '../components/WorkRequestCard';
+import { useAuth } from '../hooks/useAuth';
 import { workRequestsService } from '../services/forestService';
 import { MARKING_COLORS, MARKING_TYPE_LABELS, MARKING_TYPES } from '../utils/markingTypes';
 import { formatArea } from '../utils/measurement';
-import { formatDate } from '../utils/dateFormatting';
+import { bidSummaryText } from '../utils/bids';
 import type { MarkingType, PublicWorkRequest } from '../types';
 
 // Popup content is built with textContent: titles and notes are written by other users
@@ -21,7 +23,9 @@ function buildPopup(request: PublicWorkRequest): HTMLElement {
   ]
     .filter(Boolean)
     .join(' · ');
-  el.append(title, meta);
+  const bids = document.createElement('div');
+  bids.textContent = `💶 ${bidSummaryText(request)}`;
+  el.append(title, meta, bids);
   return el;
 }
 
@@ -31,6 +35,10 @@ export default function EmployersPage() {
   const mapRef = useRef<L.Map | null>(null);
   const requestsLayerRef = useRef<L.FeatureGroup | null>(null);
   const layersByIdRef = useRef<Map<number, L.Layer>>(new Map());
+  // Fit the map to the requests only after a fresh load, not when a bid updates one row
+  const fitPendingRef = useRef(true);
+  const { isAuthenticated, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [requests, setRequests] = useState<PublicWorkRequest[]>([]);
   const [typeFilter, setTypeFilter] = useState<MarkingType | null>(null);
@@ -63,6 +71,7 @@ export default function EmployersPage() {
       .getOpen(typeFilter ?? undefined)
       .then((data) => {
         if (cancelled) return;
+        fitPendingRef.current = true;
         setRequests(data);
         setError('');
       })
@@ -101,10 +110,20 @@ export default function EmployersPage() {
     });
 
     const bounds = group.getBounds();
-    if (bounds.isValid()) {
+    if (fitPendingRef.current && bounds.isValid()) {
       map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
+      fitPendingRef.current = false;
     }
   }, [requests]);
+
+  const handleBidPlaced = (updated: PublicWorkRequest) => {
+    setRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+  };
+
+  const goToLogin = () => {
+    logout();
+    navigate('/login');
+  };
 
   const focusRequest = (request: PublicWorkRequest) => {
     setSelectedId(request.id);
@@ -128,8 +147,8 @@ export default function EmployersPage() {
           <Link to="/start" className="back-link">← Takaisin</Link>
           <h1>Työn tarjoajille</h1>
           <p>
-            Selaa metsäpalstoja, joille metsänomistajat ovat jättäneet työpyynnön. Metsäyrittäjille,
-            yrityksille ja yhdistyksille.
+            Selaa metsäpalstoja, joille metsänomistajat ovat jättäneet työpyynnön, ja tarjoa hintaa.
+            Paras tarjous näkyy kaikille nimettömänä.
           </p>
         </header>
 
@@ -168,22 +187,15 @@ export default function EmployersPage() {
             )}
 
             {requests.map((request) => (
-              <button
+              <WorkRequestCard
                 key={request.id}
-                className={`request-card ${selectedId === request.id ? 'selected' : ''}`}
-                style={{ borderLeftColor: MARKING_COLORS[request.type] }}
-                onClick={() => focusRequest(request)}
-              >
-                <span className="request-type" style={{ color: MARKING_COLORS[request.type] }}>
-                  {MARKING_TYPE_LABELS[request.type]}
-                </span>
-                <strong className="request-title">{request.title}</strong>
-                <span className="request-meta">
-                  {request.area_ha ? `📐 ${formatArea(request.area_ha)} · ` : ''}
-                  Julkaistu {formatDate(request.created_at.slice(0, 10))}
-                </span>
-                {request.note && <span className="request-note">{request.note}</span>}
-              </button>
+                request={request}
+                selected={selectedId === request.id}
+                canBid={isAuthenticated}
+                onFocus={() => focusRequest(request)}
+                onBidPlaced={handleBidPlaced}
+                onLoginToBid={goToLogin}
+              />
             ))}
           </section>
         </div>

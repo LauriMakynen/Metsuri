@@ -53,8 +53,19 @@ export interface Marking {
   updated_at: string;
 }
 
+// owner_receives = timber sale, highest offer is best; owner_pays = service, lowest is best
+export type Pricing = 'owner_receives' | 'owner_pays';
+
+// Anonymous bid summary shared by the owner and public views
+export interface BidSummary {
+  pricing: Pricing;
+  bid_count: number;
+  best_bid_eur: number | null;
+  latest_bid_at: string | null;
+}
+
 // A forest owner's own work request for one marking
-export interface WorkRequest {
+export interface WorkRequest extends BidSummary {
   id: number;
   marking_id: number;
   note: string | null;
@@ -63,8 +74,8 @@ export interface WorkRequest {
   updated_at: string;
 }
 
-// Open work request as shown publicly to work providers (no owner details)
-export interface PublicWorkRequest {
+// Open work request as shown publicly to work providers (no owner or bidder details)
+export interface PublicWorkRequest extends BidSummary {
   id: number;
   note: string | null;
   created_at: string;
@@ -75,6 +86,9 @@ export interface PublicWorkRequest {
   geometry: GeoJSONGeometry;
   lat: number;
   lng: number;
+  // Only meaningful for a logged-in viewer
+  is_own: boolean;
+  my_bid_eur: number | null;
 }
 
 export interface CadastreFeatureProperties {

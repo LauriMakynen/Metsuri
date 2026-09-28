@@ -262,6 +262,54 @@ html, body, #root {
   border-radius: var(--radius-sm); padding: 0.75rem 0.9rem; cursor: pointer; font-family: inherit; color: var(--text);
 }
 .request-card:hover { box-shadow: var(--shadow); }
+.request-card { cursor: default; padding: 0; gap: 0; }
+.request-card-head {
+  display: flex; flex-direction: column; gap: 0.2rem; text-align: left; width: 100%;
+  background: none; border: none; padding: 0.75rem 0.9rem 0.6rem; cursor: pointer; font-family: inherit; color: var(--text);
+}
+.request-tags { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.pricing-tag { font-size: 0.72rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 999px; white-space: nowrap; }
+.pricing-tag.owner_receives { background: #dcfce7; color: #166534; }
+.pricing-tag.owner_pays { background: #e0f2fe; color: #075985; }
+
+/* Anonymous best offer and bid form on a work request card */
+.bid-box {
+  display: flex; flex-direction: column; gap: 0.45rem;
+  border-top: 1px dashed var(--border); padding: 0.6rem 0.9rem 0.8rem;
+}
+.bid-best { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.5rem; }
+.bid-best-label { font-size: 0.78rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.03em; }
+.bid-best-value { font-size: 1.2rem; color: var(--forest-green); font-variant-numeric: tabular-nums; }
+.bid-best-meta { font-size: 0.8rem; color: var(--text-light); }
+.bid-none { font-size: 0.85rem; color: var(--text-light); }
+.bid-mine { font-size: 0.85rem; font-weight: 600; color: #075985; }
+.bid-note { font-size: 0.8rem; color: var(--text-light); line-height: 1.4; }
+.bid-error { font-size: 0.82rem; color: var(--error); }
+.bid-open-btn { align-self: flex-start; }
+.bid-form { display: flex; flex-direction: column; gap: 0.45rem; }
+.bid-form-row { display: flex; gap: 0.5rem; }
+.bid-input {
+  flex: 1; display: flex; align-items: center; border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--white); padding-right: 0.6rem;
+}
+.bid-input:focus-within { border-color: var(--forest-green); }
+.bid-input input { flex: 1; min-width: 0; border: none; outline: none; padding: 0.5rem 0.6rem; font-size: 1rem; font-family: inherit; background: none; }
+.bid-input span { color: var(--text-light); font-weight: 600; }
+
+/* Owner: who pays, chosen when publishing a work request */
+.pricing-choice { border: none; display: flex; flex-direction: column; gap: 0.35rem; }
+.pricing-choice legend { font-size: 0.8rem; font-weight: 700; color: var(--text); margin-bottom: 0.3rem; }
+.pricing-option {
+  display: flex; align-items: flex-start; gap: 0.5rem; cursor: pointer;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 0.45rem 0.55rem; background: var(--white);
+}
+.pricing-option.selected { border-color: var(--forest-green); background: #f0fdf4; }
+.pricing-option input { margin-top: 0.2rem; accent-color: var(--forest-green); }
+.sidebar-item .pricing-option-text { display: flex; flex-direction: column; gap: 0.1rem; white-space: normal; overflow: visible; }
+.pricing-option-text strong { font-size: 0.85rem; }
+.pricing-option-text small { font-size: 0.78rem; color: var(--text-light); }
+.pricing-usual { font-weight: 500; font-style: normal; color: var(--forest-green); font-size: 0.75rem; }
+.sidebar-item .work-request-bids { font-size: 0.8rem; color: var(--text); font-weight: 600; }
 .request-card.selected { outline: 2px solid var(--forest-green); }
 .request-type { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .request-title { font-size: 1rem; overflow-wrap: anywhere; }

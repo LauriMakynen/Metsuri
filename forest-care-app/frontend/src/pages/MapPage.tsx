@@ -28,6 +28,7 @@ import type {
   ForestDataResponse,
   ForestValuationResponse,
   WorkRequest,
+  Pricing,
 } from '../types';
 import MarkingForm from '../components/MarkingForm';
 import Sidebar from '../components/Sidebar';
@@ -367,9 +368,9 @@ export default function MapPage() {
       .catch(() => setError('Työpyyntöjen lataaminen epäonnistui'));
   }, [isGuest]);
 
-  const handleRequestWork = async (markingId: number, note: string) => {
+  const handleRequestWork = async (markingId: number, note: string, pricing: Pricing) => {
     try {
-      const request = await workRequestsService.create(markingId, note);
+      const request = await workRequestsService.create(markingId, note, pricing);
       setWorkRequests((prev) => ({ ...prev, [markingId]: request }));
     } catch {
       setError('Työpyynnön julkaisu epäonnistui');

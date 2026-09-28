@@ -5,6 +5,7 @@ import type {
   ForestDataResponse,
   ForestValuationResponse,
   WorkRequest,
+  Pricing,
 } from '../types';
 import PropertySearch from './PropertySearch';
 import ActivePropertyCard from './ActivePropertyCard';
@@ -27,7 +28,7 @@ interface SidebarProps {
   onDeleteMarking: (id: number) => void;
   workRequests: Record<number, WorkRequest>;
   canRequestWork: boolean;
-  onRequestWork: (markingId: number, note: string) => Promise<void>;
+  onRequestWork: (markingId: number, note: string, pricing: Pricing) => Promise<void>;
   onWithdrawWorkRequest: (requestId: number) => Promise<void>;
 }
 

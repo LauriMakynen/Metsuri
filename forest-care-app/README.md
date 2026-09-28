@@ -178,7 +178,12 @@ Skripti tarkistaa Dockerin ja Node-version, luo puuttuvat `.env`-tiedostot esime
 `./start.sh seed` (tai `reset-db`) luo tunnukset:
 
 - `admin@metsuri.test` – metsänomistaja, jolla valmis Testipalsta, merkinnät ja avoin työpyyntö
-- `yrittaja@metsuri.test` – työn tarjoaja
+- `omistaja2@metsuri.test`, `omistaja3@metsuri.test` – metsänomistajia, joilla työpyyntöjä eri puolilla Suomea
+- `yrittaja@metsuri.test`, `yrittaja2@metsuri.test` – työn tarjoajia, joilla valmiita tarjouksia
+
+Työpyynnössä omistaja valitsee **puukaupan** (ostaja maksaa omistajalle, korkein tarjous paras)
+tai **palvelutyön** (omistaja maksaa tekijälle, edullisin tarjous paras). Paras tarjous näytetään
+kaikille nimettömänä.
 
 Salasana on `backend/.env`-tiedostossa kohdassa `SEED_PASSWORD` (arvotaan automaattisesti).
 Voit vaihtaa sen ja ajaa `./start.sh seed` uudelleen.

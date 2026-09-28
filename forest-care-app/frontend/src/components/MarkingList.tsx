@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { formatArea } from '../utils/measurement';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
-import type { Marking, WorkRequest } from '../types';
+import { PRICING_OPTIONS, bidSummaryText, suggestedPricing } from '../utils/bids';
+import type { Marking, Pricing, WorkRequest } from '../types';
 
 interface MarkingListProps {
   markings: Marking[];
@@ -11,7 +12,7 @@ interface MarkingListProps {
   // Work requests keyed by marking id
   workRequests: Record<number, WorkRequest>;
   canRequestWork: boolean;
-  onRequestWork: (markingId: number, note: string) => Promise<void>;
+  onRequestWork: (markingId: number, note: string, pricing: Pricing) => Promise<void>;
   onWithdrawWorkRequest: (requestId: number) => Promise<void>;
 }
 
@@ -27,17 +28,21 @@ export default function MarkingList({
   // Marking whose work request form is open, and its draft note
   const [requestingId, setRequestingId] = useState<number | null>(null);
   const [note, setNote] = useState('');
+  // Must be chosen explicitly: decides whether the highest or the lowest offer is best
+  const [pricing, setPricing] = useState<Pricing | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
 
   const openRequestForm = (markingId: number) => {
     setRequestingId(markingId);
     setNote('');
+    setPricing(null);
   };
 
   const submitRequest = async (markingId: number) => {
+    if (!pricing) return;
     setBusyId(markingId);
     try {
-      await onRequestWork(markingId, note);
+      await onRequestWork(markingId, note, pricing);
       setRequestingId(null);
     } finally {
       setBusyId(null);
@@ -118,6 +123,7 @@ export default function MarkingList({
                       <>
                         <span className="work-request-badge">📢 Työpyyntö avoinna</span>
                         {request.note && <small className="work-request-note">{request.note}</small>}
+                        <small className="work-request-bids">💶 {bidSummaryText(request)}</small>
                         <button
                           className="btn-link"
                           disabled={busy}
@@ -128,6 +134,32 @@ export default function MarkingList({
                       </>
                     ) : requestingId === m.id ? (
                       <>
+                        <fieldset className="pricing-choice">
+                          <legend>Kuka maksaa? (pakollinen)</legend>
+                          {PRICING_OPTIONS.map((option) => (
+                            <label
+                              key={option.value}
+                              className={`pricing-option ${pricing === option.value ? 'selected' : ''}`}
+                            >
+                              <input
+                                type="radio"
+                                name={`pricing-${m.id}`}
+                                value={option.value}
+                                checked={pricing === option.value}
+                                onChange={() => setPricing(option.value)}
+                              />
+                              <span className="pricing-option-text">
+                                <strong>
+                                  {option.title}
+                                  {suggestedPricing(m.type) === option.value && (
+                                    <em className="pricing-usual"> · tavallinen tälle työlle</em>
+                                  )}
+                                </strong>
+                                <small>{option.description}</small>
+                              </span>
+                            </label>
+                          ))}
+                        </fieldset>
                         <textarea
                           className="work-request-input"
                           value={note}
@@ -139,7 +171,8 @@ export default function MarkingList({
                         <div className="work-request-actions">
                           <button
                             className="btn btn-primary btn-compact"
-                            disabled={busy}
+                            disabled={busy || !pricing}
+                            title={!pricing ? 'Valitse ensin puukauppa tai palvelutyö' : undefined}
                             onClick={() => submitRequest(m.id)}
                           >
                             {busy ? 'Julkaistaan...' : 'Julkaise työpyyntö'}

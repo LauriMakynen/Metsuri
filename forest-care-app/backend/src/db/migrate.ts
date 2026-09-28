@@ -156,6 +156,34 @@ async function migrate() {
       'CREATE INDEX IF NOT EXISTS work_requests_status_idx ON work_requests(status)'
     );
 
+    // Who pays: owner_receives = timber sale (highest offer best), owner_pays = service (lowest best).
+    // The owner picks this when publishing; older rows are backfilled from the marking type.
+    await client.query(`
+      ALTER TABLE work_requests ADD COLUMN IF NOT EXISTS pricing VARCHAR(20)
+        CHECK (pricing IN ('owner_receives', 'owner_pays'))
+    `);
+    await client.query(`
+      UPDATE work_requests wr
+      SET pricing = CASE WHEN m.type IN ('avohakkuu', 'harvennus') THEN 'owner_receives' ELSE 'owner_pays' END
+      FROM markings m
+      WHERE m.id = wr.marking_id AND wr.pricing IS NULL
+    `);
+    await client.query('ALTER TABLE work_requests ALTER COLUMN pricing SET NOT NULL');
+
+    // Price offers on work requests. Bidder identity is never shown publicly.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS work_request_bids (
+        id SERIAL PRIMARY KEY,
+        work_request_id INTEGER NOT NULL REFERENCES work_requests(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        amount_eur NUMERIC(12,2) NOT NULL CHECK (amount_eur > 0),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS work_request_bids_request_idx ON work_request_bids(work_request_id)'
+    );
+
     await client.query('COMMIT');
     console.log('Migration completed successfully');
   } catch (error) {
