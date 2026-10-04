@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL with PostGIS extension for geographic data
   db:
@@ -19,6 +17,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Development mail catcher: the app's emails (e.g. password reset) show up at
+  # http://localhost:8025 instead of being delivered. Bound to localhost only.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: forest_care_mailpit
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
   # Node.js Express backend
   backend:

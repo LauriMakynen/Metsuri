@@ -72,6 +72,7 @@ export default function LoginPage() {
               required
               autoComplete="current-password"
             />
+            <Link to="/forgot-password" className="forgot-password-link">Salasana unohtunut?</Link>
           </div>
 
           <button type="submit" className="btn btn-primary" disabled={loading}>

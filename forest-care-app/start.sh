@@ -95,8 +95,8 @@ ensure_deps() {
 }
 
 start_db() {
-  info "Käynnistetään tietokanta..."
-  compose up -d --wait db
+  info "Käynnistetään tietokanta ja sähköpostin testipalvelin (Mailpit)..."
+  compose up -d --wait db mailpit
 }
 
 migrate() {
@@ -172,6 +172,7 @@ run_servers() {
     echo "    Frontend: http://localhost:5173"
   fi
   echo "    Backend:  http://localhost:3001/health"
+  echo "    Sähköpostit (Mailpit): http://localhost:8025"
   echo "    Sammuta:  Ctrl+C"
   echo
 

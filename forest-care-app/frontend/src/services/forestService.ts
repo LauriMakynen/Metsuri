@@ -89,6 +89,17 @@ export const authService = {
     );
     return response.data;
   },
+
+  // Always resolves with the same message, whether or not the address has an account
+  forgotPassword: async (email: string): Promise<string> => {
+    const response = await api.post<{ message: string }>('/api/auth/forgot-password', { email });
+    return response.data.message;
+  },
+
+  resetPassword: async (token: string, password: string): Promise<string> => {
+    const response = await api.post<{ message: string }>('/api/auth/reset-password', { token, password });
+    return response.data.message;
+  },
 };
 
 // Forest properties API calls

@@ -188,6 +188,16 @@ kaikille nimettömänä.
 Salasana on `backend/.env`-tiedostossa kohdassa `SEED_PASSWORD` (arvotaan automaattisesti).
 Voit vaihtaa sen ja ajaa `./start.sh seed` uudelleen.
 
+### Salasanan palautus ja sähköpostit
+
+Kirjautumissivun **"Salasana unohtunut?"** lähettää kertakäyttöisen linkin, joka on voimassa 30 minuuttia.
+Kehityksessä viestit eivät lähde oikeasti, vaan ne näkyvät Mailpitissa: **http://localhost:8025**
+(käynnistyy `./start.sh`:n mukana). Salasanan vaihto kirjaa käyttäjän ulos kaikilta laitteilta.
+
+Tuotannossa aseta `backend/.env`:iin oikean sähköpostipalvelun SMTP-tiedot (`SMTP_HOST`, `SMTP_PORT`,
+`SMTP_USER`, `SMTP_PASS`, `MAIL_FROM`, esim. Resend tai Brevo) ja `FRONTEND_URL` julkiseen osoitteeseen,
+koska linkit muodostetaan siitä.
+
 ### Testaus puhelimella
 
 Puhelimen pitää olla samassa WLANissa kuin kone. GPS toimii puhelimen selaimessa vain HTTPS:llä,
