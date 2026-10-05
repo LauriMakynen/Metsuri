@@ -20,7 +20,20 @@ Koodi on kansiossa `forest-care-app/` (React + Vite + Leaflet / Express + TypeSc
   `wsl -e bash -ic "…"` (lataa nvm:n Node 24:n).
 - PowerShell sotkee lainausmerkit: kirjoita monimutkaiset komennot skriptiksi
   `\\wsl.localhost\Ubuntu\tmp\…sh` ja aja `wsl -e bash -ic "bash /tmp/…sh"`, poista lopuksi.
-- **Git: commitoi paikallisesti, käyttäjä pushaa itse.** `git push`/`fetch` jää SSH-salasanaan jumiin.
+- **`git push`/`fetch` jää Clauden shellissä SSH-salasanaan jumiin** → pyydä käyttäjää ajamaan ne.
+
+## Git-työtapa (kolme kehittäjää: Lauri, Eemil, Reetta)
+- Haarat: henkilökohtainen haara (`Lauri`, `Eemil`, `Reetta`) → `dev` → `pre-main` → `main`.
+  Testattu kokonaisuus viedään `dev`istä `pre-main`iin ja sieltä julkaisuun `main`iin.
+- **Claude työskentelee aina sen kehittäjän omassa haarassa, jonka kanssa istunto on**
+  (Laurin kanssa `Lauri`). Tarkista `git branch --show-current` ennen ensimmäistä muutosta.
+  Älä commitoi suoraan `dev`-, `pre-main`- tai `main`-haaraan.
+- Ennen uuden työn aloittamista pyydä käyttäjää hakemaan muiden muutokset ja päivittämään oma
+  haara `dev`istä (`git fetch` ja `git merge origin/dev`), jotta työ alkaa tuoreimmasta versiosta.
+- Claude commitoi omaan haaraan paikallisesti; käyttäjä pushaa sen ja tekee pull requestin `dev`iin,
+  jossa muut kehittäjät voivat katselmoida sen.
+- Muiden työ voi muuttaa migraatioita (`migrate.ts`) ja testidataa (`seed.ts`) – tarkista ne
+  `dev`in päivittämisen jälkeen ja aja `npm run migrate`.
 
 ## Tietokanta
 - Ainoa ajettava migraatio on `backend/src/db/migrate.ts` (idempotentti: `IF NOT EXISTS`, backfill).
