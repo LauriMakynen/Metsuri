@@ -23,6 +23,7 @@ interface SeedRequest {
   geometry: Geometry;
   note: string;
   targetPriceEur: number;
+  legacyTitle?: string;
   bids?: { provider: string; amountEur: number }[];
 }
 
@@ -145,6 +146,23 @@ const OWNERS: SeedOwner[] = [
         targetPriceEur: 1500,
         bids: [{ provider: 'yrittaja2@metsuri.test', amountEur: 1450 }],
       },
+      {
+        type: 'muu_tyo',
+        title: 'Sivuojarummun vaihto, Iisvedentie',
+        legacyTitle: 'Rajalinjan raivaus, länsireuna',
+        geometry: { type: 'Point', coordinates: [26.9024601, 62.7068409] },
+        note: 'Iisvedentien sivuojarumpu on painunut ja tukkeutunut. Vaihdetaan rumpu ja varmistetaan veden esteetön kulku.',
+        targetPriceEur: 500,
+        bids: [{ provider: 'yrittaja@metsuri.test', amountEur: 460 }],
+      },
+      {
+        type: 'muu_tyo',
+        title: 'Tienvarsivesakon raivaus, Kuopiontie',
+        legacyTitle: 'Metsäautotien lanaus ja sorastus',
+        geometry: { type: 'Point', coordinates: [26.8341085, 62.6219351] },
+        note: 'Raivataan Kuopiontien varresta näkyvyyttä haittaava vesakko. Työalue ja puuston käsittely sovitaan ennen työn aloitusta.',
+        targetPriceEur: 900,
+      },
     ],
   },
   {
@@ -195,28 +213,55 @@ async function upsertUser(email: string, passwordHash: string): Promise<number> 
 
 async function seedOwner(owner: SeedOwner, ownerId: number, providerIds: Record<string, number>) {
   const existing = await pool.query('SELECT id FROM properties WHERE user_id = $1 LIMIT 1', [ownerId]);
-  if (existing.rows.length > 0) return;
-
-  const property = await pool.query(
-    `INSERT INTO properties (user_id, name, source, area_ha, geometry)
-     VALUES ($1, $2, 'manual', $3, ST_GeomFromGeoJSON($4)) RETURNING id`,
-    [ownerId, owner.parcel.name, owner.parcel.areaHa, JSON.stringify(owner.parcel.geometry)]
-  );
-  const propertyId = property.rows[0].id;
-
-  for (const m of owner.markings) {
-    await pool.query(
-      `INSERT INTO markings (user_id, property_id, type, geometry_type, title, description, geometry,
-                             area_ha, operation_date)
-       VALUES ($1, $2, $3, $4, $5, 'Testidataa', ST_GeomFromGeoJSON($6), $7, $8)`,
-      [
-        ownerId, propertyId, m.type, m.geometry.type === 'Point' ? 'point' : 'area', m.title,
-        JSON.stringify(m.geometry), m.areaHa, m.operationDate,
-      ]
+  let propertyId: number;
+  if (existing.rows.length > 0) {
+    propertyId = existing.rows[0].id;
+  } else {
+    const property = await pool.query(
+      `INSERT INTO properties (user_id, name, source, area_ha, geometry)
+       VALUES ($1, $2, 'manual', $3, ST_GeomFromGeoJSON($4)) RETURNING id`,
+      [ownerId, owner.parcel.name, owner.parcel.areaHa, JSON.stringify(owner.parcel.geometry)]
     );
+    propertyId = property.rows[0].id;
+
+    for (const m of owner.markings) {
+      await pool.query(
+        `INSERT INTO markings (user_id, property_id, type, geometry_type, title, description, geometry,
+                               area_ha, operation_date)
+         VALUES ($1, $2, $3, $4, $5, 'Testidataa', ST_GeomFromGeoJSON($6), $7, $8)`,
+        [
+          ownerId, propertyId, m.type, m.geometry.type === 'Point' ? 'point' : 'area', m.title,
+          JSON.stringify(m.geometry), m.areaHa, m.operationDate,
+        ]
+      );
+    }
   }
 
   for (const r of owner.requests) {
+    const existingRequest = await pool.query(
+      'SELECT id FROM work_requests WHERE user_id = $1 AND property_id = $2 AND title = ANY($3::text[]) LIMIT 1',
+      [ownerId, propertyId, [r.title, ...(r.legacyTitle ? [r.legacyTitle] : [])]]
+    );
+    if (existingRequest.rows.length > 0) {
+      if (r.legacyTitle) {
+        await pool.query(
+          `UPDATE work_requests
+           SET title = $2, geometry = ST_GeomFromGeoJSON($3),
+               area_ha = CASE WHEN GeometryType(ST_GeomFromGeoJSON($3)) = 'POINT' THEN NULL
+                              ELSE ROUND((ST_Area(ST_GeomFromGeoJSON($3)::geography) / 10000)::numeric, 2) END,
+               note = $4
+           WHERE id = $1`,
+          [
+            existingRequest.rows[0].id,
+            r.title,
+            JSON.stringify(r.geometry),
+            r.note,
+          ]
+        );
+      }
+      continue;
+    }
+
     const request = await pool.query(
       `INSERT INTO work_requests (user_id, property_id, type, title, geometry, area_ha, note, pricing, target_price_eur)
        VALUES ($1, $2, $3, $4, ST_GeomFromGeoJSON($5),
