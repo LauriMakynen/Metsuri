@@ -22,23 +22,24 @@ Metsänhoitokarttasovellus web- ja mobiilikäyttöön.
 forest-care-app/
 ├── backend/          # Node.js + Express API
 │   ├── src/
-│   │   ├── db/       # Tietokantayhteys ja migraatiot
+│   │   ├── db/       # Tietokantayhteys, migraatio (migrate.ts) ja testidata (seed.ts)
 │   │   ├── middleware/  # JWT-autentikointi
-│   │   ├── routes/   # API-reitit (auth, properties, markings)
+│   │   ├── routes/   # API-reitit (auth, properties, markings, work-requests, cadastre, map)
+│   │   ├── services/ # Liiketoimintalogiikka
 │   │   └── index.ts  # Palvelimen käynnistys
-│   ├── Dockerfile
 │   └── package.json
 ├── frontend/         # React-sovellus
 │   ├── src/
-│   │   ├── components/  # MarkingForm, PrivateRoute
+│   │   ├── components/
 │   │   ├── hooks/    # useAuth (context)
-│   │   ├── pages/    # LoginPage, RegisterPage, MapPage
+│   │   ├── pages/    # Start, Login, Register, salasanan palautus, Map, Employers
 │   │   ├── services/ # API-kutsut
-│   │   └── types/    # TypeScript-tyypit
+│   │   ├── types/    # TypeScript-tyypit
+│   │   └── utils/    # mm. vierailijatilan demodata
 │   └── package.json
-├── database/
-│   └── init.sql      # Tietokantarakenne
-└── docker-compose.yml
+├── database/         # Vanhat SQL-tiedostot, eivät käytössä (migraatio on backend/src/db/migrate.ts)
+├── docker-compose.yml  # Tietokanta (PostGIS) ja Mailpit
+└── start.sh          # Kehitysympäristön käynnistys
 ```
 
 ---
@@ -50,6 +51,8 @@ forest-care-app/
 |--------|-------|--------|
 | POST | `/api/auth/register` | Rekisteröidy |
 | POST | `/api/auth/login` | Kirjaudu sisään |
+| POST | `/api/auth/forgot-password` | Lähetä salasanan palautuslinkki |
+| POST | `/api/auth/reset-password` | Vaihda salasana palautuslinkillä |
 
 ### Metsäkiinteistöt
 | Metodi | Polku | Kuvaus |
@@ -72,10 +75,20 @@ forest-care-app/
 | PUT | `/api/markings/:id` | Päivitä merkintä |
 | DELETE | `/api/markings/:id` | Poista merkintä |
 
+### Työpyynnöt ja tarjoukset
+| Metodi | Polku | Kuvaus |
+|--------|-------|--------|
+| GET | `/api/work-requests` | Hae avoimet työpyynnöt (paras tarjous nimettömänä) |
+| GET | `/api/work-requests/mine` | Hae omat työpyynnöt |
+| POST | `/api/work-requests` | Luo työpyyntö |
+| POST | `/api/work-requests/:id/bids` | Tee tarjous |
+| DELETE | `/api/work-requests/:id` | Poista oma työpyyntö |
+
 ### Kiinteistötunnushaku ja karttatasot
 | Metodi | Polku | Kuvaus |
 |--------|-------|--------|
 | GET | `/api/cadastre/search/:propertyCode` | Hae kiinteistö kiinteistötunnuksella |
+| GET | `/api/cadastre/at?lat=..&lng=..` | Hae kiinteistö karttapisteen perusteella |
 | GET | `/api/map/layers` | Hae karttatasojen asetukset |
 | GET | `/api/map/tiles/:style/:z/:x/:y` | MML-tiiliproxy (`maastokartta`, `peruskartta`, `ortokuva`) |
 
@@ -149,29 +162,43 @@ forest-care-app/
 
 ## Paikallinen kehitys
 
+Toimii macOS:llä, Linuxilla ja Windowsissa WSL:n kautta. Kaikki komennot ajetaan kansiossa `forest-care-app`.
+
 ### Vaatimukset
-- Node.js 20.19+ (tai 22.12+)
-- Docker + Docker Compose
-- npm
+- Node.js 20.19+ (tai 22.12+), esim. `nvm install --lts`
+- Docker (macOS/Windows: Docker Desktop käynnissä)
+- Windows: komennot ajetaan WSL:n (Ubuntu) terminaalissa, ei PowerShellissä
 
-### Pikakäynnistys (suositeltu)
-
-Aja WSL:n / Linuxin terminaalissa:
+### Ensimmäinen käynnistys
 
 ```bash
 cd forest-care-app
-./start.sh
+./start.sh seed   # valmistelee kaiken ja luo testitunnukset
+./start.sh        # käynnistää sovelluksen
 ```
 
-Skripti tarkistaa Dockerin ja Node-version, luo puuttuvat `.env`-tiedostot esimerkeistä (satunnaisella `JWT_SECRET`illä), asentaa riippuvuudet tarvittaessa, käynnistää tietokannan, ajaa migraatiot ja käynnistää backendin ja frontendin samaan terminaaliin. `Ctrl+C` sammuttaa palvelimet.
+`./start.sh` tarkistaa Dockerin ja Node-version, luo puuttuvat `.env`-tiedostot esimerkeistä
+(satunnaisella `JWT_SECRET`illä), asentaa riippuvuudet tarvittaessa, käynnistää tietokannan ja Mailpitin,
+ajaa migraatiot ja käynnistää backendin ja frontendin samaan terminaaliin. `Ctrl+C` sammuttaa palvelimet.
+
+- Frontend: http://localhost:5173
+- Backend: http://localhost:3001/health
+- Sähköpostit (Mailpit): http://localhost:8025
+
+**Huom:** pelkkä `./start.sh` ei luo käyttäjiä. Jos tietokanta on tyhjä, kirjautuminen ei onnistu ennen
+kuin `./start.sh seed` on ajettu (tai olet rekisteröitynyt itse).
+
+### Komennot
 
 | Komento | Kuvaus |
 |---------|--------|
 | `./start.sh` | Käynnistä kaikki |
+| `./start.sh seed` | Luo/päivitä testitunnukset ja -data (ei poista mitään). Voi ajaa myös sovelluksen ollessa käynnissä |
 | `./start.sh phone` | Käynnistä niin, että sovelluksen voi avata puhelimella (HTTPS) |
-| `./start.sh stop` | Pysäytä tietokantakontti |
-| `./start.sh seed` | Luo testitunnukset (ei poista mitään) |
+| `./start.sh stop` | Pysäytä tietokanta ja Mailpit, kun lopetat työskentelyn |
 | `./start.sh reset-db` | Tyhjennä tietokanta ja luo testitunnukset (kysyy vahvistuksen) |
+
+Uudet tietokantasarakkeet tulevat käyttöön ajamalla `./start.sh` uudelleen (tai `npm run migrate` kansiossa `backend`).
 
 ### Testitunnukset
 
@@ -181,12 +208,13 @@ Skripti tarkistaa Dockerin ja Node-version, luo puuttuvat `.env`-tiedostot esime
 - `omistaja2@metsuri.test`, `omistaja3@metsuri.test` – metsänomistajia, joilla työpyyntöjä eri puolilla Suomea
 - `yrittaja@metsuri.test`, `yrittaja2@metsuri.test` – työn tarjoajia, joilla valmiita tarjouksia
 
+Kaikilla on sama salasana: `SEED_PASSWORD` tiedostossa `backend/.env`. Seed arpoo sen, jos kohta on tyhjä.
+Salasana on jokaisen koneen oma (`backend/.env` ei ole gitissä). Voit vaihtaa sen (väh. 8 merkkiä) ja ajaa
+`./start.sh seed` uudelleen, jolloin tunnusten salasana päivittyy.
+
 Työpyynnössä omistaja valitsee **puukaupan** (ostaja maksaa omistajalle, korkein tarjous paras)
 tai **palvelutyön** (omistaja maksaa tekijälle, edullisin tarjous paras). Paras tarjous näytetään
 kaikille nimettömänä.
-
-Salasana on `backend/.env`-tiedostossa kohdassa `SEED_PASSWORD` (arvotaan automaattisesti).
-Voit vaihtaa sen ja ajaa `./start.sh seed` uudelleen.
 
 ### Salasanan palautus ja sähköpostit
 
@@ -204,7 +232,11 @@ Puhelimen pitää olla samassa WLANissa kuin kone. GPS toimii puhelimen selaimes
 joten `phone`-tila käyttää itse tehtyä sertifikaattia – selain varoittaa siitä, ja varoitus hyväksytään
 ("Lisätiedot" → "Siirry sivustolle").
 
-**Kerran tehtävät Windows-asetukset** (WSL2 näkyy muuten vain koneen sisällä):
+Aja `./start.sh phone` ja avaa puhelimella skriptin tulostama osoite (`https://192.168.x.x:5173`).
+
+**macOS:** ei erillisiä asetuksia. Jos macOS kysyy, sallitaanko Noden vastaanottaa yhteyksiä, vastaa kyllä.
+
+**Windows + WSL, kerran tehtävät asetukset** (WSL2 näkyy muuten vain koneen sisällä):
 
 1. Luo tiedosto `%USERPROFILE%\.wslconfig`, sisältö:
    ```ini
@@ -218,102 +250,24 @@ joten `phone`-tila käyttää itse tehtyä sertifikaattia – selain varoittaa s
    ```
 4. Varmista, että WLAN-verkon profiili on Windowsissa **Yksityinen** (ei Julkinen).
 
-Sen jälkeen: `./start.sh phone` ja avaa puhelimella skriptin tulostama osoite (`https://192.168.x.x:5173`).
+### Yleisimmät ongelmat
 
-Alla samat vaiheet käsin.
+| Ongelma | Ratkaisu |
+|---------|----------|
+| Kirjautuminen ei onnistu testitunnuksilla | Aja `./start.sh seed` ja käytä `backend/.env`:n `SEED_PASSWORD`ia |
+| "Docker ei ole käynnissä" | Käynnistä Docker Desktop ja odota, että se on valmis |
+| "Portti 3001/5173 on jo käytössä" | Sovellus on jo käynnissä toisessa terminaalissa – sammuta se `Ctrl+C`:llä |
+| "Node … on liian vanha" | Päivitä Node versioon 20.19+ (`nvm install --lts`) |
+| "npm not recognized" Windowsissa | Aja komennot WSL:n terminaalissa, ei PowerShellissä |
+| "client password must be a string" | `backend/.env` puuttuu tai siitä puuttuu `DATABASE_URL` – aja `./start.sh` |
 
-### Ensimmäinen käyttöönotto
+### Kehityskäytännöt
 
-1. Käynnistä tietokanta:
-
-```bash
-cd forest-care-app
-docker compose up -d db
-```
-
-2. Ota backend käyttöön:
-
-```bash
-cd backend
-cp .env.example .env
-npm install
-npm run migrate
-```
-
-3. Ota frontend käyttöön:
-
-```bash
-cd ../frontend
-cp .env.example .env
-npm install
-```
-
-4. Käynnistä kehityspalvelimet kahdessa eri terminaalissa:
-
-```bash
-# Terminaali 1
-cd forest-care-app/backend
-npm run dev
-
-# Terminaali 2
-cd forest-care-app/frontend
-npm run dev
-```
-
-5. Avaa selaimessa:
-- Frontend: http://localhost:5173
-- Backend health: http://localhost:3001/health
-
-### Seuraavan kerran käynnistys (nopea rutiini)
-
-Kun riippuvuudet ja .env-tiedostot on jo tehty, käytä tätä:
-
-```bash
-# Projektin juuressa
-cd forest-care-app
-docker compose up -d db
-
-# Terminaali 1
-cd backend
-npm run migrate
-npm run dev
-
-# Terminaali 2
-cd ../frontend
-npm run dev
-```
-
-Kun lopetat työskentelyn:
-
-```bash
-# Projektin juuressa
-docker compose stop
-```
-
-## Miten jatkan kehitystä
-
-Suositeltu etenemisjärjestys joka kerta:
-
-1. Vedä uusimmat muutokset ja käynnistä sovellus nopealla rutiinilla.
-2. Testaa perusflow heti alussa:
-	 - Rekisteröinti
-	 - Kirjautuminen
-	 - Suojattu datahaku (esim. properties/markings)
-3. Tee muutos pieninä paloina:
-	 - Backend-reitti tai logiikka
-	 - Frontend-kutsu palveluun
-	 - UI-muutos
-4. Aja vähintään nämä tarkistukset ennen committia:
-	 - Backend käynnistyy ilman virheitä
-	 - Frontend käynnistyy ilman virheitä
-	 - Muutettu toiminto toimii selaimessa
-5. Kirjoita commit-viesti muodossa: feat/fix/chore + lyhyt kuvaus.
-
-## Yleisimmät ongelmat
-
-- Jos saat virheen "client password must be a string":
-	- tarkista että backend/.env on olemassa
-	- tarkista että DATABASE_URL on asetettu
+1. Vedä uusimmat muutokset (`git pull`) ja käynnistä `./start.sh`.
+2. Tee muutos pieninä paloina: backend-reitti → frontendin palvelukutsu → käyttöliittymä.
+3. Ennen committia: backend käynnistyy ilman virheitä, `npm run build` onnistuu frontendissä ja
+   muutettu toiminto toimii selaimessa (myös puhelimen levyisellä näytöllä).
+4. Commit-viesti suomeksi muodossa `feat: …` / `fix: …` / `chore: …`.
 
 ## MML API-avain ja mock-data
 
@@ -390,12 +344,6 @@ Vastaus, kun dataa ei ole:
 **Laskennan logiikka (tuleva toteutus):**
 `estimated_value_eur = Σ (puulajikohtainen m³ * alueellinen kantohinta €/m³) + maapohjan arvio €`
 
-- Jos saat virheen "npm not recognized" Windows PowerShellissa:
-	- aja komennot WSL:n puolella (Ubuntu-terminaali)
-
-- Jos frontend build/dev kaatuu Node-versioon:
-	- päivitä Node versioon 20.19+ (tai 22.12+)
-
 ---
 
 ## Merkintätyypit
@@ -421,41 +369,18 @@ Vastaus, kun dataa ei ole:
 
 ## Tietokantataulut
 
-```sql
-users (id, email, password_hash, created_at)
+Rakenne määritellään tiedostossa `backend/src/db/migrate.ts` (ajetaan `./start.sh`:n mukana, turvallinen ajaa
+uudelleen). Kansion `database/` SQL-tiedostot ovat vanhoja eivätkä ole käytössä.
 
-properties (
-  id, user_id, name,
-  property_code TEXT,          -- kiinteistötunnus, esim. 145-410-43-16
-  source TEXT DEFAULT 'manual',-- 'manual' | 'cadastre'
-  area_ha NUMERIC,             -- pinta-ala hehtaareissa (valinnainen)
-  geometry GEOMETRY(4326),     -- PostGIS-polygoni
-  created_at, updated_at
-)
--- Uniikki rajoite: sama käyttäjä ei voi tallentaa samaa kiinteistötunnusta kahdesti
--- UNIQUE INDEX (user_id, property_code) WHERE property_code IS NOT NULL
-
-markings (
-  id, user_id,
-  property_id INTEGER,         -- viittaa properties.id (SET NULL jos kiinteistö poistetaan)
-  type VARCHAR(50),            -- vesakonhoito | istutus | harvennus | avohakkuu | muu_tyo
-  geometry_type VARCHAR(20),   -- point | line | area | note
-  title, description,
-  geometry GEOMETRY(4326),     -- PostGIS-geometria
-  created_at, updated_at
-)
-```
-
----
-
-## Docker – koko sovellus kerralla
-
-```bash
-cd forest-care-app
-docker-compose up
-```
-
-Tämä käynnistää tietokannan ja backendin. Frontend käynnistetään erikseen `npm run dev`:llä kehitysvaiheessa.
+| Taulu | Sisältö |
+|-------|---------|
+| `users` | Käyttäjät (email, bcrypt-salasana) |
+| `properties` | Palstat/kiinteistöt (PostGIS-polygoni, kiinteistötunnus, pinta-ala) |
+| `markings` | Tehdyt työt kartalla (tyyppi, geometria, toimenpidepäivä, pinta-ala) |
+| `work_requests` | Työpyynnöt (alue, tyyppi, puukauppa/palvelutyö, tavoitehinta) |
+| `work_request_bids` | Tarjoukset työpyyntöihin |
+| `password_reset_tokens` | Salasanan palautuslinkit |
+| `forest_stand_data`, `forest_valuation` | Tulevaa metsävaratieto- ja arviointi-integraatiota varten |
 
 ---
 
