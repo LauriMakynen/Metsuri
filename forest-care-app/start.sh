@@ -99,9 +99,17 @@ ensure_env() {
 ensure_deps() {
   local dir="$1" name
   name="$(basename "$dir")"
-  # Asennetaan, jos node_modules puuttuu tai package-lock.json on muuttunut asennuksen jälkeen.
-  if [[ ! -d "$dir/node_modules" ]] || [[ "$dir/package-lock.json" -nt "$dir/node_modules/.package-lock.json" ]]; then
+  local marker="$dir/node_modules/.package-lock.json"
+  # Asennetaan, jos node_modules puuttuu tai package.json/package-lock.json on muuttunut asennuksen jälkeen.
+  if [[ ! -f "$marker" || "$dir/package-lock.json" -nt "$marker" || "$dir/package.json" -nt "$marker" ]]; then
     info "Asennetaan $name-riippuvuudet..."
+    # npm ci asentaa täsmälleen package-lock.jsonin mukaiset versiot eikä muokkaa sitä,
+    # joten eri koneiden npm-versiot eivät tuota turhia muutoksia gitiin.
+    if [[ -f "$dir/package-lock.json" ]] && (cd "$dir" && npm ci --no-fund --no-audit); then
+      return
+    fi
+    # package-lock.json puuttuu tai ei vastaa package.jsonia (esim. riippuvuus lisätty ilman lukkoa).
+    warn "npm ci epäonnistui – ajetaan npm install, joka päivittää $name/package-lock.json. Commitoi se."
     (cd "$dir" && npm install --no-fund --no-audit)
   fi
 }
