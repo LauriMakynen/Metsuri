@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import TopNav from '../components/TopNav';
 import WorkRequestCard from '../components/WorkRequestCard';
+import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
 import { useAuth } from '../hooks/useAuth';
 import { workRequestsService } from '../services/forestService';
 import { MARKING_COLORS, MARKING_TYPE_LABELS, MARKING_TYPES } from '../utils/markingTypes';
@@ -139,45 +140,53 @@ export default function EmployersPage() {
   };
 
   return (
-    <div className="start-page">
+    <div className="start-page forest-page">
+      <SpruceForestBackdrop />
       <TopNav />
 
-      <main className="start-content">
-        <header className="start-header">
+      <main className="start-content forest-content">
+        <header className="forest-hero">
           <Link to="/start" className="back-link">← Takaisin</Link>
-          <h1>Työn tarjoajille</h1>
+          <p className="forest-eyebrow">🌲 Työn tarjoajille</p>
+          <h1>Metsätyöt odottavat tekijäänsä</h1>
           <p>
             Selaa metsäpalstoja, joille metsänomistajat ovat jättäneet työpyynnön, ja tarjoa hintaa.
             Paras tarjous näkyy kaikille nimettömänä.
           </p>
         </header>
 
-        <div className="type-filter" role="group" aria-label="Suodata työtyypin mukaan">
-          <button
-            className={`filter-chip ${typeFilter === null ? 'active' : ''}`}
-            onClick={() => setTypeFilter(null)}
-          >
-            Kaikki
-          </button>
-          {MARKING_TYPES.map((type) => (
+        <section className="glass-panel filter-panel" aria-label="Suodata työtyypin mukaan">
+          <h2 className="panel-title">Työtyyppi</h2>
+          <div className="type-filter">
             <button
-              key={type}
-              className={`filter-chip ${typeFilter === type ? 'active' : ''}`}
-              onClick={() => setTypeFilter(type)}
+              className={`filter-chip ${typeFilter === null ? 'active' : ''}`}
+              onClick={() => setTypeFilter(null)}
             >
-              <span style={{ color: MARKING_COLORS[type] }}>●</span> {MARKING_TYPE_LABELS[type]}
+              Kaikki
             </button>
-          ))}
-        </div>
+            {MARKING_TYPES.map((type) => (
+              <button
+                key={type}
+                className={`filter-chip ${typeFilter === type ? 'active' : ''}`}
+                onClick={() => setTypeFilter(type)}
+              >
+                <span style={{ color: MARKING_COLORS[type] }}>●</span> {MARKING_TYPE_LABELS[type]}
+              </button>
+            ))}
+          </div>
+        </section>
 
         {error && <div className="error-message">{error}</div>}
 
         <div className="requests-layout">
-          <div ref={mapContainerRef} className="requests-map" />
+          <section className="glass-panel map-panel">
+            <h2 className="panel-title">🗺️ Kartta</h2>
+            <div ref={mapContainerRef} className="requests-map" />
+          </section>
 
-          <section className="requests-list">
-            <h2 className="requests-count">
-              {loading ? 'Ladataan...' : `Avoimia työpyyntöjä: ${requests.length}`}
+          <section className="glass-panel requests-list">
+            <h2 className="panel-title">
+              📢 {loading ? 'Ladataan työpyyntöjä...' : `Avoimet työpyynnöt (${requests.length})`}
             </h2>
 
             {!loading && requests.length === 0 && !error && (
