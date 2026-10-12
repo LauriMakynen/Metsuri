@@ -290,12 +290,19 @@ html, body, #root {
 .panel-title { font-size: 0.82rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #14532d; margin-bottom: 0.7rem; }
 .forest-page .filter-panel { margin-bottom: 1rem; }
 .forest-page .filter-panel .type-filter { margin-bottom: 0; }
-.forest-page .requests-map { height: 50vh; box-shadow: none; border-radius: 12px; }
+/* The map panel stays put: no sticky positioning (it moved while wheel-zooming) and no
+   backdrop blur (re-rendered on every zoom animation frame and made the map shimmer) */
+.forest-page .map-panel {
+  background: rgba(255,255,255,0.94); -webkit-backdrop-filter: none; backdrop-filter: none;
+}
+.forest-page .requests-map {
+  height: 50vh; box-shadow: none; border-radius: 12px;
+  isolation: isolate; contain: paint; transform: translateZ(0);
+}
 .forest-page .requests-list { gap: 0.7rem; }
 .forest-page .request-card { box-shadow: 0 2px 8px rgba(8,40,22,0.08); }
 @media (min-width: 900px) {
-  .forest-page .map-panel { position: sticky; top: 1rem; }
-  .forest-page .requests-map { height: 64vh; position: static; }
+  .forest-page .requests-map { height: 64vh; position: relative; top: auto; }
   .forest-page .requests-list { max-height: calc(64vh + 2.6rem); }
 }
 .request-card {
