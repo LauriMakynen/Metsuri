@@ -52,7 +52,7 @@ export default function Sidebar({
   onWithdrawWorkRequest,
 }: SidebarProps) {
   return (
-    <aside className={`map-sidebar ${isOpen ? 'open' : ''}`}>
+    <aside id="map-sidebar" className={`map-sidebar ${isOpen ? 'open' : ''}`}>
       <PropertySearch onSearch={onSearch} onSelectResult={onSelectResult} isSearching={isSearching} />
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
