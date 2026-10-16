@@ -369,6 +369,12 @@ html, body, #root {
 
 .map-content { display: flex; flex: 1; overflow: hidden; position: relative; background: #fafafa; }
 
+@media (min-width: 900px) {
+  .map-content.sidebar-open .leaflet-left {
+    left: 320px;
+  }
+}
+
 /* Sidebar */
 .map-sidebar {
   width: 320px; background: var(--white); border-right: 1px solid var(--border);
@@ -380,8 +386,11 @@ html, body, #root {
   z-index: 1000; box-shadow: 4px 0 16px rgba(0,0,0,0.15); border-radius: 0;
 }
 @media (min-width: 900px) {
-  .map-sidebar { display: flex !important; position: relative; top: auto; left: auto; bottom: auto; max-width: none; box-shadow: 2px 0 8px rgba(0,0,0,0.08); }
-  .map-sidebar.open { position: relative; }
+  .map-sidebar.open {
+    display: flex; position: fixed; top: 56px; left: 0; bottom: 0;
+    width: 320px; max-width: 320px;
+    z-index: 1000; box-shadow: 4px 0 16px rgba(0,0,0,0.15);
+  }
 }
 
 .search-panel {

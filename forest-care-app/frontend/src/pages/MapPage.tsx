@@ -1146,7 +1146,9 @@ export default function MapPage() {
         <div className="map-nav-left">
           <button
             className="sidebar-toggle"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
+            onClick={() => setSidebarOpen((isOpen) => !isOpen)}
+            aria-expanded={sidebarOpen}
+            aria-controls="map-sidebar"
             title="Valikko"
           >
             ☰
@@ -1172,7 +1174,7 @@ export default function MapPage() {
         </div>
       </nav>
 
-      <div className={`map-content ${isGuest ? 'has-guest-banner' : ''}`}>
+      <div className={`map-content ${isGuest ? 'has-guest-banner' : ''} ${sidebarOpen ? 'sidebar-open' : ''}`}>
         {isGuest && (
           <div className="guest-banner">
             <span>Demotila – mitään ei tallenneta</span>
