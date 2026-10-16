@@ -8,6 +8,7 @@ import markingsRoutes from './routes/markings';
 import cadastreRoutes from './routes/cadastre';
 import mapRoutes from './routes/map';
 import workRequestsRoutes from './routes/workRequests';
+import forestValueRoutes from './routes/forestValue';
 
 dotenv.config();
 
@@ -63,6 +64,7 @@ app.use('/api/markings', apiLimiter, markingsRoutes);
 app.use('/api/cadastre', cadastreLimiter, cadastreRoutes);
 app.use('/api/map', apiLimiter, mapRoutes);
 app.use('/api/work-requests', apiLimiter, workRequestsRoutes);
+app.use('/api/forest-value', apiLimiter, forestValueRoutes);
 
 // Health check endpoints
 app.get('/health', (_req, res) => {

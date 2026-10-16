@@ -20,9 +20,12 @@ export const TREE_SPECIES: TreeSpecies[] = ['pine', 'spruce', 'birch', 'other_de
  *   A0 aukea uudistusala, S0 siemenpuumetsikkö,
  *   T1 taimikko alle 1,3 m, T2 taimikko yli 1,3 m, Y1 ylispuustoinen taimikko,
  *   02 nuori kasvatusmetsikkö, 03 varttunut kasvatusmetsikkö,
- *   04 uudistuskypsä metsikkö, ER eri-ikäisrakenteinen metsikkö
+ *   04 uudistuskypsä metsikkö, 05 suojuspuumetsikkö, ER eri-ikäisrakenteinen metsikkö
+ * (koodistot.suomi.fi, registry metsarek, scheme kehitysluokka-v_1_0)
  */
-export type DevelopmentClass = 'A0' | 'S0' | 'T1' | 'T2' | 'Y1' | '02' | '03' | '04' | 'ER';
+export type DevelopmentClass = 'A0' | 'S0' | 'T1' | 'T2' | 'Y1' | '02' | '03' | '04' | '05' | 'ER';
+
+export const DEVELOPMENT_CLASSES: DevelopmentClass[] = ['A0', 'S0', 'T1', 'T2', 'Y1', '02', '03', '04', '05', 'ER'];
 
 /** Timber assortments (puutavaralajit) that have a stumpage price. */
 export type TimberAssortment =
@@ -79,6 +82,7 @@ export type OperationType =
   | 'clear_cut' // uudistushakkuu, avohakkuu
   | 'selection_cut' // poimintahakkuu (eri-ikäisrakenteinen)
   | 'seed_tree_cut' // siemenpuuhakkuu
+  | 'overstory_removal' // ylispuiden poisto
   | 'soil_preparation' // maanmuokkaus
   | 'planting'; // istutus / kylvö
 

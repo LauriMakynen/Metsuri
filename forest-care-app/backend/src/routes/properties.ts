@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import pool from '../db/pool';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { isValidPropertyCode } from '../services/cadastreService';
+import { getForestValue } from '../services/forestValue/forestValueService';
 
 const router = Router();
 
@@ -266,6 +267,29 @@ router.get('/:id/valuation', async (req: AuthRequest, res: Response): Promise<vo
     res.json({ status: 'available', data: result.rows[0] });
   } catch (error) {
     console.error('Get valuation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/properties/:id/forest-value - Timber value, stands and recommended operations
+// ?refresh=1 bypasses the result cache (external APIs are queried again)
+router.get('/:id/forest-value', async (req: AuthRequest, res: Response): Promise<void> => {
+  const propertyId = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(propertyId)) {
+    res.status(400).json({ error: 'Invalid property id' });
+    return;
+  }
+  try {
+    const response = await getForestValue(propertyId, req.userId as number, {
+      refresh: req.query.refresh === '1',
+    });
+    if (!response) {
+      res.status(404).json({ error: 'Property not found' });
+      return;
+    }
+    res.json(response);
+  } catch (error) {
+    console.error('Get forest value error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

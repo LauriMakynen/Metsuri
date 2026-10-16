@@ -41,9 +41,9 @@ import type { ClippedStand } from './clip';
 
 /** Sawlog share of total volume when the source has no split, by species and development class. */
 export const DEFAULT_SAWLOG_SHARE: Record<TreeSpecies, Partial<Record<DevelopmentClass, number>>> = {
-  pine: { '02': 0.05, '03': 0.35, '04': 0.6, ER: 0.45, S0: 0.6, Y1: 0.5 },
-  spruce: { '02': 0.05, '03': 0.4, '04': 0.62, ER: 0.45, S0: 0.55, Y1: 0.5 },
-  birch: { '02': 0.0, '03': 0.25, '04': 0.35, ER: 0.25, S0: 0.3, Y1: 0.3 },
+  pine: { '02': 0.05, '03': 0.35, '04': 0.6, '05': 0.6, ER: 0.45, S0: 0.6, Y1: 0.5 },
+  spruce: { '02': 0.05, '03': 0.4, '04': 0.62, '05': 0.6, ER: 0.45, S0: 0.55, Y1: 0.5 },
+  birch: { '02': 0.0, '03': 0.25, '04': 0.35, '05': 0.35, ER: 0.25, S0: 0.3, Y1: 0.3 },
   other_deciduous: {},
 };
 
@@ -93,6 +93,7 @@ function emptyAssortmentRecord(): Record<TimberAssortment, number> {
 export function priceCutTypeFor(stand: Pick<ForestStand, 'developmentClass' | 'meanAgeYears'>): PriceCutType {
   switch (stand.developmentClass) {
     case '04':
+    case '05':
     case 'S0':
     case 'Y1':
       return 'regeneration';

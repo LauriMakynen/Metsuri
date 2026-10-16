@@ -41,6 +41,8 @@ export const REMOVAL_SHARE: Partial<Record<OperationType, number>> = {
   // Retention trees (säästöpuut) are left standing
   clear_cut: 0.95,
   seed_tree_cut: 0.85,
+  // In a Y1 stand most of the volume is the overstory
+  overstory_removal: 0.9,
 };
 
 export const PRICE_CUT_TYPE: Partial<Record<OperationType, PriceCutType>> = {
@@ -49,6 +51,7 @@ export const PRICE_CUT_TYPE: Partial<Record<OperationType, PriceCutType>> = {
   selection_cut: 'thinning',
   clear_cut: 'regeneration',
   seed_tree_cut: 'regeneration',
+  overstory_removal: 'regeneration',
 };
 
 export interface StandContext {
@@ -118,7 +121,7 @@ export const RULES: RecommendationRule[] = [
   },
   {
     id: 'overstory-removal',
-    operation: 'young_stand_management',
+    operation: 'overstory_removal',
     when: (s) => s.developmentClass === 'Y1',
     timing: () => 'now',
     reason: () => 'Ylispuustoinen taimikko: ylispuut kannattaa poistaa, jotta ne eivät vahingoita taimikkoa.',
@@ -201,7 +204,7 @@ export const RULES: RecommendationRule[] = [
   {
     id: 'regeneration-cut',
     operation: 'clear_cut',
-    when: (s) => s.developmentClass === '04' || s.developmentClass === 'S0',
+    when: (s) => s.developmentClass === '04' || s.developmentClass === '05' || s.developmentClass === 'S0',
     timing: (s) =>
       s.ageYears === null || s.ageYears >= THRESHOLDS.regenerationAge[s.species] ? 'now' : '1-3y',
     reason: (s) =>
