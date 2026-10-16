@@ -1,0 +1,31 @@
+{
+  "_comment": "Fallback stumpage prices (EUR/m3) used when the Luke PxWeb API is unavailable. Rounded whole-country averages, approximate level of 2025-2026 Luke statistics. Update at least yearly from https://www.luke.fi/fi/tilastot/puun-hinnat.",
+  "region": "Koko maa",
+  "period": "2025",
+  "prices": {
+    "regeneration": {
+      "pine_log": 76,
+      "spruce_log": 78,
+      "birch_log": 52,
+      "pine_pulp": 27,
+      "spruce_pulp": 28,
+      "birch_pulp": 26
+    },
+    "thinning": {
+      "pine_log": 62,
+      "spruce_log": 63,
+      "birch_log": 45,
+      "pine_pulp": 22,
+      "spruce_pulp": 22,
+      "birch_pulp": 21
+    },
+    "first_thinning": {
+      "pine_log": 50,
+      "spruce_log": 50,
+      "birch_log": 38,
+      "pine_pulp": 17,
+      "spruce_pulp": 17,
+      "birch_pulp": 16
+    }
+  }
+}

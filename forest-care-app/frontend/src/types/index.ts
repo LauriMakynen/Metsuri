@@ -167,3 +167,128 @@ export interface ForestValuationResponse {
   message?: string;
   data: ForestValuation | null;
 }
+
+// ---------------------------------------------------------------------------
+// Forest parcel value ("Metsäpalstan arvo"). Mirrors backend/src/services/forestValue/types.ts.
+// ---------------------------------------------------------------------------
+
+export type TreeSpecies = 'pine' | 'spruce' | 'birch' | 'other_deciduous';
+
+// Kehitysluokka codes of the Finnish forest data standard
+export type DevelopmentClass = 'A0' | 'S0' | 'T1' | 'T2' | 'Y1' | '02' | '03' | '04' | 'ER';
+
+export type TimberAssortment =
+  | 'pine_log'
+  | 'spruce_log'
+  | 'birch_log'
+  | 'pine_pulp'
+  | 'spruce_pulp'
+  | 'birch_pulp';
+
+export type PriceCutType = 'regeneration' | 'thinning' | 'first_thinning';
+
+export type OperationType =
+  | 'young_stand_management'
+  | 'brush_clearing'
+  | 'first_thinning'
+  | 'thinning'
+  | 'clear_cut'
+  | 'selection_cut'
+  | 'seed_tree_cut'
+  | 'soil_preparation'
+  | 'planting';
+
+export type OperationTiming = 'now' | '1-3y' | '3-5y' | '5-10y' | '10y+';
+
+export interface ValueRange {
+  lowEur: number;
+  midEur: number;
+  highEur: number;
+  uncertainty: number;
+}
+
+export interface StandValuation {
+  standId: string;
+  standNumber: string | null;
+  // Stand clipped to the parcel, WGS84
+  geometry: GeoJSONGeometry;
+  areaHaInParcel: number;
+  developmentClass: DevelopmentClass | null;
+  mainSpecies: TreeSpecies | null;
+  speciesShares: Record<TreeSpecies, number>;
+  meanAgeYears: number | null;
+  volumeM3: number;
+  volumeM3PerHa: number;
+  sawlogShare: number;
+  pulpwoodShare: number;
+  valueEur: number;
+  priceCutType: PriceCutType;
+  isForestLand: boolean;
+  inventoryYear: number | null;
+}
+
+export interface RecommendedOperation {
+  standId: string;
+  standNumber: string | null;
+  type: OperationType;
+  timing: OperationTiming;
+  year: number;
+  reason: string;
+  source: 'metsakeskus' | 'rules';
+  estimatedRemovalM3: number | null;
+  estimatedIncomeEur: number | null;
+}
+
+export type ForestValueWarningCode =
+  | 'outdated_data'
+  | 'small_parcel'
+  | 'no_forest_land'
+  | 'partial_coverage'
+  | 'fallback_prices'
+  | 'stale_cache';
+
+export interface ForestValueWarning {
+  code: ForestValueWarningCode;
+  message: string;
+}
+
+export interface ForestValueResult {
+  propertyId: number;
+  areaHa: number;
+  coveredAreaHa: number;
+  forestLandAreaHa: number;
+  totalVolumeM3: number;
+  volumeM3PerHa: number;
+  meanAgeYears: number | null;
+  value: ValueRange;
+  valueBySpecies: Record<TreeSpecies, number>;
+  valueByAssortment: Record<TimberAssortment, number>;
+  stands: StandValuation[];
+  operations: RecommendedOperation[];
+  data: {
+    provider: 'metsakeskus' | 'mock' | 'manual';
+    inventoryYearMin: number | null;
+    inventoryYearMax: number | null;
+    isOutdated: boolean;
+  };
+  prices: {
+    source: 'luke' | 'fallback';
+    region: string;
+    period: string | null;
+    fetchedAt: string;
+  };
+  warnings: ForestValueWarning[];
+  computedAt: string;
+}
+
+export type ForestValueResponse =
+  | { status: 'available'; result: ForestValueResult; stale: boolean }
+  | { status: 'no_data'; message: string }
+  | { status: 'error'; message: string };
+
+// Owner-entered basics when no forest resource data is found
+export interface ManualStandInput {
+  species: TreeSpecies;
+  ageYears: number;
+  volumeM3PerHa: number;
+}
