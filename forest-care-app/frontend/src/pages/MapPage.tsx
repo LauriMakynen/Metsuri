@@ -25,14 +25,18 @@ import type {
   GeoJSONGeometry,
   CadastreFeature,
   MapLayerConfig,
+  RecommendedOperation,
   WorkRequest,
 } from '../types';
 import MarkingForm from '../components/MarkingForm';
 import Sidebar from '../components/Sidebar';
 import ActivityTracker from '../components/ActivityTracker';
 import WorkRequestForm from '../components/WorkRequestForm';
-import type { WorkRequestFormData } from '../components/WorkRequestForm';
-import { bidSummaryText } from '../utils/bids';
+import ForestValuePanel from '../components/forestValue/ForestValuePanel';
+import { useForestValue } from '../hooks/useForestValue';
+import { OPERATION_LABEL, OPERATION_WORK_TYPE, standTitle } from '../utils/forestValueFormat';
+import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
+import { bidSummaryText, suggestedPricing } from '../utils/bids';
 import type { ActivityResult } from '../components/ActivityTracker';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -129,8 +133,11 @@ export default function MapPage() {
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(FALLBACK_LAYER_CONFIG);
   const [activeBaseLayer, setActiveBaseLayer] = useState<BaseLayerKey>('maastokartta');
   const [showCadastreOverlay, setShowCadastreOverlay] = useState(false);
-  // The detail view (ForestValuePanel) is added in the next step
-  const [, setForestValueOpen] = useState(false);
+  const [forestValueOpen, setForestValueOpen] = useState(false);
+  // Stand highlighted from the value view; tied to the parcel so it resets on reselect
+  const [highlightedStand, setHighlightedStand] = useState<{ propertyId: number; standId: string } | null>(null);
+  // Prefilled work request opened from a recommended operation
+  const [requestDraft, setRequestDraft] = useState<WorkRequestDraft | null>(null);
   const [tileLoading, setTileLoading] = useState(false);
   const [clickedCadastre, setClickedCadastre] = useState<CadastreFeature | null>(null);
   const [clickedCadastreCustomName, setClickedCadastreCustomName] = useState('');
@@ -149,6 +156,12 @@ export default function MapPage() {
     () => properties.find((p) => p.id === selectedPropertyId) ?? null,
     [properties, selectedPropertyId]
   );
+  const forestValue = useForestValue(selectedProperty);
+  const forestValueResult =
+    forestValue.entry?.response?.status === 'available' ? forestValue.entry.response.result : null;
+  const highlightedStandId =
+    highlightedStand && highlightedStand.propertyId === selectedPropertyId ? highlightedStand.standId : null;
+  const standsLayerRef = useRef<L.FeatureGroup | null>(null);
 
   const loadProperties = useCallback(async () => {
     if (isGuest) return;
@@ -379,6 +392,7 @@ export default function MapPage() {
     });
     setWorkRequests((prev) => [request, ...prev]);
     drawnLayersRef.current?.clearLayers();
+    setRequestDraft(null);
     setShowForm(false);
     setActiveTool(null);
     setSidebarOpen(true);
@@ -912,6 +926,7 @@ export default function MapPage() {
 
   const handleCancelForm = () => {
     drawnLayersRef.current?.clearLayers();
+    setRequestDraft(null);
     setShowForm(false);
     setActiveTool(null);
     if (drawControlRef.current && mapRef.current) {
@@ -1004,6 +1019,78 @@ export default function MapPage() {
     } finally {
       setSavingSearchResult(false);
     }
+  };
+
+  // Stands of the value view on the map: thin outlines, the selected one filled
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!standsLayerRef.current || !map.hasLayer(standsLayerRef.current)) {
+      standsLayerRef.current = new L.FeatureGroup().addTo(map);
+    }
+    const group = standsLayerRef.current;
+    group.clearLayers();
+    if (!forestValueResult || (!forestValueOpen && !highlightedStandId)) return;
+    forestValueResult.stands.forEach((stand) => {
+      if (!stand.geometry) return;
+      const selected = stand.standId === highlightedStandId;
+      const layer = L.geoJSON(stand.geometry as GeoJSON.Geometry, {
+        style: {
+          color: selected ? '#1d4ed8' : '#166534',
+          weight: selected ? 3 : 1.5,
+          fillColor: selected ? '#3b82f6' : '#22c55e',
+          fillOpacity: selected ? 0.35 : 0.08,
+        },
+      });
+      layer.bindTooltip(standTitle(stand.standNumber), { sticky: true });
+      group.addLayer(layer);
+      if (selected) layer.bringToFront();
+    });
+  }, [forestValueResult, forestValueOpen, highlightedStandId]);
+
+  const handleSelectStand = (standId: string) => {
+    if (selectedPropertyId === null) return;
+    setHighlightedStand({ propertyId: selectedPropertyId, standId });
+    const stand = forestValueResult?.stands.find((s) => s.standId === standId);
+    const bounds = stand ? toBounds(stand.geometry) : null;
+    const map = mapRef.current;
+    if (!map || !bounds) return;
+    const narrow = window.innerWidth < 900;
+    if (narrow) {
+      // The view covers the whole screen on mobile: step aside to show the stand
+      setForestValueOpen(false);
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    } else {
+      // Keep the stand clear of the side panel
+      const panelWidth = document.querySelector('.fv-panel')?.clientWidth ?? 0;
+      map.fitBounds(bounds, { paddingTopLeft: [40, 40], paddingBottomRight: [panelWidth + 40, 40], maxZoom: 16 });
+    }
+  };
+
+  const closeForestValue = () => {
+    setForestValueOpen(false);
+    setHighlightedStand(null);
+  };
+
+  const handleRequestOffers = (op: RecommendedOperation) => {
+    const stand = forestValueResult?.stands.find((s) => s.standId === op.standId);
+    if (!stand?.geometry) return;
+    const type = OPERATION_WORK_TYPE[op.type];
+    const amounts = [
+      op.estimatedRemovalM3 !== null ? `arvioitu kertymä noin ${op.estimatedRemovalM3} m³` : null,
+      op.estimatedIncomeEur !== null ? `arvioitu kantoraha noin ${op.estimatedIncomeEur.toLocaleString('fi-FI')} €` : null,
+    ].filter(Boolean);
+    setRequestDraft({
+      type,
+      title: `${OPERATION_LABEL[op.type]} – ${standTitle(op.standNumber).toLowerCase()}`,
+      note: `Ajankohta: ${op.year}. ${op.reason}${amounts.length ? ` (${amounts.join(', ')})` : ''}`,
+      pricing: suggestedPricing(type),
+    });
+    setPendingGeometry(stand.geometry);
+    setPendingGeometryType('area');
+    setActiveTool('request');
+    setShowForm(true);
+    closeForestValue();
   };
 
   const handleSelectProperty = (property: Property) => {
@@ -1169,7 +1256,10 @@ export default function MapPage() {
           markings={markings}
           selectedPropertyId={selectedPropertyId}
           selectedProperty={selectedProperty}
-          onOpenForestValue={() => setForestValueOpen(true)}
+          onOpenForestValue={() => {
+            setForestValueOpen(true);
+            setSidebarOpen(false);
+          }}
           isSearching={searchLoading}
           onSearch={handleOnSearch}
           onSelectResult={handleSaveCadastreToProperties}
@@ -1409,6 +1499,24 @@ export default function MapPage() {
             </div>
           )}
 
+          {forestValueOpen && selectedProperty && (
+            <ForestValuePanel
+              property={selectedProperty}
+              entry={forestValue.entry}
+              onReload={() => forestValue.reload(true)}
+              onClose={closeForestValue}
+              selectedStandId={highlightedStandId}
+              onSelectStand={handleSelectStand}
+              onRequestOffers={isGuest ? undefined : handleRequestOffers}
+            />
+          )}
+
+          {!forestValueOpen && highlightedStandId && (
+            <button type="button" className="fv-back-chip" onClick={() => setForestValueOpen(true)}>
+              ← Takaisin arvoon
+            </button>
+          )}
+
           {error && (
             <div className="map-error" onClick={() => setError('')}>
               ⚠️ {error}
@@ -1420,6 +1528,7 @@ export default function MapPage() {
       {showForm && activeTool === 'request' && (
         <WorkRequestForm
           parcelName={selectedProperty?.name ?? 'Palsta'}
+          initial={requestDraft}
           areaHa={pendingGeometry?.type === 'Polygon' ? calculateAreaHa(pendingGeometry) : null}
           onSubmit={handleCreateWorkRequest}
           onCancel={handleCancelForm}

@@ -1,5 +1,6 @@
 import type {
   DevelopmentClass,
+  MarkingType,
   ForestValueResult,
   OperationTiming,
   OperationType,
@@ -108,4 +109,22 @@ export function dataSourceLabel(result: ForestValueResult): string {
   return inventoryYearMin === inventoryYearMax
     ? `Metsävaratieto ${inventoryYearMin}`
     : `Metsävaratieto ${inventoryYearMin}–${inventoryYearMax}`;
+}
+
+// Work request type when the owner asks for offers on a recommended operation
+export const OPERATION_WORK_TYPE: Record<OperationType, MarkingType> = {
+  young_stand_management: 'vesakonhoito',
+  brush_clearing: 'vesakonhoito',
+  first_thinning: 'harvennus',
+  thinning: 'harvennus',
+  selection_cut: 'harvennus',
+  clear_cut: 'avohakkuu',
+  seed_tree_cut: 'avohakkuu',
+  overstory_removal: 'avohakkuu',
+  soil_preparation: 'muu_tyo',
+  planting: 'istutus',
+};
+
+export function standTitle(standNumber: string | null): string {
+  return standNumber ? `Kuvio ${standNumber}` : 'Kuvio';
 }
