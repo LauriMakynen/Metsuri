@@ -7,8 +7,7 @@ import type {
   GeometryType,
   CadastreFeature,
   MapLayerConfig,
-  ForestDataResponse,
-  ForestValuationResponse,
+  ForestValueResponse,
   WorkRequest,
   PublicWorkRequest,
   NewWorkRequest,
@@ -138,13 +137,19 @@ export const propertiesService = {
     return response.data.map(normalizeMarking);
   },
 
-  getForestData: async (propertyId: number): Promise<ForestDataResponse> => {
-    const response = await api.get<ForestDataResponse>(`/api/properties/${propertyId}/forest-data`);
+  // refresh = skip the server-side result cache and query Metsäkeskus again
+  getForestValue: async (propertyId: number, refresh = false): Promise<ForestValueResponse> => {
+    const response = await api.get<ForestValueResponse>(`/api/properties/${propertyId}/forest-value`, {
+      params: refresh ? { refresh: 1 } : undefined,
+    });
     return response.data;
   },
+};
 
-  getValuation: async (propertyId: number): Promise<ForestValuationResponse> => {
-    const response = await api.get<ForestValuationResponse>(`/api/properties/${propertyId}/valuation`);
+export const forestValueService = {
+  // Guest demo parcel, computed from example data on the server
+  getDemo: async (): Promise<ForestValueResponse> => {
+    const response = await api.get<ForestValueResponse>('/api/forest-value/demo');
     return response.data;
   },
 };

@@ -927,3 +927,47 @@ html, body, #root {
 .modal-actions { display: flex; gap: 0.75rem; margin-top: 0.5rem; }
 .modal-actions .btn-secondary { flex: 1; width: auto; }
 .modal-actions .btn-primary { flex: 2; }
+
+/* Forest parcel value ("Metsäpalstan arvo"): card in the sidebar */
+.fv-card {
+  margin-top: 0.75rem;
+  padding: 0.85rem;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.fv-card-label { font-size: 0.75rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.04em; }
+.fv-card-value { font-size: 1.35rem; font-weight: 700; color: var(--forest-green); line-height: 1.2; font-variant-numeric: tabular-nums; }
+.fv-card-volume { font-size: 0.85rem; color: var(--text); font-variant-numeric: tabular-nums; }
+.fv-card-message { font-size: 0.85rem; color: var(--text); line-height: 1.4; }
+.fv-card-tags { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.15rem; }
+.fv-card-button { margin-top: 0.4rem; min-height: 44px; font-size: 0.95rem; }
+.fv-card .btn-compact { align-self: flex-start; margin-top: 0.25rem; }
+
+.fv-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--forest-green-bg);
+  color: var(--forest-green);
+  border: 1px solid #bbf7d0;
+}
+/* Amber text on light amber: contrast 5.9:1 */
+.fv-tag-warn { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+
+.fv-skeleton {
+  border-radius: 4px;
+  background: linear-gradient(90deg, #eef2ee 25%, #f7faf7 50%, #eef2ee 75%);
+  background-size: 200% 100%;
+  animation: fv-shimmer 1.4s ease-in-out infinite;
+}
+.fv-skeleton-label { height: 0.7rem; width: 45%; }
+.fv-skeleton-value { height: 1.5rem; width: 75%; margin: 0.2rem 0; }
+.fv-skeleton-line { height: 0.8rem; width: 60%; }
+.fv-skeleton-line.short { width: 40%; }
+@keyframes fv-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .fv-skeleton { animation: none; } }

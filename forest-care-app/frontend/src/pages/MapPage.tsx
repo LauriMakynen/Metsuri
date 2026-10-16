@@ -25,8 +25,6 @@ import type {
   GeoJSONGeometry,
   CadastreFeature,
   MapLayerConfig,
-  ForestDataResponse,
-  ForestValuationResponse,
   WorkRequest,
 } from '../types';
 import MarkingForm from '../components/MarkingForm';
@@ -131,8 +129,8 @@ export default function MapPage() {
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(FALLBACK_LAYER_CONFIG);
   const [activeBaseLayer, setActiveBaseLayer] = useState<BaseLayerKey>('maastokartta');
   const [showCadastreOverlay, setShowCadastreOverlay] = useState(false);
-  const [forestData, setForestData] = useState<ForestDataResponse | null>(null);
-  const [valuation, setValuation] = useState<ForestValuationResponse | null>(null);
+  // The detail view (ForestValuePanel) is added in the next step
+  const [, setForestValueOpen] = useState(false);
   const [tileLoading, setTileLoading] = useState(false);
   const [clickedCadastre, setClickedCadastre] = useState<CadastreFeature | null>(null);
   const [clickedCadastreCustomName, setClickedCadastreCustomName] = useState('');
@@ -537,22 +535,6 @@ export default function MapPage() {
       mapRef.current.fitBounds(bounds, { padding: [40, 40] });
     }
   }, [selectedPropertyGeometry, renderSelectedHighlight]);
-
-  // Load forest stand data and valuation when selected property changes
-  useEffect(() => {
-    if (!selectedPropertyId) {
-      setForestData(null);
-      setValuation(null);
-      return;
-    }
-    Promise.all([
-      propertiesService.getForestData(selectedPropertyId).catch(() => null),
-      propertiesService.getValuation(selectedPropertyId).catch(() => null),
-    ]).then(([fd, val]) => {
-      setForestData(fd);
-      setValuation(val);
-    });
-  }, [selectedPropertyId]);
 
   const startDraw = useCallback((tool: DrawTool) => {
     if (!mapRef.current || !drawnLayersRef.current) return;
@@ -1187,8 +1169,7 @@ export default function MapPage() {
           markings={markings}
           selectedPropertyId={selectedPropertyId}
           selectedProperty={selectedProperty}
-          forestData={forestData}
-          valuation={valuation}
+          onOpenForestValue={() => setForestValueOpen(true)}
           isSearching={searchLoading}
           onSearch={handleOnSearch}
           onSelectResult={handleSaveCadastreToProperties}
@@ -1234,18 +1215,6 @@ export default function MapPage() {
               {selectedProperty.property_code && <span>Tunnus: {selectedProperty.property_code}</span>}
               {selectedProperty.area_ha !== null && selectedProperty.area_ha !== undefined && (
                 <span>Pinta-ala: {Number(selectedProperty.area_ha).toFixed(2)} ha</span>
-              )}
-              {forestData?.status === 'available' && forestData.data?.total_volume_m3 != null && (
-                <span>Puusto: {forestData.data.total_volume_m3.toFixed(0)} m³</span>
-              )}
-              {forestData?.status === 'not_available' && (
-                <span className="info-placeholder">Metsädata ei saatavilla</span>
-              )}
-              {valuation?.status === 'available' && valuation.data?.estimated_value_eur != null && (
-                <span>Arvio: {valuation.data.estimated_value_eur.toLocaleString('fi-FI')} €</span>
-              )}
-              {valuation?.status === 'not_available' && (
-                <span className="info-placeholder">Arviota ei saatavilla</span>
               )}
             </div>
           )}
