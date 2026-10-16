@@ -8,6 +8,7 @@ import type {
   CadastreFeature,
   MapLayerConfig,
   ForestValueResponse,
+  ManualStandInput,
   WorkRequest,
   PublicWorkRequest,
   NewWorkRequest,
@@ -142,6 +143,12 @@ export const propertiesService = {
     const response = await api.get<ForestValueResponse>(`/api/properties/${propertyId}/forest-value`, {
       params: refresh ? { refresh: 1 } : undefined,
     });
+    return response.data;
+  },
+
+  // Owner-entered basics when there is no forest resource data
+  submitManualForestValue: async (propertyId: number, input: ManualStandInput): Promise<ForestValueResponse> => {
+    const response = await api.post<ForestValueResponse>(`/api/properties/${propertyId}/forest-value/manual`, input);
     return response.data;
   },
 };

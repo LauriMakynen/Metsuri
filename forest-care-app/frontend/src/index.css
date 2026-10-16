@@ -956,7 +956,7 @@ html, body, #root {
   color: var(--forest-green);
   border: 1px solid #bbf7d0;
 }
-/* Amber text on light amber: contrast 5.9:1 */
+/* Amber text on light amber: contrast 6.8:1 */
 .fv-tag-warn { background: #fffbeb; color: #92400e; border-color: #fde68a; }
 
 .fv-skeleton {
@@ -1135,3 +1135,14 @@ html, body, #root {
 .fv-stand:focus-visible, .fv-op-stand:focus-visible, .fv-icon-btn:focus-visible, .fv-back-chip:focus-visible {
   outline: 3px solid #2563eb; outline-offset: 2px;
 }
+
+/* Forest value: states and manual input */
+.fv-card-notice { font-size: 0.8rem; color: #78350f; background: #fffbeb; border-radius: var(--radius-sm); padding: 0.4rem 0.55rem; }
+.fv-state { display: flex; flex-direction: column; gap: 0.75rem; align-items: flex-start; }
+.fv-state-error .fv-state-message { color: #991b1b; }
+.fv-manual .form-group { margin-bottom: 0; }
+.fv-manual select, .fv-manual input { width: 100%; }
+.fv-manual-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+.fv-manual-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
+.fv-panel-source .btn-link { font-size: inherit; }
+@media (prefers-reduced-motion: reduce) { .fv-spin { animation: none; } }

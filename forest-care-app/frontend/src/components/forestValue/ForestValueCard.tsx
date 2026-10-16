@@ -57,6 +57,8 @@ export default function ForestValueCard({ property, onOpenDetails }: ForestValue
 
   const { result, stale } = response;
   const hasValue = result.value.midEur > 0;
+  // Reasons the number is missing or unreliable, shown on the card as well
+  const notice = result.warnings.find((w) => w.code === 'no_forest_land' || w.code === 'small_parcel');
 
   return (
     <div className="fv-card">
@@ -67,6 +69,7 @@ export default function ForestValueCard({ property, onOpenDetails }: ForestValue
       <p className="fv-card-volume">
         {formatNumber(result.totalVolumeM3)} m³ · {formatNumber(result.volumeM3PerHa)} m³/ha
       </p>
+      {notice && <p className="fv-card-notice">{notice.message}</p>}
       <div className="fv-card-tags">
         <span className={`fv-tag ${result.data.isOutdated ? 'fv-tag-warn' : ''}`}>
           {dataSourceLabel(result)}

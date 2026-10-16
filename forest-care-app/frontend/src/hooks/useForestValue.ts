@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { forestValueService, propertiesService } from '../services/forestService';
-import type { ForestValueResponse, Property } from '../types';
+import type { ForestValueResponse, ManualStandInput, Property } from '../types';
 import { DEMO_PROPERTY_ID } from '../utils/demoData';
 
 // In-memory cache of forest value results, shared by the value card and the
@@ -68,5 +68,15 @@ export function useForestValue(property: Property | null) {
     [key, propertyId]
   );
 
-  return { entry, reload };
+  // Throws on failure so the form can show the server's message
+  const submitManual = useCallback(
+    async (input: ManualStandInput) => {
+      if (!key || propertyId === null) return;
+      const response = await propertiesService.submitManualForestValue(propertyId, input);
+      setEntry(key, { status: 'ready', response, fetchedAt: Date.now() });
+    },
+    [key, propertyId]
+  );
+
+  return { entry, reload, submitManual };
 }

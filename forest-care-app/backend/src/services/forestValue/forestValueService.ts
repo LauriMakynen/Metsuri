@@ -15,6 +15,7 @@ import { clipStandsToParcel, planarAreaHa } from './clip';
 import { DEMO_PARCEL_WGS84 } from './demoParcel';
 import { fallbackPrices, fetchLukePrices, priceRegionForMunicipality } from './lukePriceClient';
 import { fetchStandsInBbox, type MetsakeskusStand } from './metsakeskusClient';
+import { manualStand } from './manualStand';
 import { generateMockStands } from './mockStands';
 import { recommendOperations } from './recommendations';
 import type {
@@ -22,6 +23,7 @@ import type {
   ForestStand,
   ForestValueResponse,
   ForestValueResult,
+  ManualStandInput,
   PolygonGeometry,
   StumpagePrices,
 } from './types';
@@ -265,8 +267,35 @@ export async function getForestValue(
     provider,
     municipality: municipalityFromPropertyCode(parcel.propertyCode),
   });
-  if (!result) return { status: 'no_data', message: NO_DATA_MESSAGE };
+  if (!result) {
+    // Owner-entered basics for this parcel, if given earlier
+    if (sameParcel && cached?.provider === 'manual') {
+      return { status: 'available', stale: false, result: cached.result };
+    }
+    return { status: 'no_data', message: NO_DATA_MESSAGE };
+  }
 
+  await writeCache(propertyId, parcel.geometryHash, result);
+  return { status: 'available', stale: false, result };
+}
+
+/** Value from owner-entered basics; stored so it is shown again while there is no forest data. */
+export async function getManualForestValue(
+  propertyId: number,
+  userId: number,
+  input: ManualStandInput
+): Promise<ForestValueResponse | null> {
+  const parcel = await loadParcel(propertyId, userId);
+  if (!parcel) return null;
+  const result = await buildForestValue({
+    propertyId,
+    parcel: parcel.geometry3067,
+    parcelAreaHa: parcel.areaHa,
+    stands: [manualStand(parcel.geometry3067, parcel.areaHa, input, new Date().getFullYear())],
+    provider: 'manual',
+    municipality: municipalityFromPropertyCode(parcel.propertyCode),
+  });
+  if (!result) return { status: 'no_data', message: NO_DATA_MESSAGE };
   await writeCache(propertyId, parcel.geometryHash, result);
   return { status: 'available', stale: false, result };
 }

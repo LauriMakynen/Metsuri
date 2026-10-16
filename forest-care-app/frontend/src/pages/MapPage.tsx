@@ -1508,6 +1508,7 @@ export default function MapPage() {
               selectedStandId={highlightedStandId}
               onSelectStand={handleSelectStand}
               onRequestOffers={isGuest ? undefined : handleRequestOffers}
+              onSubmitManual={isGuest ? undefined : forestValue.submitManual}
             />
           )}
 

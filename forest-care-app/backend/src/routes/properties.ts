@@ -2,7 +2,8 @@ import { Router, Response } from 'express';
 import pool from '../db/pool';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { isValidPropertyCode } from '../services/cadastreService';
-import { getForestValue } from '../services/forestValue/forestValueService';
+import { getForestValue, getManualForestValue } from '../services/forestValue/forestValueService';
+import { validateManualInput } from '../services/forestValue/manualStand';
 
 const router = Router();
 
@@ -216,6 +217,32 @@ router.get('/:id/forest-value', async (req: AuthRequest, res: Response): Promise
     res.json(response);
   } catch (error) {
     console.error('Get forest value error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/properties/:id/forest-value/manual - Value from owner-entered basics
+// (species, ageYears, volumeM3PerHa) when there is no forest resource data
+router.post('/:id/forest-value/manual', async (req: AuthRequest, res: Response): Promise<void> => {
+  const propertyId = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(propertyId)) {
+    res.status(400).json({ error: 'Invalid property id' });
+    return;
+  }
+  const validated = validateManualInput(req.body);
+  if ('error' in validated) {
+    res.status(400).json({ error: validated.error });
+    return;
+  }
+  try {
+    const response = await getManualForestValue(propertyId, req.userId as number, validated.value);
+    if (!response) {
+      res.status(404).json({ error: 'Property not found' });
+      return;
+    }
+    res.json(response);
+  } catch (error) {
+    console.error('Manual forest value error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
