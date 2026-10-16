@@ -162,7 +162,7 @@ export interface RecommendedOperation {
   standNumber: string | null;
   type: OperationType;
   timing: OperationTiming;
-  /** Earliest suggested year. */
+  /** Suggested year: the source's proposal year, or a representative year of the timing class. */
   year: number;
   /** Plain-language reason for the owner (Finnish). */
   reason: string;
