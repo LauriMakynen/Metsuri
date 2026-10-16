@@ -1,0 +1,31 @@
+{
+  "_comment": "Fallback stumpage prices (EUR/m3) used when the Luke PxWeb API is unavailable: whole-country standing sale prices from Luke table LUKE/met/teokau/kk/0100_teokau.px, month 2026M06, rounded. Update at least yearly.",
+  "region": "Koko maa",
+  "period": "2026M06",
+  "prices": {
+    "regeneration": {
+      "pine_log": 81,
+      "spruce_log": 85,
+      "birch_log": 67,
+      "pine_pulp": 27,
+      "spruce_pulp": 28,
+      "birch_pulp": 28
+    },
+    "thinning": {
+      "pine_log": 70,
+      "spruce_log": 71,
+      "birch_log": 58,
+      "pine_pulp": 22,
+      "spruce_pulp": 23,
+      "birch_pulp": 23
+    },
+    "first_thinning": {
+      "pine_log": 54,
+      "spruce_log": 54,
+      "birch_log": 45,
+      "pine_pulp": 17,
+      "spruce_pulp": 18,
+      "birch_pulp": 17
+    }
+  }
+}

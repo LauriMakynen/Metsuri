@@ -1,0 +1,167 @@
+{
+ "type": "FeatureCollection",
+ "features": [
+  {
+   "type": "Feature",
+   "id": "stand.34661551",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       394000,
+       6875000
+      ],
+      [
+       394100,
+       6875000
+      ],
+      [
+       394100,
+       6875100
+      ],
+      [
+       394000,
+       6875100
+      ],
+      [
+       394000,
+       6875000
+      ]
+     ]
+    ]
+   },
+   "geometry_name": "geometry",
+   "properties": {
+    "standid": 34661551,
+    "municipalitynumber": "182",
+    "standnumber": 21,
+    "standnumberextension": null,
+    "maingroup": "1",
+    "subgroup": "1",
+    "fertilityclass": "3",
+    "soiltype": "10",
+    "drainagestate": "1",
+    "ditchingyear": null,
+    "developmentclass": "03",
+    "harvestaccessibility": "2",
+    "area": 2.169,
+    "treestanddatasource": "4",
+    "treestanddatadate": "2026-01-01T00:00:00+02:00",
+    "measurementdate": "2024-06-28T00:00:00+03:00",
+    "cuttingrestriction": null,
+    "silviculturerestriction": null,
+    "guidingmaterialstype": null,
+    "proportionunderguidance": null,
+    "maintreespecies": "1",
+    "proportionpine": 0.683,
+    "proportionspruce": 0.317,
+    "proportionother": 0,
+    "meanage": 63,
+    "basalarea": 19.11,
+    "stemcount": 469,
+    "meandiameter": 25.53,
+    "meanheight": 21.13,
+    "volume": 190.33,
+    "sawlogvolume": 127.62,
+    "pulpwoodvolume": 60.83,
+    "volumegrowth": 5.9,
+    "cuttingtype": "5",
+    "cuttingproposalyear": 2033,
+    "cuttingtype_ccs": null,
+    "cuttingproposalyear_ccs": null,
+    "silviculturetype": "2",
+    "silvicultureproposalyear": 2033,
+    "creationtime": "2020-02-23T12:44:40+02:00",
+    "updatetime": "2025-09-11T02:44:34.589+03:00"
+   },
+   "bbox": [
+    396115.59800011,
+    6874854.16000109,
+    396351.29689828,
+    6875033.9823581
+   ]
+  },
+  {
+   "type": "Feature",
+   "id": "stand.34659819",
+   "geometry": {
+    "type": "Polygon",
+    "coordinates": [
+     [
+      [
+       394000,
+       6875000
+      ],
+      [
+       394100,
+       6875000
+      ],
+      [
+       394100,
+       6875100
+      ],
+      [
+       394000,
+       6875100
+      ],
+      [
+       394000,
+       6875000
+      ]
+     ]
+    ]
+   },
+   "geometry_name": "geometry",
+   "properties": {
+    "standid": 34659819,
+    "municipalitynumber": "182",
+    "standnumber": 17,
+    "standnumberextension": null,
+    "maingroup": "1",
+    "subgroup": "1",
+    "fertilityclass": "2",
+    "soiltype": "20",
+    "drainagestate": "1",
+    "ditchingyear": null,
+    "developmentclass": "03",
+    "harvestaccessibility": "3",
+    "area": 0.183,
+    "treestanddatasource": "4",
+    "treestanddatadate": "2026-01-01T00:00:00+02:00",
+    "measurementdate": "2024-06-28T00:00:00+03:00",
+    "cuttingrestriction": null,
+    "silviculturerestriction": null,
+    "guidingmaterialstype": null,
+    "proportionunderguidance": null,
+    "maintreespecies": "29",
+    "proportionpine": 0,
+    "proportionspruce": 0.149,
+    "proportionother": 0.851,
+    "meanage": 36,
+    "basalarea": 24.25,
+    "stemcount": 1014,
+    "meandiameter": 20.22,
+    "meanheight": 22.4,
+    "volume": 254.74,
+    "sawlogvolume": 65.77,
+    "pulpwoodvolume": 183.37,
+    "volumegrowth": 10.03,
+    "cuttingtype": "3",
+    "cuttingproposalyear": 2026,
+    "cuttingtype_ccs": null,
+    "cuttingproposalyear_ccs": null,
+    "silviculturetype": null,
+    "silvicultureproposalyear": null,
+    "creationtime": "2020-02-23T11:36:17+02:00",
+    "updatetime": "2025-09-11T02:44:34.480+03:00"
+   },
+   "bbox": [
+    396103.988,
+    6875827.1631316,
+    396168.5929604,
+    6875866.444
+   ]
+  }
+ ]
+}

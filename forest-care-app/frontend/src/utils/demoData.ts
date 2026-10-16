@@ -11,7 +11,7 @@ export const DEMO_PROPERTY: Property = {
   name: 'Demopalsta (esimerkki)',
   property_code: null,
   source: 'demo',
-  area_ha: 11.2,
+  area_ha: 12.1,
   geometry: {
     type: 'Polygon',
     coordinates: [[
