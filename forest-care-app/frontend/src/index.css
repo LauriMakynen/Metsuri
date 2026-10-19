@@ -863,6 +863,29 @@ html, body, #root {
   font-size: 0.85rem;
   color: var(--error);
 }
+.work-request-confirm-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: -0.5rem 0 1.25rem;
+  padding: 0.75rem;
+  background: var(--forest-green-bg);
+  border-radius: var(--radius-sm);
+  font-size: 0.9rem;
+}
+.work-request-confirm-details span {
+  color: var(--text-light);
+  overflow-wrap: anywhere;
+}
+.work-request-confirm .modal-actions .btn {
+  flex: 1;
+  width: auto;
+  background: var(--forest-green);
+  color: var(--white);
+}
+.work-request-confirm .modal-actions .btn:hover:not(:disabled) {
+  background: var(--forest-green-light);
+}
 
 @media (max-width: 899px) {
   .clicked-cadastre-panel {
