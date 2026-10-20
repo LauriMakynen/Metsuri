@@ -544,8 +544,8 @@ Yksityiskohtaisemmat ohjeet: **[DEPLOYMENT.md](./DEPLOYMENT.md)**
 
 Projektissa käytetään seuraavaa haaramallia (Branch workflow):
 
-1. Jokainen ryhmän jäsen tekee muutoksensa omaan, jäsenen mukaan nimettyyn henkilökohtaiseen haaraan.
-2. Henkilökohtaiset haarat yhdistetään `dev`-haaraan, jossa muutokset integroidaan.
+1. Jokainen ryhmän jäsen tekee muutoksensa omaan, jäsenen mukaan nimettyyn `henkilökohtaiseen haaraan`.
+2. `Henkilökohtaiset haarat` yhdistetään `dev`-haaraan, jossa muutokset integroidaan.
 3. Kun kokonaisuus on valmis testattavaksi, `dev` yhdistetään `pre-main`-haaraan. Siellä testataan lähes valmis kokonaisuus.
 4. Kun `pre-main`-haaran testit menevät läpi, se voidaan yhdistää `main`-haaraan. `main` on tuotantohaara.
 
