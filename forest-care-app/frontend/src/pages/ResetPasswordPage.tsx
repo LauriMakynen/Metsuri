@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { authService } from '../services/forestService';
 import { useAuth } from '../hooks/useAuth';
+import { AuthBackdrop } from '../components/VideoBackdrop';
 
 // Step 2 of password reset: opened from the emailed link, sets the new password
 export default function ResetPasswordPage() {
@@ -46,6 +47,7 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="auth-container">
+      <AuthBackdrop />
       <div className="auth-card">
         <div className="auth-logo">🔑</div>
         <h1 className="auth-title">Uusi salasana</h1>

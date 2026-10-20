@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/forestService';
 import { useAuth } from '../hooks/useAuth';
+import { AuthBackdrop } from '../components/VideoBackdrop';
 
 // Registration page - allows new users to create an account
 export default function RegisterPage() {
@@ -35,6 +36,7 @@ export default function RegisterPage() {
 
   return (
     <div className="auth-container">
+      <AuthBackdrop />
       <div className="auth-card">
         <div className="auth-logo">🌲</div>
         <h1 className="auth-title">Metsuri</h1>
