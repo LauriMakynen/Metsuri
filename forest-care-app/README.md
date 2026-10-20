@@ -550,3 +550,36 @@ Projektissa käytetään seuraavaa haaramallia (Branch workflow):
 4. Kun `pre-main`-haaran testit menevät läpi, se voidaan yhdistää `main`-haaraan. `main` on tuotantohaara.
 
 Vain projektin johtajalla on oikeus tehdä haarojen yhdistämisiä. Tämä koskee kaikkia yllä kuvattuja yhdistämisiä.
+
+## Yhteiset koodauskäytännöt
+
+Näitä vähimmäiskäytäntöjä noudatetaan kaikessa projektin kehitystyössä.
+
+### Koodin kirjoittaminen
+
+- Tee yksi rajattu, yhtenäinen muutos kerrallaan. Suosi olemassa olevia rakenteita, apufunktioita ja nimeämistapoja uuden rinnakkaisen ratkaisun sijaan.
+- Kirjoita koodi TypeScriptillä ja määrittele tyypit niin, että virheelliset arvot ja tilanteet huomataan. Vältä `any`-tyyppiä ja tyyppivirheiden ohittamista.
+- Pidä käyttöliittymän komponentit, API-kutsut ja palvelinpuolen liiketoimintalogiikka omissa nykyisten projektikäytäntöjen mukaisissa kerroksissaan.
+- Näytä virhetilanteet selkeästi. Älä peitä virheitä tyhjillä tai oletusarvoisilla onnistumisvastauksilla.
+- Säilytä käyttöliittymän suomenkieliset tekstit ja responsiivinen toiminta.
+- Kysy projektiryhmältä ennen uuden riippuvuuden tai ulkoisen palvelun lisäämistä.
+- Älä lisää salasanoja, API-avaimia tai muita salaisuuksia koodiin tai versionhallintaan. Käytä ympäristömuuttujia.
+- Jos muutos vaikuttaa tietokannan rakenteeseen, päivitä tietokannan skeema ja tarvittavat migraatiot projektin nykyisen käytännön mukaisesti.
+- Päivitä tähän liittyvä dokumentaatio, kun toiminta tai käyttöönotto-ohje muuttuu.
+
+### Tietoturva ja metsätiedot
+
+- Tarkista kirjautuminen ja käyttäjän oikeus käsitellä pyydettyä kiinteistöä tai merkintää palvelimella; käyttöliittymän piilotus ei yksin riitä käyttöoikeuden tarkistukseksi.
+- Käytä tietokantakyselyissä parametrisoituja arvoja. Älä liitä käyttäjän syötettä suoraan SQL-kyselyyn.
+- Käsittele paikkatietoja ja mittayksiköitä johdonmukaisesti nykyisten GeoJSON-, koordinaatti- ja pinta-alakäytäntöjen mukaisesti.
+- Älä esitä paikkamerkki-, mock- tai alustavia metsänhoitosuosituksia varmennettuina tietoina. Älä keksi metsäalan sääntöjä; varmista vaatimukset ennen niiden toteuttamista.
+
+### Tarkistukset ja muutosten toimittaminen
+
+- Aja muutokseen sopivat tarkistukset ennen kuin pyydät sen yhdistämistä:
+  - Frontend: `cd frontend && npm run lint` ja `npm run build`
+  - Backend: `cd backend && npm run build`
+- Testaa muutettu käyttöliittymätoiminto tai API-kulku käsin, jos paikallinen ympäristö on käytettävissä. Kerro selkeästi, jos tarkistusta ei voitu ajaa.
+- Älä ilmoita testien menneen läpi, ellei niitä ole ajettu. Pakettien nykyisissä `package.json`-tiedostoissa ei ole automaattista testikomentoa.
+- Tee commit-viestistä lyhyt ja kuvaava; käytä etuliitettä `feat`, `fix` tai `chore` muutoksen luonteen mukaan.
+- Noudata yllä kuvattua haaramallia. Tee muutokset omassa henkilökohtaisessa haarassasi ja jätä haarojen yhdistäminen projektin johtajalle.
