@@ -159,6 +159,14 @@ export const forestValueService = {
     const response = await api.get<ForestValueResponse>('/api/forest-value/demo');
     return response.data;
   },
+  // A parcel a guest added in the demo: it exists only in the browser, so send its geometry
+  getGuest: async (geometry: GeoJSONGeometry, propertyCode: string | null): Promise<ForestValueResponse> => {
+    const response = await api.post<ForestValueResponse>('/api/forest-value/guest', {
+      geometry,
+      property_code: propertyCode,
+    });
+    return response.data;
+  },
 };
 
 // Map markings API calls

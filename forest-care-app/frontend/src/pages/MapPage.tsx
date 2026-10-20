@@ -51,6 +51,10 @@ type BaseLayerKey = 'maastokartta' | 'peruskartta' | 'ortokuva';
 
 // Same rule as the backend: 1–3, 1–3, 1–4 and 1–4 digits (e.g. 91-2-9901-100), or the 14-digit form
 const PROPERTY_CODE_REGEX = /^(\d{1,3}-\d{1,3}-\d{1,4}-\d{1,4}|\d{14})$/;
+// MML tiles exist up to zoom 18; beyond that Leaflet upscales them instead of showing grey
+const MAX_TILE_ZOOM = 18;
+// Zooming to a (small) parcel stops here so its surroundings stay visible
+const FIT_MAX_ZOOM = 17;
 
 const FALLBACK_LAYER_CONFIG: MapLayerConfig = {
   provider: 'fallback',
@@ -197,15 +201,15 @@ export default function MapPage() {
     const baseLayers: Record<BaseLayerKey, L.TileLayer> = {
       maastokartta: L.tileLayer(FALLBACK_LAYER_CONFIG.layers.maastokartta, {
         attribution: FALLBACK_LAYER_CONFIG.attribution,
-        maxZoom: 19,
+        maxZoom: 19, maxNativeZoom: MAX_TILE_ZOOM,
       }),
       peruskartta: L.tileLayer(FALLBACK_LAYER_CONFIG.layers.peruskartta, {
         attribution: FALLBACK_LAYER_CONFIG.attribution,
-        maxZoom: 19,
+        maxZoom: 19, maxNativeZoom: MAX_TILE_ZOOM,
       }),
       ortokuva: L.tileLayer(FALLBACK_LAYER_CONFIG.layers.ortokuva, {
         attribution: FALLBACK_LAYER_CONFIG.attribution,
-        maxZoom: 19,
+        maxZoom: 19, maxNativeZoom: MAX_TILE_ZOOM,
       }),
     };
 
@@ -298,7 +302,7 @@ export default function MapPage() {
       return;
     }
     if (!overlayLayerRef.current) {
-      overlayLayerRef.current = L.tileLayer(overlayUrl, { opacity: 0.85, maxZoom: 19, minZoom: 14 });
+      overlayLayerRef.current = L.tileLayer(overlayUrl, { opacity: 0.85, maxZoom: 19, maxNativeZoom: MAX_TILE_ZOOM, minZoom: 14 });
     } else {
       overlayLayerRef.current.setUrl(overlayUrl);
     }
@@ -547,7 +551,7 @@ export default function MapPage() {
 
     const bounds = toBounds(selectedPropertyGeometry);
     if (bounds && mapRef.current) {
-      mapRef.current.fitBounds(bounds, { padding: [40, 40] });
+      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
     }
   }, [selectedPropertyGeometry, renderSelectedHighlight]);
 
@@ -1181,7 +1185,7 @@ export default function MapPage() {
 
       const bounds = layer.getBounds();
       if (bounds.isValid()) {
-        mapRef.current?.fitBounds(bounds, { padding: [40, 40] });
+        mapRef.current?.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
       }
 
       renderSelectedHighlight(feature.geometry, '#0369a1');
