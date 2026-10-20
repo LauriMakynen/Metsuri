@@ -49,7 +49,8 @@ L.Icon.Default.mergeOptions({
 type DrawTool = 'property' | 'point' | 'line' | 'area' | 'note' | 'measure' | 'request' | null;
 type BaseLayerKey = 'maastokartta' | 'peruskartta' | 'ortokuva';
 
-const PROPERTY_CODE_REGEX = /^\d{3}-\d{3}-\d{2}-\d{1,4}$/;
+// Same rule as the backend: 1–3, 1–3, 1–4 and 1–4 digits (e.g. 91-2-9901-100), or the 14-digit form
+const PROPERTY_CODE_REGEX = /^(\d{1,3}-\d{1,3}-\d{1,4}-\d{1,4}|\d{14})$/;
 
 const FALLBACK_LAYER_CONFIG: MapLayerConfig = {
   provider: 'fallback',
@@ -1150,9 +1151,9 @@ export default function MapPage() {
   };
 
   const handleOnSearch = async (propertyCode: string): Promise<CadastreFeature | null> => {
-    const code = propertyCode.trim();
+    const code = propertyCode.trim().replace(/\s*-\s*/g, '-').replace(/\s+/g, '-');
     if (!PROPERTY_CODE_REGEX.test(code)) {
-      setError('Kiinteistötunnus on väärässä muodossa');
+      setError('Kiinteistötunnus on väärässä muodossa. Anna se esim. muodossa 91-401-5-24.');
       return null;
     }
 

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import pool from '../db/pool';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { isValidPropertyCode } from '../services/cadastreService';
+import { parsePropertyCode } from '../services/cadastreService';
 import { getForestValue, getManualForestValue } from '../services/forestValue/forestValueService';
 import { validateManualInput } from '../services/forestValue/manualStand';
 
@@ -64,14 +64,17 @@ router.post('/import', async (req: AuthRequest, res: Response): Promise<void> =>
     return;
   }
 
-  if (!isValidPropertyCode(property_code)) {
-    res.status(400).json({ error: 'Kiinteistötunnus on väärässä muodossa' });
+  // Store one canonical display form so the same parcel can't be saved twice in different spellings
+  const parsedCode = typeof property_code === 'string' ? parsePropertyCode(property_code) : null;
+  if (!parsedCode) {
+    res.status(400).json({ error: 'Kiinteistötunnus on väärässä muodossa (esim. 91-401-5-24)' });
     return;
   }
+  const propertyCode = parsedCode.display;
 
   const resolvedName = typeof name === 'string' && name.trim()
     ? name.trim()
-    : `Kiinteisto ${property_code}`;
+    : `Kiinteisto ${propertyCode}`;
 
   try {
     const result = await pool.query(
@@ -80,7 +83,7 @@ router.post('/import', async (req: AuthRequest, res: Response): Promise<void> =>
        RETURNING id, name, property_code, source, area_ha,
                  ST_AsGeoJSON(geometry)::json AS geometry,
                  created_at, updated_at`,
-      [req.userId, resolvedName, property_code, area_ha || null, JSON.stringify(geometry)]
+      [req.userId, resolvedName, propertyCode, area_ha || null, JSON.stringify(geometry)]
     );
 
     res.status(201).json(result.rows[0]);
