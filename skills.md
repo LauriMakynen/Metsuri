@@ -53,3 +53,11 @@ Run commands from `forest-care-app/` or the relevant package directory:
 - The package manifests do not define automated test scripts. Do not claim tests were run unless an available test suite was actually executed.
 - Run the checks relevant to the change and report what passed, failed, or could not be run.
 - For UI or workflow changes, verify the affected flow in the app when a working local environment is available.
+
+## Git branch workflow
+
+- `main` is the production branch.
+- `pre-main` is for testing the nearly finished project. Merge it into `main` only after its tests pass.
+- `dev` is the integration branch. `Personal branches` named after each group member are merged into `dev`.
+- Only the project leader is authorized to merge branches. Do not merge branches yourself; leave merges to the project leader.
+- Follow this flow: `personal branch` → `dev` → `pre-main` → `main`.
