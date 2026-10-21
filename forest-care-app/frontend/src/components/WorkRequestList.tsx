@@ -21,12 +21,16 @@ export default function WorkRequestList({
   onWithdraw,
 }: WorkRequestListProps) {
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [requestToWithdraw, setRequestToWithdraw] = useState<WorkRequest | null>(null);
   const visible = requests.filter((r) => r.property_id === selectedPropertyId);
 
-  const withdraw = async (id: number) => {
+  const withdraw = async () => {
+    if (!requestToWithdraw) return;
+    const id = requestToWithdraw.id;
     setBusyId(id);
     try {
       await onWithdraw(id);
+      setRequestToWithdraw(null);
     } finally {
       setBusyId(null);
     }
@@ -76,7 +80,7 @@ export default function WorkRequestList({
                 )}
                 <small className="work-request-bids">💶 {bidSummaryText(r)}</small>
                 {r.note && <small className="work-request-note">{r.note}</small>}
-                <button className="btn-link" disabled={busyId === r.id} onClick={() => withdraw(r.id)}>
+                <button className="btn-link" disabled={busyId === r.id} onClick={() => setRequestToWithdraw(r)}>
                   {busyId === r.id ? 'Perutaan...' : 'Peru työpyyntö'}
                 </button>
               </div>
@@ -84,6 +88,47 @@ export default function WorkRequestList({
           ))
         )}
       </ul>
+      {requestToWithdraw && (
+        <div className="modal-overlay" onClick={() => busyId === null && setRequestToWithdraw(null)}>
+          <div className="modal-card confirm-dialog work-request-confirm" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Haluatko varmasti perua tämän työpyynnön?</h2>
+              <button
+                className="modal-close"
+                onClick={() => busyId === null && setRequestToWithdraw(null)}
+                aria-label="Sulje"
+                disabled={busyId !== null}
+              >
+                ✕
+              </button>
+            </div>
+            <div className="work-request-confirm-details">
+              <strong>{requestToWithdraw.title}</strong>
+              <span>{MARKING_TYPE_LABELS[requestToWithdraw.type]}</span>
+              {requestToWithdraw.area_ha && <span>Pinta-ala: {formatArea(requestToWithdraw.area_ha)}</span>}
+              {requestToWithdraw.target_price_eur !== null && (
+                <span>
+                  {TARGET_PRICE_LABEL[requestToWithdraw.pricing]}: {formatEur(requestToWithdraw.target_price_eur)}
+                </span>
+              )}
+              <span>Tarjouksia: {requestToWithdraw.bid_count}</span>
+              {requestToWithdraw.note && <span>Lisätiedot: {requestToWithdraw.note}</span>}
+            </div>
+            <div className="modal-actions">
+              <button
+                className="btn btn-secondary"
+                onClick={() => setRequestToWithdraw(null)}
+                disabled={busyId !== null}
+              >
+                Ei
+              </button>
+              <button className="btn btn-danger" onClick={withdraw} disabled={busyId !== null}>
+                {busyId !== null ? 'Perutaan...' : 'Kyllä'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
