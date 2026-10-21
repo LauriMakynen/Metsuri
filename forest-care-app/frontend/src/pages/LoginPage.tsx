@@ -4,6 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/forestService';
 import { useAuth } from '../hooks/useAuth';
 import axios from 'axios';
+import { AuthBackdrop } from '../components/VideoBackdrop';
 
 // Login page - authenticates existing users
 export default function LoginPage() {
@@ -40,6 +41,7 @@ export default function LoginPage() {
 
   return (
     <div className="auth-container">
+      <AuthBackdrop />
       <div className="auth-card">
         <div className="auth-logo">🌲</div>
         <h1 className="auth-title">Metsuri</h1>

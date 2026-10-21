@@ -1,1 +1,2 @@
-.DS_Store
+# Original, uncompressed media (only compressed versions in frontend/public/media are committed)
+media-src/

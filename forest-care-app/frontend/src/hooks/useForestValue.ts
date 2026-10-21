@@ -34,7 +34,12 @@ function cacheKey(property: Property): string {
   return `${property.id}:${property.updated_at ?? property.created_at}`;
 }
 
-async function load(key: string, propertyId: number, force: boolean) {
+// Guest-added parcels have negative ids and exist only in the browser
+function isGuestParcel(propertyId: number): boolean {
+  return propertyId < 0 && propertyId !== DEMO_PROPERTY_ID;
+}
+
+async function load(key: string, property: Property, force: boolean) {
   const current = entries.get(key);
   if (current?.status === 'loading') return;
   if (!force && current?.status === 'ready' && Date.now() - current.fetchedAt < FRESH_MS) return;
@@ -42,9 +47,11 @@ async function load(key: string, propertyId: number, force: boolean) {
   setEntry(key, { status: 'loading', response: current?.response ?? null, fetchedAt: current?.fetchedAt ?? 0 });
   try {
     const response =
-      propertyId === DEMO_PROPERTY_ID
+      property.id === DEMO_PROPERTY_ID
         ? await forestValueService.getDemo()
-        : await propertiesService.getForestValue(propertyId, force);
+        : isGuestParcel(property.id)
+          ? await forestValueService.getGuest(property.geometry, property.property_code ?? null)
+          : await propertiesService.getForestValue(property.id, force);
     setEntry(key, { status: 'ready', response, fetchedAt: Date.now() });
   } catch {
     setEntry(key, { status: 'failed', response: current?.response ?? null, fetchedAt: Date.now() });
@@ -57,21 +64,25 @@ export function useForestValue(property: Property | null) {
   const entry = useSyncExternalStore(subscribe, () => (key ? entries.get(key) : undefined));
 
   useEffect(() => {
-    if (key && propertyId !== null) void load(key, propertyId, false);
-  }, [key, propertyId]);
+    if (key && property) void load(key, property, false);
+  }, [key, property]);
 
   // force = also bypass the server cache
   const reload = useCallback(
     (force = true) => {
-      if (key && propertyId !== null) void load(key, propertyId, force);
+      if (key && property) void load(key, property, force);
     },
-    [key, propertyId]
+    [key, property]
   );
 
   // Throws on failure so the form can show the server's message
   const submitManual = useCallback(
     async (input: ManualStandInput) => {
       if (!key || propertyId === null) return;
+      if (propertyId < 0) {
+        // Shape of an axios error, so the form shows this message like a server error
+        throw { response: { data: { error: 'Kirjaudu sisään, niin voit syöttää palstan tiedot itse.' } } };
+      }
       const response = await propertiesService.submitManualForestValue(propertyId, input);
       setEntry(key, { status: 'ready', response, fetchedAt: Date.now() });
     },

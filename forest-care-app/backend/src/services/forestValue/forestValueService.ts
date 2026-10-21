@@ -320,3 +320,49 @@ export async function getDemoForestValue(): Promise<ForestValueResponse> {
   demoCache = { result, at: Date.now() };
   return { status: 'available', stale: false, result };
 }
+
+// Guests may add their own parcel in the demo (kept only in the browser). Its value is
+// computed from example stands like the demo parcel – never from the live Metsäkeskus API,
+// so the public endpoint stays cheap. Size cap keeps generated stand counts reasonable.
+export const MAX_GUEST_PARCEL_HA = 1000;
+
+export class GuestParcelError extends Error {}
+
+function seedFromGeometry(geometry: unknown): number {
+  const text = JSON.stringify(geometry);
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) hash = (Math.imul(hash, 31) + text.charCodeAt(i)) | 0;
+  return Math.abs(hash);
+}
+
+export async function getGuestForestValue(
+  geometryWgs84: unknown,
+  propertyCode: string | null
+): Promise<ForestValueResponse> {
+  const type = (geometryWgs84 as { type?: unknown } | null)?.type;
+  if (type !== 'Polygon' && type !== 'MultiPolygon') {
+    throw new GuestParcelError('Palstan rajaus puuttuu tai on virheellinen');
+  }
+  let parcel: PolygonGeometry;
+  try {
+    parcel = await wgs84ToTm35(geometryWgs84);
+  } catch {
+    throw new GuestParcelError('Palstan rajaus on virheellinen');
+  }
+  const areaHa = planarAreaHa(parcel);
+  if (!(areaHa > 0) || areaHa > MAX_GUEST_PARCEL_HA) {
+    throw new GuestParcelError(`Demossa palstan koko voi olla enintään ${MAX_GUEST_PARCEL_HA} ha`);
+  }
+
+  const result = await buildForestValue({
+    propertyId: -1,
+    parcel,
+    parcelAreaHa: areaHa,
+    // Same parcel → same example stands on every request
+    stands: generateMockStands(parcel, seedFromGeometry(geometryWgs84)),
+    provider: 'mock',
+    municipality: municipalityFromPropertyCode(propertyCode),
+  });
+  if (!result) return { status: 'no_data', message: NO_DATA_MESSAGE };
+  return { status: 'available', stale: false, result };
+}
