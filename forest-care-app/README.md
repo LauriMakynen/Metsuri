@@ -261,9 +261,49 @@ Aja `./start.sh phone` ja avaa puhelimella skriptin tulostama osoite (`https://1
 | "npm not recognized" Windowsissa | Aja komennot WSL:n terminaalissa, ei PowerShellissä |
 | "client password must be a string" | `backend/.env` puuttuu tai siitä puuttuu `DATABASE_URL` – aja `./start.sh` |
 
+### Git-työtapa
+
+Haarat:
+
+```
+Lauri / Eemil / Reetta  →  dev  →  pre-main  →  main
+ (oma työ)                (yhteinen)  (testaus)    (julkaisu)
+```
+
+- Jokainen tekee työnsä **omassa haarassaan**. Älä commitoi suoraan `dev`-, `pre-main`- tai `main`-haaraan.
+- Valmis työ viedään `dev`iin **pull requestilla**, jotta muut voivat katselmoida sen.
+- Testattu kokonaisuus viedään `dev`istä `pre-main`iin ja sieltä julkaisuun `main`iin.
+
+Työn aloitus (päivitä oma haara muiden muutoksilla):
+
+```bash
+git switch Lauri          # oma haarasi
+git fetch origin
+git merge origin/dev
+./start.sh                # ajaa myös mahdolliset uudet migraatiot
+```
+
+Jos muut ovat muuttaneet testidataa (`backend/src/db/seed.ts`), aja lisäksi `./start.sh seed`.
+
+Työn lopetus:
+
+```bash
+git push origin Lauri
+```
+
+ja tee GitHubissa pull request `Lauri` → `dev`.
+
+**Uusi kone:** aseta gitiin sama sähköposti kuin GitHub-tililläsi. Muuten GitHub ei yhdistä committeja
+sinuun ja Vercel hylkää niiden deploymentit ("commit author" -virhe):
+
+```bash
+git config --global user.name "GitHub-käyttäjänimesi"
+git config --global user.email "github-tilisi@sähköposti"
+```
+
 ### Kehityskäytännöt
 
-1. Vedä uusimmat muutokset (`git pull`) ja käynnistä `./start.sh`.
+1. Päivitä oma haara `dev`istä (ks. yllä) ja käynnistä `./start.sh`.
 2. Tee muutos pieninä paloina: backend-reitti → frontendin palvelukutsu → käyttöliittymä.
 3. Ennen committia: backend käynnistyy ilman virheitä, `npm run build` onnistuu frontendissä ja
    muutettu toiminto toimii selaimessa (myös puhelimen levyisellä näytöllä).

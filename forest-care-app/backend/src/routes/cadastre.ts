@@ -14,7 +14,7 @@ router.get('/search/:propertyCode', async (req: Request, res: Response): Promise
   const { propertyCode } = req.params;
 
   if (!isValidPropertyCode(propertyCode)) {
-    res.status(400).json({ error: 'Kiinteistötunnus on väärässä muodossa (esim. 145-410-43-16)' });
+    res.status(400).json({ error: 'Kiinteistötunnus on väärässä muodossa (esim. 91-401-5-24)' });
     return;
   }
 

@@ -13,21 +13,25 @@ export interface WorkRequestFormData {
   target_price_eur: number;
 }
 
+// Prefill, e.g. from a recommended operation of the forest value view
+export type WorkRequestDraft = Omit<WorkRequestFormData, 'target_price_eur'>;
+
 interface WorkRequestFormProps {
   parcelName: string;
+  initial?: WorkRequestDraft | null;
   areaHa: number | null;
   onSubmit: (data: WorkRequestFormData) => Promise<void>;
   onCancel: () => void;
 }
 
 // Modal for publishing planned work: what, who pays, the owner's price and details
-export default function WorkRequestForm({ parcelName, areaHa, onSubmit, onCancel }: WorkRequestFormProps) {
-  const [type, setType] = useState<MarkingType | null>(null);
-  const [title, setTitle] = useState('');
-  // Must be chosen explicitly: decides whether the highest or the lowest offer is best
-  const [pricing, setPricing] = useState<Pricing | null>(null);
+export default function WorkRequestForm({ parcelName, initial, areaHa, onSubmit, onCancel }: WorkRequestFormProps) {
+  const [type, setType] = useState<MarkingType | null>(initial?.type ?? null);
+  const [title, setTitle] = useState(initial?.title ?? '');
+  // Must be chosen explicitly (or confirmed from a prefill): decides whether the highest or the lowest offer is best
+  const [pricing, setPricing] = useState<Pricing | null>(initial?.pricing ?? null);
   const [price, setPrice] = useState('');
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(initial?.note ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
