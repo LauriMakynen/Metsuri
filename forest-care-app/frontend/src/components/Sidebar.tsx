@@ -2,8 +2,6 @@ import type {
   Property,
   Marking,
   CadastreFeature,
-  ForestDataResponse,
-  ForestValuationResponse,
   WorkRequest,
 } from '../types';
 import PropertySearch from './PropertySearch';
@@ -18,8 +16,7 @@ interface SidebarProps {
   markings: Marking[];
   selectedPropertyId: number | null;
   selectedProperty: Property | null;
-  forestData: ForestDataResponse | null;
-  valuation: ForestValuationResponse | null;
+  onOpenForestValue: () => void;
   isSearching: boolean;
   onSearch: (propertyCode: string) => Promise<CadastreFeature | null>;
   onSelectResult: (result: CadastreFeature) => void;
@@ -38,8 +35,7 @@ export default function Sidebar({
   markings,
   selectedPropertyId,
   selectedProperty,
-  forestData,
-  valuation,
+  onOpenForestValue,
   isSearching,
   onSearch,
   onSelectResult,
@@ -52,14 +48,13 @@ export default function Sidebar({
   onWithdrawWorkRequest,
 }: SidebarProps) {
   return (
-    <aside className={`map-sidebar ${isOpen ? 'open' : ''}`}>
+    <aside id="map-sidebar" className={`map-sidebar ${isOpen ? 'open' : ''}`}>
       <PropertySearch onSearch={onSearch} onSelectResult={onSelectResult} isSearching={isSearching} />
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         <ActivePropertyCard
           property={selectedProperty}
-          forestData={forestData}
-          valuation={valuation}
+          onOpenForestValue={onOpenForestValue}
         />
 
         <PropertyList

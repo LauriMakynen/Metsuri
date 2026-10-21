@@ -1,6 +1,29 @@
 export type CadastreSource = 'mml' | 'mock';
 
-const PROPERTY_CODE_REGEX = /^\d{3}-\d{3}-\d{2}-\d{1,4}$/;
+// Kiinteistötunnus: kunta (1–3) - kylä/rekisteriyksikkö (1–3) - tila (1–4) - yksikkö (1–4) digits,
+// as MML shows it without leading zeros (e.g. 91-2-9901-100), or the 14-digit canonical form.
+const DISPLAY_CODE_REGEX = /^(\d{1,3})-(\d{1,3})-(\d{1,4})-(\d{1,4})$/;
+const CANONICAL_CODE_REGEX = /^(\d{3})(\d{3})(\d{4})(\d{4})$/;
+
+interface ParsedPropertyCode {
+  // MML "kiinteistotunnuksenEsitysmuoto", e.g. 91-2-9901-100
+  display: string;
+  // MML "kiinteistotunnus", 14 digits, e.g. 09100299010100
+  canonical: string;
+}
+
+export function parsePropertyCode(raw: string): ParsedPropertyCode | null {
+  // Spaces work as separators too: "145 414 5 187" and "145 - 414 - 5 - 187" -> 145-414-5-187
+  const value = raw.trim().replace(/\s*-\s*/g, '-').replace(/\s+/g, '-');
+  const match = DISPLAY_CODE_REGEX.exec(value) ?? CANONICAL_CODE_REGEX.exec(value);
+  if (!match) return null;
+  const parts = match.slice(1, 5).map(Number);
+  const widths = [3, 3, 4, 4];
+  return {
+    display: parts.join('-'),
+    canonical: parts.map((part, i) => String(part).padStart(widths[i], '0')).join(''),
+  };
+}
 
 /**
  * Thrown when the MML Cadastre API is not configured and the environment
@@ -134,15 +157,6 @@ function normalizeMmlResponse(data: unknown, propertyCode: string): CadastreFeat
   return null;
 }
 
-function normalizePropertyCode(propertyCode: string): string {
-  return propertyCode.trim();
-}
-
-function toCanonicalPropertyCode(propertyCode: string): string {
-  const [kunta, ryhma, yksikko, tunnus] = propertyCode.split('-');
-  return `${kunta}${ryhma}${yksikko.padStart(4, '0')}${tunnus.padStart(4, '0')}`;
-}
-
 function createMockFeature(propertyCode: string): CadastreFeature {
   const numbers = propertyCode.replace(/-/g, '').split('').map((n) => Number(n));
   const hash = numbers.reduce((acc, n, idx) => acc + n * (idx + 3), 0);
@@ -175,15 +189,15 @@ function createMockFeature(propertyCode: string): CadastreFeature {
 }
 
 export function isValidPropertyCode(value: string): boolean {
-  return PROPERTY_CODE_REGEX.test(value.trim());
+  return typeof value === 'string' && parsePropertyCode(value) !== null;
 }
 
 export async function searchCadastreByPropertyCode(propertyCodeRaw: string): Promise<CadastreFeature | null> {
-  const propertyCode = normalizePropertyCode(propertyCodeRaw);
-
-  if (!isValidPropertyCode(propertyCode)) {
+  const parsed = parsePropertyCode(propertyCodeRaw);
+  if (!parsed) {
     return null;
   }
+  const propertyCode = parsed.display;
 
   const apiKey = process.env.MML_API_KEY;
   const urlTemplate = process.env.MML_CADASTRE_API_URL;
@@ -199,7 +213,7 @@ export async function searchCadastreByPropertyCode(propertyCodeRaw: string): Pro
     throw new CadastreApiNotConfiguredError();
   }
 
-  const canonicalPropertyCode = toCanonicalPropertyCode(propertyCode);
+  const canonicalPropertyCode = parsed.canonical;
   const encodedCanonicalCode = encodeURIComponent(canonicalPropertyCode);
   // Build URL from template – use ?api-key= URL param (Basic auth causes HTTP 500 with Node.js undici/HTTP2)
   let targetUrl = urlTemplate

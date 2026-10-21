@@ -68,6 +68,16 @@ check_ports() {
   done
 }
 
+# Asettaa avaimen arvon .env-tiedostossa. Ei käytä sed -i:tä, koska sen syntaksi
+# eroaa macOS:n (BSD) ja Linuxin (GNU) välillä.
+set_env_var() {
+  local file="$1" key="$2" value="$3" tmp
+  tmp="$(mktemp)"
+  awk -v k="$key" -v v="$value" 'index($0, k "=") == 1 { print k "=" v; next } { print }' "$file" > "$tmp"
+  cat "$tmp" > "$file"
+  rm -f "$tmp"
+}
+
 # --- Vaiheet ---------------------------------------------------------------
 
 ensure_env() {
@@ -75,21 +85,31 @@ ensure_env() {
   if [[ ! -f "$dir/.env" ]]; then
     cp "$dir/.env.example" "$dir/.env"
     info "Luotiin $(basename "$dir")/.env esimerkistä"
-    # Korvataan esimerkin JWT-salaisuus satunnaisella arvolla.
-    if grep -q '^JWT_SECRET=' "$dir/.env"; then
-      local secret
-      secret="$(head -c 48 /dev/urandom | base64 | tr -d '/+=\n')"
-      sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$secret|" "$dir/.env"
-    fi
+  fi
+  # Korvataan esimerkin JWT-salaisuus satunnaisella arvolla (myös jos aiempi ajo jäi kesken).
+  local example_secret
+  example_secret="$(grep '^JWT_SECRET=' "$dir/.env.example" 2>/dev/null || true)"
+  if [[ -n "$example_secret" ]] && grep -qxF "$example_secret" "$dir/.env"; then
+    local secret
+    secret="$(head -c 48 /dev/urandom | base64 | tr -d '/+=\n')"
+    set_env_var "$dir/.env" JWT_SECRET "$secret"
   fi
 }
 
 ensure_deps() {
   local dir="$1" name
   name="$(basename "$dir")"
-  # Asennetaan, jos node_modules puuttuu tai package-lock.json on muuttunut asennuksen jälkeen.
-  if [[ ! -d "$dir/node_modules" ]] || [[ "$dir/package-lock.json" -nt "$dir/node_modules/.package-lock.json" ]]; then
+  local marker="$dir/node_modules/.package-lock.json"
+  # Asennetaan, jos node_modules puuttuu tai package.json/package-lock.json on muuttunut asennuksen jälkeen.
+  if [[ ! -f "$marker" || "$dir/package-lock.json" -nt "$marker" || "$dir/package.json" -nt "$marker" ]]; then
     info "Asennetaan $name-riippuvuudet..."
+    # npm ci asentaa täsmälleen package-lock.jsonin mukaiset versiot eikä muokkaa sitä,
+    # joten eri koneiden npm-versiot eivät tuota turhia muutoksia gitiin.
+    if [[ -f "$dir/package-lock.json" ]] && (cd "$dir" && npm ci --no-fund --no-audit); then
+      return
+    fi
+    # package-lock.json puuttuu tai ei vastaa package.jsonia (esim. riippuvuus lisätty ilman lukkoa).
+    warn "npm ci epäonnistui – ajetaan npm install, joka päivittää $name/package-lock.json. Commitoi se."
     (cd "$dir" && npm install --no-fund --no-audit)
   fi
 }
@@ -110,7 +130,7 @@ ensure_seed_password() {
     local password
     password="$(head -c 12 /dev/urandom | base64 | tr -d '/+=\n' | head -c 12)"
     if grep -q '^SEED_PASSWORD=' "$BACKEND/.env"; then
-      sed -i "s|^SEED_PASSWORD=.*|SEED_PASSWORD=$password|" "$BACKEND/.env"
+      set_env_var "$BACKEND/.env" SEED_PASSWORD "$password"
     else
       printf '\nSEED_PASSWORD=%s\n' "$password" >> "$BACKEND/.env"
     fi
@@ -128,6 +148,10 @@ seed() {
 # Koneen osoite WLANissa. WSL2:n oletusverkossa (NAT) näkyy vain sisäinen 172.x-osoite,
 # jolloin puhelin ei tavoita konetta – silloin tarvitaan mirrored-verkkotila.
 lan_ip() {
+  if [[ "$(uname)" == "Darwin" ]]; then
+    ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true
+    return
+  fi
   # 10.255.255.254 on WSL:n sisäinen DNS-osoite, ei koneen verkko-osoite
   hostname -I | tr ' ' '\n' | grep -E '^(192\.168\.|10\.)' | grep -v '^10\.255\.255\.254$' | head -1 || true
 }
@@ -148,6 +172,8 @@ run_servers() {
   # Lisäargumentit välitetään Vitelle (esim. --host puhelintilassa)
   local vite_args=("$@")
   local pids=()
+  local cyan magenta reset
+  cyan=$'\033[0;36m' magenta=$'\033[0;35m' reset=$'\033[0m'
   cleanup() {
     trap - INT TERM EXIT
     echo
@@ -158,9 +184,9 @@ run_servers() {
   }
   trap cleanup INT TERM EXIT
 
-  (cd "$BACKEND"  && npm run dev 2>&1 | sed -u 's/^/\x1b[0;36m[backend]\x1b[0m  /') &
+  (cd "$BACKEND"  && npm run dev 2>&1 | sed -u "s/^/${cyan}[backend]${reset}  /") &
   pids+=($!)
-  (cd "$FRONTEND" && npm run dev -- --strictPort "${vite_args[@]}" 2>&1 | sed -u 's/^/\x1b[0;35m[frontend]\x1b[0m /') &
+  (cd "$FRONTEND" && npm run dev -- --strictPort ${vite_args[@]+"${vite_args[@]}"} 2>&1 | sed -u "s/^/${magenta}[frontend]${reset} /") &
   pids+=($!)
 
   echo
@@ -177,7 +203,10 @@ run_servers() {
   echo
 
   # Jos kumpi tahansa palvelin kaatuu, sammutetaan molemmat.
-  wait -n "${pids[@]}" || true
+  # (wait -n puuttuu macOS:n bash 3.2:sta, joten tarkistetaan prosessit silmukassa.)
+  while kill -0 "${pids[0]}" 2>/dev/null && kill -0 "${pids[1]}" 2>/dev/null; do
+    sleep 1
+  done
   warn "Palvelin pysähtyi."
 }
 
