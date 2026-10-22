@@ -946,6 +946,12 @@ html, body, #root {
 .work-request-confirm .modal-actions .btn:hover:not(:disabled) {
   background: var(--forest-green-light);
 }
+.bid-delete-link {
+  color: var(--error);
+}
+.bid-delete-link:hover:not(:disabled) {
+  color: #b91c1c;
+}
 
 @media (max-width: 899px) {
   .clicked-cadastre-panel {

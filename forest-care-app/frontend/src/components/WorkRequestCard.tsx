@@ -30,6 +30,8 @@ export default function WorkRequestCard({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [sent, setSent] = useState(false);
+  const [confirmationAmount, setConfirmationAmount] = useState<number | null>(null);
+  const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
 
   const color = MARKING_COLORS[request.type];
   const hasBids = request.bid_count > 0 && request.best_bid_eur !== null;
@@ -43,16 +45,38 @@ export default function WorkRequestCard({
       setError('Anna tarjous euroina, esim. 1500');
       return;
     }
+    setError('');
+    setConfirmationAmount(value);
+  };
+
+  const confirmSubmit = async () => {
+    if (confirmationAmount === null) return;
     setSending(true);
     setError('');
     try {
-      onBidPlaced(await workRequestsService.placeBid(request.id, value));
+      onBidPlaced(await workRequestsService.placeBid(request.id, confirmationAmount));
       setFormOpen(false);
       setAmount('');
+      setConfirmationAmount(null);
       setSent(true);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
       setError(message || 'Tarjouksen lähetys epäonnistui');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const deleteBid = async () => {
+    setSending(true);
+    setError('');
+    try {
+      onBidPlaced(await workRequestsService.deleteBid(request.id));
+      setDeleteConfirmationOpen(false);
+      setSent(false);
+    } catch (err: unknown) {
+      const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
+      setError(message || 'Tarjouksen poisto epäonnistui');
     } finally {
       setSending(false);
     }
@@ -95,10 +119,20 @@ export default function WorkRequestCard({
         )}
 
         {request.my_bid_eur !== null && (
-          <span className="bid-mine">
-            {sent ? '✓ Tarjouksesi on jätetty: ' : 'Oma tarjouksesi: '}
-            {formatEur(request.my_bid_eur)}
-          </span>
+          <>
+            <span className="bid-mine">
+              {sent ? '✓ Tarjouksesi on jätetty: ' : 'Oma tarjouksesi: '}
+              {formatEur(request.my_bid_eur)}
+            </span>
+            <button
+              type="button"
+              className="btn-link bid-delete-link"
+              onClick={() => setDeleteConfirmationOpen(true)}
+              disabled={sending}
+            >
+              Poista tarjous
+            </button>
+          </>
         )}
 
         {request.is_own ? (
@@ -136,6 +170,76 @@ export default function WorkRequestCard({
           </button>
         )}
       </div>
+      {confirmationAmount !== null && (
+        <div className="modal-overlay" onClick={() => !sending && setConfirmationAmount(null)}>
+          <div className="modal-card confirm-dialog bid-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Vahvista tarjous</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => !sending && setConfirmationAmount(null)}
+                aria-label="Sulje"
+                disabled={sending}
+              >
+                ✕
+              </button>
+            </div>
+            <p className="confirm-dialog-text">
+              Haluatko varmasti tarjota <strong>{formatEur(confirmationAmount)}</strong> työpyynnöstä{' '}
+              <strong>“{request.title}”</strong>?
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setConfirmationAmount(null)}
+                disabled={sending}
+              >
+                Peruuta
+              </button>
+              <button type="button" className="btn btn-primary" onClick={confirmSubmit} disabled={sending}>
+                {sending ? 'Lähetetään...' : 'Vahvista'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteConfirmationOpen && (
+        <div className="modal-overlay" onClick={() => !sending && setDeleteConfirmationOpen(false)}>
+          <div className="modal-card confirm-dialog bid-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Poistetaanko tarjous?</h2>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => !sending && setDeleteConfirmationOpen(false)}
+                aria-label="Sulje"
+                disabled={sending}
+              >
+                ✕
+              </button>
+            </div>
+            <p className="confirm-dialog-text">
+              Haluatko varmasti poistaa tarjouksesi <strong>{formatEur(request.my_bid_eur ?? 0)}</strong> työpyynnöstä{' '}
+              <strong>“{request.title}”</strong>?
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setDeleteConfirmationOpen(false)}
+                disabled={sending}
+              >
+                Ei
+              </button>
+              <button type="button" className="btn btn-danger" onClick={deleteBid} disabled={sending}>
+                {sending ? 'Poistetaan...' : 'Kyllä'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   );
 }

@@ -257,6 +257,10 @@ export const workRequestsService = {
     });
     return normalizePublicRequest(response.data);
   },
+  deleteBid: async (requestId: number): Promise<PublicWorkRequest> => {
+    const response = await api.delete<PublicWorkRequest>(`/api/work-requests/${requestId}/bids`);
+    return normalizePublicRequest(response.data);
+  },
   withdraw: async (id: number): Promise<void> => {
     await api.delete(`/api/work-requests/${id}`);
   },
