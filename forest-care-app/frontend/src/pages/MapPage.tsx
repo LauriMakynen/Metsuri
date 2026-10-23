@@ -55,6 +55,7 @@ const PROPERTY_CODE_REGEX = /^(\d{1,3}-\d{1,3}-\d{1,4}-\d{1,4}|\d{14})$/;
 const MAX_TILE_ZOOM = 18;
 // Zooming to a (small) parcel stops here so its surroundings stay visible
 const FIT_MAX_ZOOM = 17;
+const MAP_VIEW_STORAGE_KEY = 'metsuri-map-view';
 
 const FALLBACK_LAYER_CONFIG: MapLayerConfig = {
   provider: 'fallback',
@@ -195,11 +196,43 @@ export default function MapPage() {
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
+    let center: L.LatLngExpression = [65.0, 25.0];
+    let zoom = 6;
+    try {
+      const savedView = sessionStorage.getItem(MAP_VIEW_STORAGE_KEY);
+      if (savedView) {
+        const view = JSON.parse(savedView) as { center?: [number, number]; zoom?: number };
+        if (
+          Array.isArray(view.center) &&
+          view.center.length === 2 &&
+          view.center.every(Number.isFinite) &&
+          Number.isFinite(view.zoom)
+        ) {
+          center = view.center;
+          zoom = view.zoom!;
+        }
+      }
+    } catch {
+      // Ignore unavailable or invalid stored map state.
+    }
+
     const map = L.map(mapContainerRef.current, {
-      center: [65.0, 25.0],
-      zoom: 6,
+      center,
+      zoom,
       zoomControl: true,
     });
+    const saveMapView = () => {
+      const currentCenter = map.getCenter();
+      try {
+        sessionStorage.setItem(
+          MAP_VIEW_STORAGE_KEY,
+          JSON.stringify({ center: [currentCenter.lat, currentCenter.lng], zoom: map.getZoom() })
+        );
+      } catch {
+        // Map navigation remains usable when session storage is unavailable.
+      }
+    };
+    map.on('moveend', saveMapView);
 
     const baseLayers: Record<BaseLayerKey, L.TileLayer> = {
       maastokartta: L.tileLayer(FALLBACK_LAYER_CONFIG.layers.maastokartta, {
@@ -245,6 +278,8 @@ export default function MapPage() {
     mapRef.current = map;
 
     return () => {
+      saveMapView();
+      map.off('moveend', saveMapView);
       map.remove();
       mapRef.current = null;
       baseLayersRef.current = null;

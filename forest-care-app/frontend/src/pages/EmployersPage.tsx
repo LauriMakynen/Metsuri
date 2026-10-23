@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import TopNav from '../components/TopNav';
@@ -146,7 +146,6 @@ export default function EmployersPage() {
 
       <main className="start-content forest-content">
         <header className="forest-hero">
-          <Link to="/start" className="back-link">← Takaisin</Link>
           <p className="forest-eyebrow">🌲 Työn tarjoajille</p>
           <h1>Metsätyöt odottavat tekijäänsä</h1>
           <p>

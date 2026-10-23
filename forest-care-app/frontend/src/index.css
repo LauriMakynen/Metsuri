@@ -130,6 +130,9 @@ html, body, #root {
 .btn-primary:hover:not(:disabled) { background: var(--forest-green-light); }
 .btn-secondary { background: var(--border); color: var(--text); }
 .btn-secondary:hover:not(:disabled) { background: #9ca3af; }
+.back-button-row { min-height: 64px; padding: 0.6rem 1rem; display: flex; align-items: center; }
+.back-button { width: auto; min-width: 44px; min-height: 44px; gap: 0.5rem; }
+.back-button span { font-size: 1.25rem; line-height: 1; }
 .btn-small {
   padding: 0.4rem 0.8rem; font-size: 0.85rem; min-height: 36px;
   background: rgba(255,255,255,0.2); color: var(--white); border-radius: var(--radius-sm);
