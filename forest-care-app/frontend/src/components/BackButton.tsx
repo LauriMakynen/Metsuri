@@ -41,7 +41,7 @@ export default function BackButton() {
 
   return (
     <div className="back-button-row">
-      <button type="button" className="btn btn-secondary back-button" onClick={handleBack} aria-label="Takaisin">
+      <button type="button" className="btn btn-primary back-button" onClick={handleBack} aria-label="Takaisin">
         <span aria-hidden="true">←</span>
         Takaisin
       </button>
