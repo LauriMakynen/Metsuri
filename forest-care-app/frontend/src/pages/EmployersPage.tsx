@@ -142,7 +142,7 @@ export default function EmployersPage() {
   return (
     <div className="start-page forest-page">
       <SpruceForestBackdrop />
-      <TopNav />
+      <TopNav showBackButton />
 
       <main className="start-content forest-content">
         <header className="forest-hero">

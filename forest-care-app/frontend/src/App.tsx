@@ -1,7 +1,6 @@
-import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import PrivateRoute from './components/PrivateRoute';
-import BackButton from './components/BackButton';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import MapPage from './pages/MapPage';
@@ -11,14 +10,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function AppLayout() {
-  const { pathname } = useLocation();
-
-  return (
-    <>
-      {pathname !== '/map' && <BackButton />}
-      <Outlet />
-    </>
-  );
+  return <Outlet />;
 }
 
 function App() {
