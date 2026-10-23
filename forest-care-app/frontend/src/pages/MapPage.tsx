@@ -205,11 +205,19 @@ export default function MapPage() {
         if (
           Array.isArray(view.center) &&
           view.center.length === 2 &&
-          view.center.every(Number.isFinite) &&
-          Number.isFinite(view.zoom)
+          Number.isFinite(view.center[0]) &&
+          view.center[0] >= -90 &&
+          view.center[0] <= 90 &&
+          Number.isFinite(view.center[1]) &&
+          view.center[1] >= -180 &&
+          view.center[1] <= 180 &&
+          typeof view.zoom === 'number' &&
+          Number.isFinite(view.zoom) &&
+          view.zoom >= 0 &&
+          view.zoom <= 19
         ) {
           center = view.center;
-          zoom = view.zoom!;
+          zoom = view.zoom;
         }
       }
     } catch {
