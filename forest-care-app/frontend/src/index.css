@@ -848,6 +848,19 @@ html, body, #root {
   font-style: italic;
 }
 
+.cadastre-click-hint { font-size: 0.9rem; color: var(--text); }
+
+/* Shown while the map uses OpenStreetMap because MML tiles do not load */
+.map-fallback-notice {
+  position: absolute; top: 4.4rem; right: 0.75rem; z-index: 950; max-width: min(360px, calc(100% - 4.5rem));
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; border-radius: 10px;
+  padding: 0.5rem 0.6rem 0.5rem 0.8rem; font-size: 0.82rem; line-height: 1.4; box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+}
+.map-fallback-notice button { background: none; border: none; color: inherit; cursor: pointer; font-size: 0.9rem; padding: 0 0.1rem; }
+@media (max-width: 899px) { .map-fallback-notice { top: 7.6rem; } }
+.cadastre-click-error { font-size: 0.9rem; color: var(--error); font-weight: 600; }
+
 .clicked-cadastre-info {
   display: flex;
   flex-direction: column;

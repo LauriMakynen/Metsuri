@@ -9,7 +9,6 @@ function getLocalIsoDate(): string {
 }
 
 interface MarkingFormProps {
-  isProperty: boolean;
   geometryType: GeometryType;
   onSaveMarking: (data: {
     type: MarkingType;
@@ -18,7 +17,6 @@ interface MarkingFormProps {
     operation_date: string;
     area_ha?: number | null;
   }) => Promise<void>;
-  onSaveProperty: (name: string) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -38,12 +36,10 @@ const GEOMETRY_TYPE_LABELS: Record<GeometryType, string> = {
   note: 'Muistiinpano',
 };
 
-// Modal form for saving a new property or marking
+// Modal form for saving a new marking (done work). Properties come from MML, not from this form.
 export default function MarkingForm({
-  isProperty,
   geometryType,
   onSaveMarking,
-  onSaveProperty,
   onCancel,
 }: MarkingFormProps) {
   const [title, setTitle] = useState('');
@@ -63,17 +59,13 @@ export default function MarkingForm({
     setError('');
 
     try {
-      if (isProperty) {
-        await onSaveProperty(title.trim());
-      } else {
-        const normalizedOperationDate = operationDate || getLocalIsoDate();
-        await onSaveMarking({
-          type,
-          title: title.trim(),
-          description: description.trim(),
-          operation_date: normalizedOperationDate,
-        });
-      }
+      const normalizedOperationDate = operationDate || getLocalIsoDate();
+      await onSaveMarking({
+        type,
+        title: title.trim(),
+        description: description.trim(),
+        operation_date: normalizedOperationDate,
+      });
     } catch {
       setError('Tallennus epäonnistui');
       setLoading(false);
@@ -84,9 +76,7 @@ export default function MarkingForm({
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal-card">
         <div className="modal-header">
-          <h2>
-            {isProperty ? '🌳 Uusi kiinteistö' : `📍 Uusi ${GEOMETRY_TYPE_LABELS[geometryType]}`}
-          </h2>
+          <h2>📍 Uusi {GEOMETRY_TYPE_LABELS[geometryType]}</h2>
           <button className="modal-close" onClick={onCancel}>✕</button>
         </div>
 
@@ -94,60 +84,54 @@ export default function MarkingForm({
 
         <form onSubmit={handleSubmit} className="modal-form">
           <div className="form-group">
-            <label htmlFor="title">
-              {isProperty ? 'Kiinteistön nimi' : 'Nimi'} *
-            </label>
+            <label htmlFor="title">Nimi *</label>
             <input
               id="title"
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder={isProperty ? 'esim. Kotimetsä' : 'esim. Harvennettu alue'}
+              placeholder="esim. Harvennettu alue"
               required
               autoFocus
             />
           </div>
 
-          {!isProperty && (
-            <>
-              <div className="form-group">
-                <label htmlFor="type">Tyyppi</label>
-                <select
-                  id="type"
-                  value={type}
-                  onChange={(e) => setType(e.target.value as MarkingType)}
-                >
-                  {MARKING_TYPES.map((t) => (
-                    <option key={t.value} value={t.value}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+          <div className="form-group">
+            <label htmlFor="type">Tyyppi</label>
+            <select
+              id="type"
+              value={type}
+              onChange={(e) => setType(e.target.value as MarkingType)}
+            >
+              {MARKING_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-              <div className="form-group">
-                <label htmlFor="description">Kuvaus</label>
-                <textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Lisätietoja..."
-                  rows={3}
-                />
-              </div>
+          <div className="form-group">
+            <label htmlFor="description">Kuvaus</label>
+            <textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Lisätietoja..."
+              rows={3}
+            />
+          </div>
 
-              <div className="form-group">
-                <label htmlFor="operationDate">Toimenpiteen päivämäärä</label>
-                <input
-                  id="operationDate"
-                  type="date"
-                  value={operationDate}
-                  onChange={(e) => setOperationDate(e.target.value)}
-                  required
-                />
-              </div>
-            </>
-          )}
+          <div className="form-group">
+            <label htmlFor="operationDate">Toimenpiteen päivämäärä</label>
+            <input
+              id="operationDate"
+              type="date"
+              value={operationDate}
+              onChange={(e) => setOperationDate(e.target.value)}
+              required
+            />
+          </div>
 
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={onCancel}>

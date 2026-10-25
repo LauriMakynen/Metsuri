@@ -46,7 +46,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-type DrawTool = 'property' | 'point' | 'line' | 'area' | 'note' | 'measure' | 'request' | null;
+// Properties are not drawn by hand: they come from MML (code search or a click on the cadastre layer)
+type DrawTool = 'point' | 'line' | 'area' | 'note' | 'measure' | 'request' | null;
 type BaseLayerKey = 'maastokartta' | 'peruskartta' | 'ortokuva';
 
 // Same rule as the backend: 1–3, 1–3, 1–4 and 1–4 digits (e.g. 91-2-9901-100), or the 14-digit form
@@ -70,6 +71,37 @@ const FALLBACK_LAYER_CONFIG: MapLayerConfig = {
   },
   attribution: 'OpenStreetMap / Esri',
 };
+
+// Used while MML tiles do not load (service down or this network blocked). The cadastre
+// overlay also comes from MML, so it is left out.
+const OSM_ONLY_LAYER_CONFIG: MapLayerConfig = { ...FALLBACK_LAYER_CONFIG, overlays: undefined };
+const MML_PROBE_TIMEOUT_MS = 6000;
+const MML_RETRY_MS = 2 * 60 * 1000;
+
+function isMmlConfig(config: MapLayerConfig): boolean {
+  return config.layers.maastokartta.includes('maanmittauslaitos');
+}
+
+/** Load one low-zoom tile as an image (no CORS needed) to see whether the tile server answers. */
+function isTileServerReachable(urlTemplate: string): Promise<boolean> {
+  const url = urlTemplate.replace('{s}', 'a').replace('{z}', '1').replace('{x}', '1').replace('{y}', '0');
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = window.setTimeout(() => {
+      img.src = '';
+      resolve(false);
+    }, MML_PROBE_TIMEOUT_MS);
+    img.onload = () => {
+      window.clearTimeout(timer);
+      resolve(true);
+    };
+    img.onerror = () => {
+      window.clearTimeout(timer);
+      resolve(false);
+    };
+    img.src = url;
+  });
+}
 
 function getDirectMmlLayerConfig(apiKey: string): MapLayerConfig {
   const key = encodeURIComponent(apiKey);
@@ -151,6 +183,10 @@ export default function MapPage() {
   const [clickedCadastre, setClickedCadastre] = useState<CadastreFeature | null>(null);
   const [clickedCadastreCustomName, setClickedCadastreCustomName] = useState('');
   const [cadastreClickLoading, setCadastreClickLoading] = useState(false);
+  const [cadastreClickError, setCadastreClickError] = useState('');
+  const [mmlMapUnavailable, setMmlMapUnavailable] = useState(false);
+  const [mapNoticeDismissed, setMapNoticeDismissed] = useState(false);
+  const mmlLayerConfigRef = useRef<MapLayerConfig | null>(null);
   const [workRequests, setWorkRequests] = useState<WorkRequest[]>([]);
   const [activityOpen, setActivityOpen] = useState(false);
   const [propertiesLoaded, setPropertiesLoaded] = useState(false);
@@ -295,23 +331,51 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const applyConfig = async () => {
+      let config: MapLayerConfig;
       // The layer config endpoint requires auth, so guests use the env/fallback config directly.
       if (isGuest) {
-        setLayerConfig(getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG);
-        return;
+        config = getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG;
+      } else {
+        try {
+          config = await mapService.getLayerConfig();
+        } catch {
+          config = getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG;
+        }
       }
-      try {
-        const serverConfig = await mapService.getLayerConfig();
-        setLayerConfig(serverConfig);
-      } catch {
-        const envConfig = getMapLayerConfigFromEnv();
-        setLayerConfig(envConfig ?? FALLBACK_LAYER_CONFIG);
+      if (cancelled) return;
+      setLayerConfig(config);
+
+      // MML tiles that never load leave the map grey: switch to OpenStreetMap until MML answers
+      if (isMmlConfig(config)) {
+        mmlLayerConfigRef.current = config;
+        const reachable = await isTileServerReachable(config.layers.maastokartta);
+        if (!cancelled && !reachable) {
+          setLayerConfig(OSM_ONLY_LAYER_CONFIG);
+          setMmlMapUnavailable(true);
+        }
       }
     };
 
     applyConfig();
+    return () => {
+      cancelled = true;
+    };
   }, [isGuest]);
+
+  // While on the OpenStreetMap fallback, retry MML now and then and switch back when it answers
+  useEffect(() => {
+    const mmlConfig = mmlLayerConfigRef.current;
+    if (!mmlMapUnavailable || !mmlConfig) return;
+    const id = window.setInterval(async () => {
+      if (await isTileServerReachable(mmlConfig.layers.maastokartta)) {
+        setLayerConfig(mmlConfig);
+        setMmlMapUnavailable(false);
+      }
+    }, MML_RETRY_MS);
+    return () => window.clearInterval(id);
+  }, [mmlMapUnavailable]);
 
   useEffect(() => {
     if (!baseLayersRef.current) return;
@@ -378,12 +442,15 @@ export default function MapPage() {
       if (activeTool) return; // Don't query while drawing
       setCadastreClickLoading(true);
       setClickedCadastre(null);
+      setCadastreClickError('');
       try {
         const result = await cadastreService.searchByCoordinates(e.latlng.lat, e.latlng.lng);
         setClickedCadastre(result);
         setClickedCadastreCustomName('');
-      } catch {
-        // Silently ignore – coordinate query is best-effort
+        if (!result) setCadastreClickError('Tästä kohdasta ei löytynyt kiinteistöä.');
+      } catch (err: unknown) {
+        const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
+        setCadastreClickError(message || 'Kiinteistön haku epäonnistui. Yritä hetken kuluttua uudelleen.');
       } finally {
         setCadastreClickLoading(false);
       }
@@ -604,7 +671,7 @@ export default function MapPage() {
   const startDraw = useCallback((tool: DrawTool) => {
     if (!mapRef.current || !drawnLayersRef.current) return;
 
-    if (tool && tool !== 'property' && !selectedPropertyId) {
+    if (tool && !selectedPropertyId) {
       setError('Valitse ensin kiinteistö ennen merkinnän tallentamista');
       return;
     }
@@ -623,8 +690,8 @@ export default function MapPage() {
 
     let drawOptions: L.Control.DrawConstructorOptions;
 
-    if (tool === 'property' || tool === 'area' || tool === 'request') {
-      const colors = { property: '#166534', area: '#3b82f6', request: '#ea580c' };
+    if (tool === 'area' || tool === 'request') {
+      const colors = { area: '#3b82f6', request: '#ea580c' };
       drawOptions = {
         draw: {
           polygon: { shapeOptions: { color: colors[tool], dashArray: tool === 'request' ? '8 6' : undefined } },
@@ -667,7 +734,6 @@ export default function MapPage() {
     drawControlRef.current = drawControl;
 
     const handlers: Record<string, string> = {
-      property: 'polygon',
       area: 'polygon',
       request: 'polygon',
       line: 'polyline',
@@ -820,30 +886,6 @@ export default function MapPage() {
     setShowForm(false);
     setActiveTool(null);
   }, []);
-
-  const handleSaveProperty = async (name: string) => {
-    try {
-      let prop: Property;
-      if (isGuest) {
-        prop = {
-          id: -Date.now(),
-          name,
-          geometry: pendingGeometry,
-          created_at: new Date().toISOString(),
-        };
-      } else {
-        prop = await propertiesService.create(name, pendingGeometry);
-      }
-      setProperties((prev) => [prop, ...prev]);
-      setSelectedPropertyId(prop.id);
-      setSelectedPropertyGeometry(prop.geometry);
-      drawnLayersRef.current?.clearLayers();
-      setShowForm(false);
-      setActiveTool(null);
-    } catch {
-      setError('Kiinteistön tallennus epäonnistui');
-    }
-  };
 
   const handleSaveMarking = async (data: {
     type: MarkingType;
@@ -1344,7 +1386,7 @@ export default function MapPage() {
             {layerConfig.overlays?.kiinteistorajat && (
               <button
                 className={`layer-btn ${showCadastreOverlay ? 'active' : ''}`}
-                onClick={() => setShowCadastreOverlay((v) => !v)}
+                onClick={() => { setCadastreClickError(''); setShowCadastreOverlay((v) => !v); }}
                 title="Näytä kiinteistörajat ja tunnukset kartalla"
               >
                 Kiinteistörajat
@@ -1362,11 +1404,18 @@ export default function MapPage() {
             </div>
           )}
 
+          {mmlMapUnavailable && !mapNoticeDismissed && (
+            <div className="map-fallback-notice" role="status">
+              <span>Maanmittauslaitoksen kartta ei ole juuri nyt saatavilla, joten näytetään OpenStreetMap.</span>
+              <button onClick={() => setMapNoticeDismissed(true)} aria-label="Sulje ilmoitus">✕</button>
+            </div>
+          )}
+
           {tileLoading && (
             <div className="tile-loading-indicator" title="Ladataan karttatiloja..." />
           )}
 
-          {showCadastreOverlay && (cadastreClickLoading || clickedCadastre) && (
+          {showCadastreOverlay && layerConfig.overlays?.kiinteistorajat && !activeTool && (
             <div className="clicked-cadastre-panel">
               {cadastreClickLoading ? (
                 <span className="cadastre-click-loading">Haetaan kiinteistöä...</span>
@@ -1375,7 +1424,11 @@ export default function MapPage() {
                   <div className="clicked-cadastre-info">
                     <strong>{clickedCadastre.properties.propertyCode}</strong>
                     {clickedCadastre.properties.areaHa != null && (
-                      <span>{Number(clickedCadastre.properties.areaHa).toFixed(2)} ha</span>
+                      <span>
+                        {Number(clickedCadastre.properties.areaHa).toFixed(2)} ha
+                        {(clickedCadastre.properties.parcelCount ?? 1) > 1 &&
+                          ` · ${clickedCadastre.properties.parcelCount} palstaa`}
+                      </span>
                     )}
                   </div>
                   <div className="clicked-cadastre-name">
@@ -1406,7 +1459,13 @@ export default function MapPage() {
                     </button>
                   </div>
                 </>
-              ) : null}
+              ) : cadastreClickError ? (
+                <span className="cadastre-click-error" role="alert">⚠️ {cadastreClickError}</span>
+              ) : (
+                <span className="cadastre-click-hint">
+                  Valitse kiinteistö klikkaamalla sitä kartalla. Zoomaa lähemmäs, jos rajoja ei näy.
+                </span>
+              )}
             </div>
           )}
 
@@ -1430,9 +1489,14 @@ export default function MapPage() {
                 >
                   🔍 Hae kiinteistötunnuksella
                 </button>
-                <button className="btn btn-secondary btn-compact" onClick={() => startDraw('property')}>
-                  ✏️ Piirrä kartalle
-                </button>
+                {layerConfig.overlays?.kiinteistorajat && (
+                  <button
+                    className="btn btn-secondary btn-compact"
+                    onClick={() => { setEmptyNoticeDismissed(true); setShowCadastreOverlay(true); }}
+                  >
+                    🗺️ Valitse kartalta
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1447,7 +1511,8 @@ export default function MapPage() {
               onClose={() => setActivityOpen(false)}
             />
           ) : (
-            selectedPropertyId && !activeTool && !showForm && (
+            // Hidden while choosing a property on the cadastre layer: the panel uses the same spot
+            selectedPropertyId && !activeTool && !showForm && !(showCadastreOverlay && layerConfig.overlays?.kiinteistorajat) && (
               <button className="activity-fab" onClick={openActivity}>
                 ▶ Aloita aktiviteetti
               </button>
@@ -1464,13 +1529,6 @@ export default function MapPage() {
                 ✕<span>Peruuta</span>
               </button>
             )}
-            <button
-              className={`tool-btn ${activeTool === 'property' ? 'active' : ''}`}
-              onClick={() => (activeTool === 'property' ? startDraw(null) : startDraw('property'))}
-              title="Lisää kiinteistö"
-            >
-              🌳<span>Kiinteistö</span>
-            </button>
             <button
               className={`tool-btn ${activeTool === 'point' ? 'active' : ''}`}
               onClick={() => (activeTool === 'point' ? startDraw(null) : startDraw('point'))}
@@ -1591,10 +1649,8 @@ export default function MapPage() {
 
       {showForm && activeTool !== 'request' && (
         <MarkingForm
-          isProperty={activeTool === 'property'}
           geometryType={pendingGeometryType}
           onSaveMarking={handleSaveMarking}
-          onSaveProperty={handleSaveProperty}
           onCancel={handleCancelForm}
         />
       )}

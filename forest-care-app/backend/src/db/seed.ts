@@ -29,7 +29,8 @@ interface SeedRequest {
 
 interface SeedOwner {
   email: string;
-  parcel: { name: string; areaHa: number; geometry: Geometry };
+  // propertyCode set = a real MML property (source 'cadastre'); otherwise a drawn example ('manual')
+  parcel: { name: string; areaHa: number; geometry: Geometry; propertyCode?: string };
   markings: SeedMarking[];
   requests: SeedRequest[];
 }
@@ -58,13 +59,16 @@ const OWNERS: SeedOwner[] = [
   {
     email: 'admin@metsuri.test',
     parcel: {
-      name: 'Testipalsta',
-      areaHa: 11.2,
+      // Real forest property in Jämsä, Keski-Suomi (MML INSPIRE cadastral parcel 182-432-8-10)
+      name: 'Testipalsta (Jämsä)',
+      propertyCode: '182-432-8-10',
+      areaHa: 10.05,
       geometry: {
         type: 'Polygon',
         coordinates: [[
-          [25.0, 62.0], [25.0062, 61.9998], [25.0066, 62.0026],
-          [25.0031, 62.0033], [24.9996, 62.0029], [25.0, 62.0],
+          [24.994196, 61.997709], [24.999806, 61.999482], [25.001252, 61.999926],
+          [25.002225, 62.000237], [24.994387, 62.001166], [24.992195, 61.999105],
+          [24.994196, 61.997709],
         ]],
       },
     },
@@ -72,27 +76,15 @@ const OWNERS: SeedOwner[] = [
       {
         type: 'harvennus',
         title: 'Ensiharvennus, kuusikko',
-        geometry: {
-          type: 'Polygon',
-          coordinates: [[
-            [25.0038, 62.0004], [25.0058, 62.0003], [25.006, 62.0016],
-            [25.0041, 62.0018], [25.0038, 62.0004],
-          ]],
-        },
-        areaHa: 1.52,
+        geometry: rect(24.9955, 61.999, 120, 90),
+        areaHa: 1.08,
         operationDate: '2025-10-14',
       },
       {
         type: 'vesakonhoito',
         title: 'Taimikon vesakonhoito',
-        geometry: {
-          type: 'Polygon',
-          coordinates: [[
-            [25.0004, 62.0019], [25.0022, 62.0018], [25.0024, 62.0027],
-            [25.0003, 62.0026], [25.0004, 62.0019],
-          ]],
-        },
-        areaHa: 0.9,
+        geometry: rect(24.996, 62.0005, 90, 70),
+        areaHa: 0.63,
         operationDate: '2026-06-02',
       },
     ],
@@ -100,7 +92,7 @@ const OWNERS: SeedOwner[] = [
       {
         type: 'vesakonhoito',
         title: 'Taimikonhoito, eteläosa',
-        geometry: rect(25.0018, 62.0006, 110, 90),
+        geometry: rect(24.9985, 61.9997, 100, 70),
         note: 'Toive: syksy 2026. Tieyhteys hyvä.',
         targetPriceEur: 700,
         bids: [{ provider: 'yrittaja@metsuri.test', amountEur: 650 }],
@@ -212,15 +204,19 @@ async function upsertUser(email: string, passwordHash: string): Promise<number> 
 }
 
 async function seedOwner(owner: SeedOwner, ownerId: number, providerIds: Record<string, number>) {
-  const existing = await pool.query('SELECT id FROM properties WHERE user_id = $1 LIMIT 1', [ownerId]);
+  // The oldest parcel is the one seed created; owners may have added their own parcels later
+  const existing = await pool.query('SELECT id FROM properties WHERE user_id = $1 ORDER BY id LIMIT 1', [ownerId]);
   let propertyId: number;
   if (existing.rows.length > 0) {
     propertyId = existing.rows[0].id;
   } else {
     const property = await pool.query(
-      `INSERT INTO properties (user_id, name, source, area_ha, geometry)
-       VALUES ($1, $2, 'manual', $3, ST_GeomFromGeoJSON($4)) RETURNING id`,
-      [ownerId, owner.parcel.name, owner.parcel.areaHa, JSON.stringify(owner.parcel.geometry)]
+      `INSERT INTO properties (user_id, name, property_code, source, area_ha, geometry)
+       VALUES ($1, $2, $3, $4, $5, ST_GeomFromGeoJSON($6)) RETURNING id`,
+      [
+        ownerId, owner.parcel.name, owner.parcel.propertyCode ?? null,
+        owner.parcel.propertyCode ? 'cadastre' : 'manual', owner.parcel.areaHa, JSON.stringify(owner.parcel.geometry),
+      ]
     );
     propertyId = property.rows[0].id;
 
