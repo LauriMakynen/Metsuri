@@ -274,13 +274,15 @@ export const cadastreService = {
     return response.data;
   },
 
+  // Null when there is no property at the point; other errors (e.g. MML not answering) are thrown
+  // so the map can show the server's message
   searchByCoordinates: async (lat: number, lng: number): Promise<CadastreFeature | null> => {
     try {
       const response = await api.get<CadastreFeature>(`/api/cadastre/at?lat=${lat}&lng=${lng}`);
       return response.data;
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } }).response?.status;
-      if (status === 404 || status === 503) return null;
+      if (status === 404) return null;
       throw err;
     }
   },

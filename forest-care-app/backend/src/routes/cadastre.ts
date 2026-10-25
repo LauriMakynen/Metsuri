@@ -4,9 +4,19 @@ import {
   searchCadastreByPropertyCode,
   searchCadastreByCoordinates,
   CadastreApiNotConfiguredError,
+  CadastreUnavailableError,
 } from '../services/cadastreService';
 
 const router = Router();
+
+// MML not configured or not answering: a clear 503 message the UI can show as is
+function sendServiceError(res: Response, error: unknown): boolean {
+  if (error instanceof CadastreApiNotConfiguredError || error instanceof CadastreUnavailableError) {
+    res.status(503).json({ error: error.message });
+    return true;
+  }
+  return false;
+}
 
 // Public: cadastre data is MML open data, and guests need it to try the demo on their own
 // parcel. Abuse is limited by the cadastre rate limiter in index.ts.
@@ -28,18 +38,13 @@ router.get('/search/:propertyCode', async (req: Request, res: Response): Promise
 
     res.json(feature);
   } catch (error) {
-    if (error instanceof CadastreApiNotConfiguredError) {
-      res.status(503).json({ error: (error as Error).message });
-      return;
-    }
+    if (sendServiceError(res, error)) return;
     console.error('Cadastre search error:', error);
-    res.status(502).json({
-      error: 'Kiinteistöhaku epäonnistui. Tarkista kiinteistötunnus tai MML-rajapinta-asetukset.',
-    });
+    res.status(502).json({ error: 'Kiinteistöhaku epäonnistui. Yritä hetken kuluttua uudelleen.' });
   }
 });
 
-// Search for a property by map coordinates (WGS84 lat/lng)
+// Search for a property by map coordinates (WGS84 lat/lng); returns the whole property
 router.get('/at', async (req: Request, res: Response): Promise<void> => {
   const lat = parseFloat(req.query.lat as string);
   const lng = parseFloat(req.query.lng as string);
@@ -52,17 +57,14 @@ router.get('/at', async (req: Request, res: Response): Promise<void> => {
   try {
     const feature = await searchCadastreByCoordinates(lat, lng);
     if (!feature) {
-      res.status(404).json({ error: 'Kiinteistöä ei löytynyt kyseisessä sijainnissa' });
+      res.status(404).json({ error: 'Tästä kohdasta ei löytynyt kiinteistöä' });
       return;
     }
     res.json(feature);
   } catch (error) {
-    if (error instanceof CadastreApiNotConfiguredError) {
-      res.status(503).json({ error: (error as Error).message });
-      return;
-    }
+    if (sendServiceError(res, error)) return;
     console.error('Cadastre at-coordinate error:', error);
-    res.status(502).json({ error: 'Kiinteistön haku epäonnistui' });
+    res.status(502).json({ error: 'Kiinteistön haku epäonnistui. Yritä hetken kuluttua uudelleen.' });
   }
 });
 

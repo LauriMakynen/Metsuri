@@ -848,6 +848,9 @@ html, body, #root {
   font-style: italic;
 }
 
+.cadastre-click-hint { font-size: 0.9rem; color: var(--text); }
+.cadastre-click-error { font-size: 0.9rem; color: var(--error); font-weight: 600; }
+
 .clicked-cadastre-info {
   display: flex;
   flex-direction: column;
