@@ -72,6 +72,37 @@ const FALLBACK_LAYER_CONFIG: MapLayerConfig = {
   attribution: 'OpenStreetMap / Esri',
 };
 
+// Used while MML tiles do not load (service down or this network blocked). The cadastre
+// overlay also comes from MML, so it is left out.
+const OSM_ONLY_LAYER_CONFIG: MapLayerConfig = { ...FALLBACK_LAYER_CONFIG, overlays: undefined };
+const MML_PROBE_TIMEOUT_MS = 6000;
+const MML_RETRY_MS = 2 * 60 * 1000;
+
+function isMmlConfig(config: MapLayerConfig): boolean {
+  return config.layers.maastokartta.includes('maanmittauslaitos');
+}
+
+/** Load one low-zoom tile as an image (no CORS needed) to see whether the tile server answers. */
+function isTileServerReachable(urlTemplate: string): Promise<boolean> {
+  const url = urlTemplate.replace('{s}', 'a').replace('{z}', '1').replace('{x}', '1').replace('{y}', '0');
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = window.setTimeout(() => {
+      img.src = '';
+      resolve(false);
+    }, MML_PROBE_TIMEOUT_MS);
+    img.onload = () => {
+      window.clearTimeout(timer);
+      resolve(true);
+    };
+    img.onerror = () => {
+      window.clearTimeout(timer);
+      resolve(false);
+    };
+    img.src = url;
+  });
+}
+
 function getDirectMmlLayerConfig(apiKey: string): MapLayerConfig {
   const key = encodeURIComponent(apiKey);
   return {
@@ -153,6 +184,9 @@ export default function MapPage() {
   const [clickedCadastreCustomName, setClickedCadastreCustomName] = useState('');
   const [cadastreClickLoading, setCadastreClickLoading] = useState(false);
   const [cadastreClickError, setCadastreClickError] = useState('');
+  const [mmlMapUnavailable, setMmlMapUnavailable] = useState(false);
+  const [mapNoticeDismissed, setMapNoticeDismissed] = useState(false);
+  const mmlLayerConfigRef = useRef<MapLayerConfig | null>(null);
   const [workRequests, setWorkRequests] = useState<WorkRequest[]>([]);
   const [activityOpen, setActivityOpen] = useState(false);
   const [propertiesLoaded, setPropertiesLoaded] = useState(false);
@@ -297,23 +331,51 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const applyConfig = async () => {
+      let config: MapLayerConfig;
       // The layer config endpoint requires auth, so guests use the env/fallback config directly.
       if (isGuest) {
-        setLayerConfig(getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG);
-        return;
+        config = getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG;
+      } else {
+        try {
+          config = await mapService.getLayerConfig();
+        } catch {
+          config = getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG;
+        }
       }
-      try {
-        const serverConfig = await mapService.getLayerConfig();
-        setLayerConfig(serverConfig);
-      } catch {
-        const envConfig = getMapLayerConfigFromEnv();
-        setLayerConfig(envConfig ?? FALLBACK_LAYER_CONFIG);
+      if (cancelled) return;
+      setLayerConfig(config);
+
+      // MML tiles that never load leave the map grey: switch to OpenStreetMap until MML answers
+      if (isMmlConfig(config)) {
+        mmlLayerConfigRef.current = config;
+        const reachable = await isTileServerReachable(config.layers.maastokartta);
+        if (!cancelled && !reachable) {
+          setLayerConfig(OSM_ONLY_LAYER_CONFIG);
+          setMmlMapUnavailable(true);
+        }
       }
     };
 
     applyConfig();
+    return () => {
+      cancelled = true;
+    };
   }, [isGuest]);
+
+  // While on the OpenStreetMap fallback, retry MML now and then and switch back when it answers
+  useEffect(() => {
+    const mmlConfig = mmlLayerConfigRef.current;
+    if (!mmlMapUnavailable || !mmlConfig) return;
+    const id = window.setInterval(async () => {
+      if (await isTileServerReachable(mmlConfig.layers.maastokartta)) {
+        setLayerConfig(mmlConfig);
+        setMmlMapUnavailable(false);
+      }
+    }, MML_RETRY_MS);
+    return () => window.clearInterval(id);
+  }, [mmlMapUnavailable]);
 
   useEffect(() => {
     if (!baseLayersRef.current) return;
@@ -1342,11 +1404,18 @@ export default function MapPage() {
             </div>
           )}
 
+          {mmlMapUnavailable && !mapNoticeDismissed && (
+            <div className="map-fallback-notice" role="status">
+              <span>Maanmittauslaitoksen kartta ei ole juuri nyt saatavilla, joten näytetään OpenStreetMap.</span>
+              <button onClick={() => setMapNoticeDismissed(true)} aria-label="Sulje ilmoitus">✕</button>
+            </div>
+          )}
+
           {tileLoading && (
             <div className="tile-loading-indicator" title="Ladataan karttatiloja..." />
           )}
 
-          {showCadastreOverlay && !activeTool && (
+          {showCadastreOverlay && layerConfig.overlays?.kiinteistorajat && !activeTool && (
             <div className="clicked-cadastre-panel">
               {cadastreClickLoading ? (
                 <span className="cadastre-click-loading">Haetaan kiinteistöä...</span>
@@ -1443,7 +1512,7 @@ export default function MapPage() {
             />
           ) : (
             // Hidden while choosing a property on the cadastre layer: the panel uses the same spot
-            selectedPropertyId && !activeTool && !showForm && !showCadastreOverlay && (
+            selectedPropertyId && !activeTool && !showForm && !(showCadastreOverlay && layerConfig.overlays?.kiinteistorajat) && (
               <button className="activity-fab" onClick={openActivity}>
                 ▶ Aloita aktiviteetti
               </button>
