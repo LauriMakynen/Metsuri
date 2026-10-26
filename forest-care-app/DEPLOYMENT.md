@@ -31,6 +31,7 @@ forest-care-app/
    ```
    VITE_API_URL=https://your-backend-url.com
    ```
+   Arvo on backendin origin ilman `/api`-polkua. Frontend kutsuu reittejä muodossa `/api/auth/login`.
 
 ### Vercel Configuration
 
@@ -85,6 +86,7 @@ Frontend on käynnissä Vercelissä kun:
    JWT_SECRET=your-very-long-random-secret-key-change-this
    JWT_EXPIRES_IN=7d
    FRONTEND_URL=https://metsuri.vercel.app
+   FRONTEND_URLS=https://preview-1.vercel.app,https://preview-2.vercel.app
    MML_API_KEY=your-mml-api-key
    MML_CADASTRE_API_URL=https://avoin-paikkatieto.maanmittauslaitos.fi/kiinteisto-avoin/simple-features/v3/collections/PalstanSijaintitiedot/items?kiinteistotunnus={propertyCode}
    NODE_ENV=production
@@ -196,6 +198,7 @@ Frontend on käynnissä Vercelissä kun:
 - [ ] `DATABASE_URL` asetettu (production database)
 - [ ] `JWT_SECRET` muutettu (ei example-arvo)
 - [ ] `FRONTEND_URL` asetettu oikeaan Vercel-domainiin
+- [ ] Tarvittavat Vercel-preview- ja custom-domainit lisätty pilkuilla eroteltuna `FRONTEND_URLS`-muuttujaan (vain tarkat origin-osoitteet)
 - [ ] `NODE_ENV=production` asetettu
 - [ ] Build command: `npm install && npm run build`
 - [ ] Start command: `npm start`
@@ -237,6 +240,7 @@ DATABASE_URL=postgresql://user:pass@host:5432/db
 JWT_SECRET=long-random-secret-key
 JWT_EXPIRES_IN=7d
 FRONTEND_URL=https://metsuri.vercel.app
+FRONTEND_URLS=https://preview-1.vercel.app,https://preview-2.vercel.app
 MML_API_KEY=your-mml-api-key
 MML_CADASTRE_API_URL=https://avoin-paikkatieto.maanmittauslaitos.fi/kiinteisto-avoin/simple-features/v3/collections/PalstanSijaintitiedot/items?kiinteistotunnus={propertyCode}
 NODE_ENV=production
@@ -299,7 +303,15 @@ NODE_ENV=production
 **Q: CORS errors from frontend**
 - A: Tarkista backend/.env:
   - `FRONTEND_URL` pitää olla asetettu oikeaan Vercel-domainiin
+  - `FRONTEND_URLS` sisältää tarvittaessa muut tarkat Vercel/custom-domain-originit
   - Backend käynnistyi uudelleen muutoksen jälkeen
+
+### Testitilit
+
+- Luo jokaiselle testaajalle oma tili suoraan käytössä olevaan testitietokantaan; älä jaa yhteistä salasanaa.
+- Merkitse tilit testitileiksi tunnistettavalla testikäyttöön varatulla sähköpostiosoitteella ja poista ne ennen tuotantokäyttöä.
+- Jaa alkuperäiset salasanat salasananhallinnassa tai suoraan kullekin testaajalle, ei repossa tai issueissa. Käyttäjä voi vaihtaa salasanan kirjautumissivun salasananpalautuksesta.
+- `backend/src/db/seed.ts` luo paikallisia yhteisiä testitilejä ja asettaa niiden salasanan `SEED_PASSWORD`-arvoksi. Älä käytä sitä tuotantotietokannassa.
 
 ### Database
 
