@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { ChangeEvent } from 'react';
 import { workRequestsService } from '../services/forestService';
 import {
@@ -137,7 +138,8 @@ function PhotoLightbox({ photos, index, onIndexChange, onClose, onDelete }: Phot
     }
   };
 
-  return (
+  // Rendered at the body so list and card layout rules don't reach it
+  return createPortal(
     <div className="modal-overlay photo-lightbox" onClick={(e) => e.target === e.currentTarget && !deleting && onClose()}>
       <div className="photo-lightbox-card" role="dialog" aria-label="Kuva">
         <div className="photo-lightbox-image">
@@ -177,7 +179,8 @@ function PhotoLightbox({ photos, index, onIndexChange, onClose, onDelete }: Phot
         </div>
         {error && <div className="error-message photo-lightbox-error">{error}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

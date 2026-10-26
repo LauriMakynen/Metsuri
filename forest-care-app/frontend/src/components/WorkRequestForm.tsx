@@ -143,7 +143,7 @@ export default function WorkRequestForm({
             <PendingPhotoGrid photos={photos} onRemove={sending ? undefined : removePhoto} />
             <div className="modal-actions">
               <button type="button" className="btn btn-secondary" onClick={onDone} disabled={sending}>
-                Valmis ilman näitä kuvia
+                Ohita kuvat
               </button>
               <button type="submit" className="btn btn-primary" disabled={sending || photos.length === 0}>
                 {submitLabel}

@@ -1229,8 +1229,16 @@ html, body, #root {
 /* Work request photos */
 .form-label { font-size: 0.9rem; font-weight: 600; color: var(--text); }
 .form-label small { font-weight: 400; color: var(--text-light); }
-.photo-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.photo-pick { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .photo-pick .btn { min-height: 44px; }
+.sidebar-item .photo-pick .btn {
+  min-height: 36px; padding: 0.3rem 0.7rem; font-size: 0.8rem;
+  background: var(--white); border: 1px solid var(--border);
+}
+/* Override the generic ".sidebar-item div" column layout */
+.sidebar-item .photo-gallery { flex: none; align-self: stretch; gap: 0.5rem; }
+.sidebar-item .photo-pick { flex-direction: row; flex: none; }
+.sidebar-item .photo-upload-failed { flex: none; gap: 0.4rem; }
 .photo-pick-status { color: var(--text-light); font-size: 0.82rem; }
 .photo-error-text { color: var(--error); font-size: 0.82rem; }
 .photo-grid {
@@ -1238,7 +1246,7 @@ html, body, #root {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 0.4rem;
 }
 .photo-thumb { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #e5e7eb; }
-.photo-thumb > button { display: block; width: 100%; height: 100%; padding: 0; border: none; cursor: zoom-in; background: none; }
+.photo-thumb > button:not(.photo-thumb-remove) { display: block; width: 100%; height: 100%; padding: 0; border: none; cursor: zoom-in; background: none; }
 .photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .photo-thumb-remove {
   position: absolute; top: 3px; right: 3px; width: 26px; height: 26px; border-radius: 50%;
