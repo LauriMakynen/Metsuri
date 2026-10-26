@@ -216,6 +216,23 @@ async function migrate() {
       'CREATE INDEX IF NOT EXISTS work_request_bids_request_idx ON work_request_bids(work_request_id)'
     );
 
+    // Photos the owner attaches to a work request (resized JPEGs, stored in the database).
+    // taken_at is the capture time when the device provided one.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS work_request_photos (
+        id SERIAL PRIMARY KEY,
+        work_request_id INTEGER NOT NULL REFERENCES work_requests(id) ON DELETE CASCADE,
+        content_type VARCHAR(20) NOT NULL,
+        data BYTEA NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        taken_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS work_request_photos_request_idx ON work_request_photos(work_request_id)'
+    );
+
     // Password reset: single-use tokens stored only as SHA-256 hashes. password_changed_at
     // lets the auth middleware reject JWTs issued before the latest password change.
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP WITH TIME ZONE');

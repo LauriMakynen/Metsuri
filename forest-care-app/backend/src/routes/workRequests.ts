@@ -1,6 +1,12 @@
-import { Router, Response } from 'express';
+import express, { Router, Response, NextFunction } from 'express';
 import pool from '../db/pool';
 import { authMiddleware, optionalAuthMiddleware, AuthRequest } from '../middleware/auth';
+import {
+  MAX_PHOTO_BYTES,
+  MAX_PHOTOS_PER_REQUEST,
+  detectImageType,
+  parseTakenAt,
+} from '../services/workRequestPhotos';
 
 const router = Router();
 
@@ -30,7 +36,27 @@ const REQUEST_COLUMNS = `
   wr.id, wr.note, wr.created_at, wr.type, wr.title, wr.area_ha, wr.pricing, wr.target_price_eur,
   CASE WHEN GeometryType(wr.geometry) = 'POINT' THEN 'point' ELSE 'area' END AS geometry_type,
   ST_AsGeoJSON(wr.geometry)::json AS geometry,
-  b.bid_count, b.best_bid_eur, b.latest_bid_at`;
+  b.bid_count, b.best_bid_eur, b.latest_bid_at,
+  COALESCE((
+    SELECT json_agg(json_build_object('id', p.id, 'taken_at', p.taken_at) ORDER BY p.created_at, p.id)
+    FROM work_request_photos p
+    WHERE p.work_request_id = wr.id
+  ), '[]'::json) AS photos`;
+
+// Raw image body for photo uploads; errors are answered as JSON like the rest of the API
+const rawPhotoParser = express.raw({ type: 'image/*', limit: MAX_PHOTO_BYTES });
+function parsePhotoBody(req: AuthRequest, res: Response, next: NextFunction): void {
+  rawPhotoParser(req, res, (err?: unknown) => {
+    if (err) {
+      const tooLarge = (err as { type?: string }).type === 'entity.too.large';
+      res.status(tooLarge ? 413 : 400).json({
+        error: tooLarge ? 'Kuva on liian suuri (enintään 3 Mt)' : 'Kuvan lukeminen epäonnistui',
+      });
+      return;
+    }
+    next();
+  });
+}
 
 function isValidEur(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= MAX_EUR;
@@ -251,6 +277,85 @@ router.delete('/:id/bids', authMiddleware, async (req: AuthRequest, res: Respons
   } catch (error) {
     console.error('Delete bid error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/work-requests/:id/photos - Attach a photo (raw image body) to the owner's request.
+// The optional X-Taken-At header carries the capture time as ISO 8601.
+router.post(
+  '/:id/photos',
+  authMiddleware,
+  parsePhotoBody,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    const { id } = req.params;
+
+    if (!/^\d+$/.test(id)) {
+      res.status(400).json({ error: 'Invalid id' });
+      return;
+    }
+    const data = Buffer.isBuffer(req.body) ? req.body : null;
+    const contentType = data ? detectImageType(data) : null;
+    if (!data || !contentType) {
+      res.status(400).json({ error: 'Tiedosto ei ole kuva (JPEG, PNG tai WebP)' });
+      return;
+    }
+
+    try {
+      const request = await pool.query(
+        `SELECT (SELECT COUNT(*)::int FROM work_request_photos WHERE work_request_id = wr.id) AS photo_count
+         FROM work_requests wr
+         WHERE wr.id = $1 AND wr.user_id = $2`,
+        [id, req.userId]
+      );
+      if (request.rows.length === 0) {
+        res.status(404).json({ error: 'Työpyyntöä ei löytynyt' });
+        return;
+      }
+      if (request.rows[0].photo_count >= MAX_PHOTOS_PER_REQUEST) {
+        res.status(400).json({ error: `Työpyyntöön voi liittää enintään ${MAX_PHOTOS_PER_REQUEST} kuvaa` });
+        return;
+      }
+
+      await pool.query(
+        `INSERT INTO work_request_photos (work_request_id, content_type, data, size_bytes, taken_at)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, contentType, data, data.length, parseTakenAt(req.header('X-Taken-At'))]
+      );
+      const [updated] = await fetchOwnRequests(req.userId as number, Number(id));
+      res.status(201).json(updated);
+    } catch (error) {
+      console.error('Upload work request photo error:', error);
+      res.status(500).json({ error: 'Kuvan tallennus epäonnistui' });
+    }
+  }
+);
+
+// DELETE /api/work-requests/:id/photos/:photoId - Remove a photo from the owner's request
+router.delete('/:id/photos/:photoId', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id, photoId } = req.params;
+
+  if (!/^\d+$/.test(id) || !/^\d+$/.test(photoId)) {
+    res.status(400).json({ error: 'Invalid id' });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `DELETE FROM work_request_photos p
+       USING work_requests wr
+       WHERE p.id = $1 AND p.work_request_id = $2 AND wr.id = p.work_request_id AND wr.user_id = $3
+       RETURNING p.id`,
+      [photoId, id, req.userId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Kuvaa ei löytynyt' });
+      return;
+    }
+    const [updated] = await fetchOwnRequests(req.userId as number, Number(id));
+    res.json(updated);
+  } catch (error) {
+    console.error('Delete work request photo error:', error);
+    res.status(500).json({ error: 'Kuvan poisto epäonnistui' });
   }
 });
 
