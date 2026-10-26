@@ -130,6 +130,9 @@ html, body, #root {
 .btn-primary:hover:not(:disabled) { background: var(--forest-green-light); }
 .btn-secondary { background: var(--border); color: var(--text); }
 .btn-secondary:hover:not(:disabled) { background: #9ca3af; }
+.back-button-row { min-height: 64px; padding: 0.6rem 1rem; display: flex; align-items: center; flex-shrink: 0; }
+.back-button { width: auto; min-width: 44px; min-height: 44px; gap: 0.5rem; box-shadow: 0 2px 5px rgba(8,40,22,0.2); }
+.back-button span { font-size: 1.25rem; line-height: 1; }
 .btn-small {
   padding: 0.4rem 0.8rem; font-size: 0.85rem; min-height: 36px;
   background: rgba(255,255,255,0.2); color: var(--white); border-radius: var(--radius-sm);
@@ -845,6 +848,19 @@ html, body, #root {
   font-style: italic;
 }
 
+.cadastre-click-hint { font-size: 0.9rem; color: var(--text); }
+
+/* Shown while the map uses OpenStreetMap because MML tiles do not load */
+.map-fallback-notice {
+  position: absolute; top: 4.4rem; right: 0.75rem; z-index: 950; max-width: min(360px, calc(100% - 4.5rem));
+  display: flex; align-items: flex-start; gap: 0.5rem;
+  background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; border-radius: 10px;
+  padding: 0.5rem 0.6rem 0.5rem 0.8rem; font-size: 0.82rem; line-height: 1.4; box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+}
+.map-fallback-notice button { background: none; border: none; color: inherit; cursor: pointer; font-size: 0.9rem; padding: 0 0.1rem; }
+@media (max-width: 899px) { .map-fallback-notice { top: 7.6rem; } }
+.cadastre-click-error { font-size: 0.9rem; color: var(--error); font-weight: 600; }
+
 .clicked-cadastre-info {
   display: flex;
   flex-direction: column;
@@ -945,6 +961,12 @@ html, body, #root {
 }
 .work-request-confirm .modal-actions .btn:hover:not(:disabled) {
   background: var(--forest-green-light);
+}
+.bid-delete-link {
+  color: var(--error);
+}
+.bid-delete-link:hover:not(:disabled) {
+  color: #b91c1c;
 }
 
 @media (max-width: 899px) {

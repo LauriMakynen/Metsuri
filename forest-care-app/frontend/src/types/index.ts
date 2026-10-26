@@ -108,6 +108,8 @@ export interface CadastreFeatureProperties {
   propertyCode: string;
   name: string;
   areaHa?: number;
+  // Number of separate parcels (palstat) the property consists of
+  parcelCount?: number;
   source: 'mml' | 'mock';
 }
 
