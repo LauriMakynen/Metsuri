@@ -5,6 +5,7 @@ import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { formatArea } from '../utils/measurement';
 import { formatDate } from '../utils/dateFormatting';
 import { BEST_BID_LABEL, PRICING_HINT, TARGET_PRICE_LABEL, formatEur } from '../utils/bids';
+import WorkRequestPhotoGallery from './WorkRequestPhotos';
 import type { PublicWorkRequest } from '../types';
 
 interface WorkRequestCardProps {
@@ -98,6 +99,7 @@ export default function WorkRequestCard({
         </span>
         {request.note && <span className="request-note">{request.note}</span>}
       </button>
+      <WorkRequestPhotoGallery requestId={request.id} photos={request.photos} />
 
       <div className="bid-box">
         {request.target_price_eur !== null && (

@@ -64,6 +64,12 @@ export interface BidSummary {
   latest_bid_at: string | null;
 }
 
+// Photo attached to a work request; taken_at is null when the device gave no capture time
+export interface WorkRequestPhoto {
+  id: number;
+  taken_at: string | null;
+}
+
 // Planned work the owner asks offers for (markings, in contrast, record done work)
 interface WorkRequestBase extends BidSummary {
   id: number;
@@ -76,6 +82,7 @@ interface WorkRequestBase extends BidSummary {
   // Service: what the owner is willing to pay. Timber sale: the owner's asking price.
   target_price_eur: number | null;
   created_at: string;
+  photos: WorkRequestPhoto[];
 }
 
 // A forest owner's own work request

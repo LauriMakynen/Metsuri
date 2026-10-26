@@ -3,7 +3,10 @@ import type { FormEvent } from 'react';
 import { MARKING_COLORS, MARKING_TYPE_LABELS, MARKING_TYPES } from '../utils/markingTypes';
 import { formatArea } from '../utils/measurement';
 import { PRICING_OPTIONS, TARGET_PRICE_QUESTION, suggestedPricing } from '../utils/bids';
-import type { MarkingType, Pricing } from '../types';
+import { MAX_PHOTOS_PER_REQUEST, releasePhoto, uploadPhotos, useReleaseOnUnmount } from '../utils/photos';
+import type { PreparedPhoto } from '../utils/photos';
+import { PendingPhotoGrid, PhotoPickButtons } from './WorkRequestPhotos';
+import type { MarkingType, Pricing, WorkRequest } from '../types';
 
 export interface WorkRequestFormData {
   type: MarkingType;
@@ -20,12 +23,24 @@ interface WorkRequestFormProps {
   parcelName: string;
   initial?: WorkRequestDraft | null;
   areaHa: number | null;
-  onSubmit: (data: WorkRequestFormData) => Promise<void>;
+  // Publishes the request; photos are uploaded to it afterwards
+  onSubmit: (data: WorkRequestFormData) => Promise<WorkRequest>;
+  onUpdated: (updated: WorkRequest) => void;
+  // Request published (with its photos, or the user gave up on the failed ones)
+  onDone: () => void;
   onCancel: () => void;
 }
 
-// Modal for publishing planned work: what, who pays, the owner's price and details
-export default function WorkRequestForm({ parcelName, initial, areaHa, onSubmit, onCancel }: WorkRequestFormProps) {
+// Modal for publishing planned work: what, who pays, the owner's price, details and photos
+export default function WorkRequestForm({
+  parcelName,
+  initial,
+  areaHa,
+  onSubmit,
+  onUpdated,
+  onDone,
+  onCancel,
+}: WorkRequestFormProps) {
   const [type, setType] = useState<MarkingType | null>(initial?.type ?? null);
   const [title, setTitle] = useState(initial?.title ?? '');
   // Must be chosen explicitly (or confirmed from a prefill): decides whether the highest or the lowest offer is best
@@ -34,9 +49,37 @@ export default function WorkRequestForm({ parcelName, initial, areaHa, onSubmit,
   const [note, setNote] = useState(initial?.note ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const [photos, setPhotos] = useState<PreparedPhoto[]>([]);
+  const [photoError, setPhotoError] = useState('');
+  // Set once the request is published; then only the photo upload can still be pending
+  const [created, setCreated] = useState<WorkRequest | null>(null);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  useReleaseOnUnmount(photos);
+
+  const removePhoto = (key: string) => {
+    setPhotos((prev) => {
+      const photo = prev.find((p) => p.key === key);
+      if (photo) releasePhoto(photo);
+      return prev.filter((p) => p.key !== key);
+    });
+  };
+
+  const uploadTo = async (request: WorkRequest, toUpload: PreparedPhoto[]) => {
+    setSending(true);
+    setPhotoError('');
+    setProgress({ done: 0, total: toUpload.length });
+    const result = await uploadPhotos(request.id, toUpload, (done) => setProgress({ done, total: toUpload.length }));
+    if (result.updated) onUpdated(result.updated);
+    setPhotos(result.remaining);
+    setSending(false);
+    if (result.error) setPhotoError(result.error);
+    else onDone();
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (created) return uploadTo(created, photos);
+
     const priceValue = Number(price.replace(/\s/g, '').replace(',', '.'));
     if (!type) return setError('Valitse toimenpide');
     if (!pricing) return setError('Valitse, onko kyse puukaupasta vai palvelutyöstä');
@@ -44,8 +87,9 @@ export default function WorkRequestForm({ parcelName, initial, areaHa, onSubmit,
 
     setSending(true);
     setError('');
+    let request: WorkRequest;
     try {
-      await onSubmit({
+      request = await onSubmit({
         type,
         title: title.trim() || `${MARKING_TYPE_LABELS[type]} – ${parcelName}`,
         note: note.trim(),
@@ -56,15 +100,30 @@ export default function WorkRequestForm({ parcelName, initial, areaHa, onSubmit,
       const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
       setError(message || 'Työpyynnön julkaisu epäonnistui');
       setSending(false);
+      return;
     }
+    if (photos.length === 0) return onDone();
+    setCreated(request);
+    await uploadTo(request, photos);
   };
 
+  // After publishing, closing keeps the request even if some photos were not saved
+  const close = () => (created ? onDone() : onCancel());
+
+  const submitLabel = created
+    ? sending
+      ? `Tallennetaan kuvia ${Math.min(progress.done + 1, progress.total)}/${progress.total}...`
+      : '↻ Yritä uudelleen'
+    : sending
+      ? 'Julkaistaan...'
+      : 'Julkaise työpyyntö';
+
   return (
-    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && !sending && close()}>
       <div className="modal-card">
         <div className="modal-header">
           <h2>📢 Uusi työpyyntö</h2>
-          <button className="modal-close" onClick={onCancel} aria-label="Sulje">✕</button>
+          <button className="modal-close" onClick={close} aria-label="Sulje" disabled={sending}>✕</button>
         </div>
         <p className="request-form-sub">
           {parcelName}
@@ -73,6 +132,25 @@ export default function WorkRequestForm({ parcelName, initial, areaHa, onSubmit,
 
         {error && <div className="error-message">{error}</div>}
 
+        {created ? (
+          <form onSubmit={handleSubmit} className="modal-form">
+            <div className="success-message">✓ Työpyyntö julkaistu.</div>
+            {photoError && (
+              <div className="error-message">
+                {photos.length === 1 ? 'Yksi kuva jäi tallentamatta' : `${photos.length} kuvaa jäi tallentamatta`}: {photoError}
+              </div>
+            )}
+            <PendingPhotoGrid photos={photos} onRemove={sending ? undefined : removePhoto} />
+            <div className="modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={onDone} disabled={sending}>
+                Valmis ilman näitä kuvia
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={sending || photos.length === 0}>
+                {submitLabel}
+              </button>
+            </div>
+          </form>
+        ) : (
         <form onSubmit={handleSubmit} className="modal-form">
           <fieldset className="form-group request-form-fieldset">
             <legend>Toimenpide *</legend>
@@ -157,13 +235,29 @@ export default function WorkRequestForm({ parcelName, initial, areaHa, onSubmit,
             />
           </div>
 
+          <div className="form-group">
+            <span className="form-label">
+              Kuvat alueelta <small>({photos.length}/{MAX_PHOTOS_PER_REQUEST})</small>
+            </span>
+            <PendingPhotoGrid photos={photos} onRemove={sending ? undefined : removePhoto} />
+            <PhotoPickButtons
+              remaining={MAX_PHOTOS_PER_REQUEST - photos.length}
+              disabled={sending}
+              onPicked={(picked) => setPhotos((prev) => [...prev, ...picked])}
+              onError={setPhotoError}
+            />
+            {photoError && <small className="photo-error-text">{photoError}</small>}
+            <small className="request-form-hint">Kuvat auttavat tekijää arvioimaan työn. Sijaintitietoja ei tallenneta.</small>
+          </div>
+
           <div className="modal-actions">
-            <button type="button" className="btn btn-secondary" onClick={onCancel}>Peruuta</button>
+            <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={sending}>Peruuta</button>
             <button type="submit" className="btn btn-primary" disabled={sending || !type || !pricing || !price}>
-              {sending ? 'Julkaistaan...' : 'Julkaise työpyyntö'}
+              {submitLabel}
             </button>
           </div>
         </form>
+        )}
       </div>
     </div>
   );
