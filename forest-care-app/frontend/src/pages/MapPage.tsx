@@ -25,16 +25,18 @@ import type {
   GeoJSONGeometry,
   CadastreFeature,
   MapLayerConfig,
-  ForestDataResponse,
-  ForestValuationResponse,
+  RecommendedOperation,
   WorkRequest,
 } from '../types';
 import MarkingForm from '../components/MarkingForm';
 import Sidebar from '../components/Sidebar';
 import ActivityTracker from '../components/ActivityTracker';
 import WorkRequestForm from '../components/WorkRequestForm';
-import type { WorkRequestFormData } from '../components/WorkRequestForm';
-import { bidSummaryText } from '../utils/bids';
+import ForestValuePanel from '../components/forestValue/ForestValuePanel';
+import { useForestValue } from '../hooks/useForestValue';
+import { OPERATION_LABEL, OPERATION_WORK_TYPE, standTitle } from '../utils/forestValueFormat';
+import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
+import { bidSummaryText, suggestedPricing } from '../utils/bids';
 import type { ActivityResult } from '../components/ActivityTracker';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -44,10 +46,17 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-type DrawTool = 'property' | 'point' | 'line' | 'area' | 'note' | 'measure' | 'request' | null;
+// Properties are not drawn by hand: they come from MML (code search or a click on the cadastre layer)
+type DrawTool = 'point' | 'line' | 'area' | 'note' | 'measure' | 'request' | null;
 type BaseLayerKey = 'maastokartta' | 'peruskartta' | 'ortokuva';
 
-const PROPERTY_CODE_REGEX = /^\d{3}-\d{3}-\d{2}-\d{1,4}$/;
+// Same rule as the backend: 1–3, 1–3, 1–4 and 1–4 digits (e.g. 91-2-9901-100), or the 14-digit form
+const PROPERTY_CODE_REGEX = /^(\d{1,3}-\d{1,3}-\d{1,4}-\d{1,4}|\d{14})$/;
+// MML tiles exist up to zoom 18; beyond that Leaflet upscales them instead of showing grey
+const MAX_TILE_ZOOM = 18;
+// Zooming to a (small) parcel stops here so its surroundings stay visible
+const FIT_MAX_ZOOM = 17;
+const MAP_VIEW_STORAGE_KEY = 'metsuri-map-view';
 
 const FALLBACK_LAYER_CONFIG: MapLayerConfig = {
   provider: 'fallback',
@@ -57,8 +66,42 @@ const FALLBACK_LAYER_CONFIG: MapLayerConfig = {
     ortokuva:
       'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   },
+  overlays: {
+    kiinteistorajat: '/api/map/tiles/kiinteistorajat/{z}/{x}/{y}',
+  },
   attribution: 'OpenStreetMap / Esri',
 };
+
+// Used while MML tiles do not load (service down or this network blocked). The cadastre
+// overlay also comes from MML, so it is left out.
+const OSM_ONLY_LAYER_CONFIG: MapLayerConfig = { ...FALLBACK_LAYER_CONFIG, overlays: undefined };
+const MML_PROBE_TIMEOUT_MS = 6000;
+const MML_RETRY_MS = 2 * 60 * 1000;
+
+function isMmlConfig(config: MapLayerConfig): boolean {
+  return config.layers.maastokartta.includes('maanmittauslaitos');
+}
+
+/** Load one low-zoom tile as an image (no CORS needed) to see whether the tile server answers. */
+function isTileServerReachable(urlTemplate: string): Promise<boolean> {
+  const url = urlTemplate.replace('{s}', 'a').replace('{z}', '1').replace('{x}', '1').replace('{y}', '0');
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = window.setTimeout(() => {
+      img.src = '';
+      resolve(false);
+    }, MML_PROBE_TIMEOUT_MS);
+    img.onload = () => {
+      window.clearTimeout(timer);
+      resolve(true);
+    };
+    img.onerror = () => {
+      window.clearTimeout(timer);
+      resolve(false);
+    };
+    img.src = url;
+  });
+}
 
 function getDirectMmlLayerConfig(apiKey: string): MapLayerConfig {
   const key = encodeURIComponent(apiKey);
@@ -131,12 +174,19 @@ export default function MapPage() {
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(FALLBACK_LAYER_CONFIG);
   const [activeBaseLayer, setActiveBaseLayer] = useState<BaseLayerKey>('maastokartta');
   const [showCadastreOverlay, setShowCadastreOverlay] = useState(false);
-  const [forestData, setForestData] = useState<ForestDataResponse | null>(null);
-  const [valuation, setValuation] = useState<ForestValuationResponse | null>(null);
+  const [forestValueOpen, setForestValueOpen] = useState(false);
+  // Stand highlighted from the value view; tied to the parcel so it resets on reselect
+  const [highlightedStand, setHighlightedStand] = useState<{ propertyId: number; standId: string } | null>(null);
+  // Prefilled work request opened from a recommended operation
+  const [requestDraft, setRequestDraft] = useState<WorkRequestDraft | null>(null);
   const [tileLoading, setTileLoading] = useState(false);
   const [clickedCadastre, setClickedCadastre] = useState<CadastreFeature | null>(null);
   const [clickedCadastreCustomName, setClickedCadastreCustomName] = useState('');
   const [cadastreClickLoading, setCadastreClickLoading] = useState(false);
+  const [cadastreClickError, setCadastreClickError] = useState('');
+  const [mmlMapUnavailable, setMmlMapUnavailable] = useState(false);
+  const [mapNoticeDismissed, setMapNoticeDismissed] = useState(false);
+  const mmlLayerConfigRef = useRef<MapLayerConfig | null>(null);
   const [workRequests, setWorkRequests] = useState<WorkRequest[]>([]);
   const [activityOpen, setActivityOpen] = useState(false);
   const [propertiesLoaded, setPropertiesLoaded] = useState(false);
@@ -151,6 +201,12 @@ export default function MapPage() {
     () => properties.find((p) => p.id === selectedPropertyId) ?? null,
     [properties, selectedPropertyId]
   );
+  const forestValue = useForestValue(selectedProperty);
+  const forestValueResult =
+    forestValue.entry?.response?.status === 'available' ? forestValue.entry.response.result : null;
+  const highlightedStandId =
+    highlightedStand && highlightedStand.propertyId === selectedPropertyId ? highlightedStand.standId : null;
+  const standsLayerRef = useRef<L.FeatureGroup | null>(null);
 
   const loadProperties = useCallback(async () => {
     if (isGuest) return;
@@ -176,24 +232,64 @@ export default function MapPage() {
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
+    let center: L.LatLngExpression = [65.0, 25.0];
+    let zoom = 6;
+    try {
+      const savedView = sessionStorage.getItem(MAP_VIEW_STORAGE_KEY);
+      if (savedView) {
+        const view = JSON.parse(savedView) as { center?: [number, number]; zoom?: number };
+        if (
+          Array.isArray(view.center) &&
+          view.center.length === 2 &&
+          Number.isFinite(view.center[0]) &&
+          view.center[0] >= -90 &&
+          view.center[0] <= 90 &&
+          Number.isFinite(view.center[1]) &&
+          view.center[1] >= -180 &&
+          view.center[1] <= 180 &&
+          typeof view.zoom === 'number' &&
+          Number.isFinite(view.zoom) &&
+          view.zoom >= 0 &&
+          view.zoom <= 19
+        ) {
+          center = view.center;
+          zoom = view.zoom;
+        }
+      }
+    } catch {
+      // Ignore unavailable or invalid stored map state.
+    }
+
     const map = L.map(mapContainerRef.current, {
-      center: [65.0, 25.0],
-      zoom: 6,
+      center,
+      zoom,
       zoomControl: true,
     });
+    const saveMapView = () => {
+      const currentCenter = map.getCenter();
+      try {
+        sessionStorage.setItem(
+          MAP_VIEW_STORAGE_KEY,
+          JSON.stringify({ center: [currentCenter.lat, currentCenter.lng], zoom: map.getZoom() })
+        );
+      } catch {
+        // Map navigation remains usable when session storage is unavailable.
+      }
+    };
+    map.on('moveend', saveMapView);
 
     const baseLayers: Record<BaseLayerKey, L.TileLayer> = {
       maastokartta: L.tileLayer(FALLBACK_LAYER_CONFIG.layers.maastokartta, {
         attribution: FALLBACK_LAYER_CONFIG.attribution,
-        maxZoom: 19,
+        maxZoom: 19, maxNativeZoom: MAX_TILE_ZOOM,
       }),
       peruskartta: L.tileLayer(FALLBACK_LAYER_CONFIG.layers.peruskartta, {
         attribution: FALLBACK_LAYER_CONFIG.attribution,
-        maxZoom: 19,
+        maxZoom: 19, maxNativeZoom: MAX_TILE_ZOOM,
       }),
       ortokuva: L.tileLayer(FALLBACK_LAYER_CONFIG.layers.ortokuva, {
         attribution: FALLBACK_LAYER_CONFIG.attribution,
-        maxZoom: 19,
+        maxZoom: 19, maxNativeZoom: MAX_TILE_ZOOM,
       }),
     };
 
@@ -226,6 +322,8 @@ export default function MapPage() {
     mapRef.current = map;
 
     return () => {
+      saveMapView();
+      map.off('moveend', saveMapView);
       map.remove();
       mapRef.current = null;
       baseLayersRef.current = null;
@@ -233,23 +331,51 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
     const applyConfig = async () => {
+      let config: MapLayerConfig;
       // The layer config endpoint requires auth, so guests use the env/fallback config directly.
       if (isGuest) {
-        setLayerConfig(getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG);
-        return;
+        config = getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG;
+      } else {
+        try {
+          config = await mapService.getLayerConfig();
+        } catch {
+          config = getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG;
+        }
       }
-      try {
-        const serverConfig = await mapService.getLayerConfig();
-        setLayerConfig(serverConfig);
-      } catch {
-        const envConfig = getMapLayerConfigFromEnv();
-        setLayerConfig(envConfig ?? FALLBACK_LAYER_CONFIG);
+      if (cancelled) return;
+      setLayerConfig(config);
+
+      // MML tiles that never load leave the map grey: switch to OpenStreetMap until MML answers
+      if (isMmlConfig(config)) {
+        mmlLayerConfigRef.current = config;
+        const reachable = await isTileServerReachable(config.layers.maastokartta);
+        if (!cancelled && !reachable) {
+          setLayerConfig(OSM_ONLY_LAYER_CONFIG);
+          setMmlMapUnavailable(true);
+        }
       }
     };
 
     applyConfig();
+    return () => {
+      cancelled = true;
+    };
   }, [isGuest]);
+
+  // While on the OpenStreetMap fallback, retry MML now and then and switch back when it answers
+  useEffect(() => {
+    const mmlConfig = mmlLayerConfigRef.current;
+    if (!mmlMapUnavailable || !mmlConfig) return;
+    const id = window.setInterval(async () => {
+      if (await isTileServerReachable(mmlConfig.layers.maastokartta)) {
+        setLayerConfig(mmlConfig);
+        setMmlMapUnavailable(false);
+      }
+    }, MML_RETRY_MS);
+    return () => window.clearInterval(id);
+  }, [mmlMapUnavailable]);
 
   useEffect(() => {
     if (!baseLayersRef.current) return;
@@ -286,7 +412,7 @@ export default function MapPage() {
       return;
     }
     if (!overlayLayerRef.current) {
-      overlayLayerRef.current = L.tileLayer(overlayUrl, { opacity: 0.85, maxZoom: 19, minZoom: 14 });
+      overlayLayerRef.current = L.tileLayer(overlayUrl, { opacity: 0.85, maxZoom: 19, maxNativeZoom: MAX_TILE_ZOOM, minZoom: 14 });
     } else {
       overlayLayerRef.current.setUrl(overlayUrl);
     }
@@ -316,12 +442,15 @@ export default function MapPage() {
       if (activeTool) return; // Don't query while drawing
       setCadastreClickLoading(true);
       setClickedCadastre(null);
+      setCadastreClickError('');
       try {
         const result = await cadastreService.searchByCoordinates(e.latlng.lat, e.latlng.lng);
         setClickedCadastre(result);
         setClickedCadastreCustomName('');
-      } catch {
-        // Silently ignore – coordinate query is best-effort
+        if (!result) setCadastreClickError('Tästä kohdasta ei löytynyt kiinteistöä.');
+      } catch (err: unknown) {
+        const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
+        setCadastreClickError(message || 'Kiinteistön haku epäonnistui. Yritä hetken kuluttua uudelleen.');
       } finally {
         setCadastreClickLoading(false);
       }
@@ -381,6 +510,7 @@ export default function MapPage() {
     });
     setWorkRequests((prev) => [request, ...prev]);
     drawnLayersRef.current?.clearLayers();
+    setRequestDraft(null);
     setShowForm(false);
     setActiveTool(null);
     setSidebarOpen(true);
@@ -534,30 +664,14 @@ export default function MapPage() {
 
     const bounds = toBounds(selectedPropertyGeometry);
     if (bounds && mapRef.current) {
-      mapRef.current.fitBounds(bounds, { padding: [40, 40] });
+      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
     }
   }, [selectedPropertyGeometry, renderSelectedHighlight]);
-
-  // Load forest stand data and valuation when selected property changes
-  useEffect(() => {
-    if (!selectedPropertyId) {
-      setForestData(null);
-      setValuation(null);
-      return;
-    }
-    Promise.all([
-      propertiesService.getForestData(selectedPropertyId).catch(() => null),
-      propertiesService.getValuation(selectedPropertyId).catch(() => null),
-    ]).then(([fd, val]) => {
-      setForestData(fd);
-      setValuation(val);
-    });
-  }, [selectedPropertyId]);
 
   const startDraw = useCallback((tool: DrawTool) => {
     if (!mapRef.current || !drawnLayersRef.current) return;
 
-    if (tool && tool !== 'property' && !selectedPropertyId) {
+    if (tool && !selectedPropertyId) {
       setError('Valitse ensin kiinteistö ennen merkinnän tallentamista');
       return;
     }
@@ -576,8 +690,8 @@ export default function MapPage() {
 
     let drawOptions: L.Control.DrawConstructorOptions;
 
-    if (tool === 'property' || tool === 'area' || tool === 'request') {
-      const colors = { property: '#166534', area: '#3b82f6', request: '#ea580c' };
+    if (tool === 'area' || tool === 'request') {
+      const colors = { area: '#3b82f6', request: '#ea580c' };
       drawOptions = {
         draw: {
           polygon: { shapeOptions: { color: colors[tool], dashArray: tool === 'request' ? '8 6' : undefined } },
@@ -620,7 +734,6 @@ export default function MapPage() {
     drawControlRef.current = drawControl;
 
     const handlers: Record<string, string> = {
-      property: 'polygon',
       area: 'polygon',
       request: 'polygon',
       line: 'polyline',
@@ -774,30 +887,6 @@ export default function MapPage() {
     setActiveTool(null);
   }, []);
 
-  const handleSaveProperty = async (name: string) => {
-    try {
-      let prop: Property;
-      if (isGuest) {
-        prop = {
-          id: -Date.now(),
-          name,
-          geometry: pendingGeometry,
-          created_at: new Date().toISOString(),
-        };
-      } else {
-        prop = await propertiesService.create(name, pendingGeometry);
-      }
-      setProperties((prev) => [prop, ...prev]);
-      setSelectedPropertyId(prop.id);
-      setSelectedPropertyGeometry(prop.geometry);
-      drawnLayersRef.current?.clearLayers();
-      setShowForm(false);
-      setActiveTool(null);
-    } catch {
-      setError('Kiinteistön tallennus epäonnistui');
-    }
-  };
-
   const handleSaveMarking = async (data: {
     type: MarkingType;
     title: string;
@@ -930,6 +1019,7 @@ export default function MapPage() {
 
   const handleCancelForm = () => {
     drawnLayersRef.current?.clearLayers();
+    setRequestDraft(null);
     setShowForm(false);
     setActiveTool(null);
     if (drawControlRef.current && mapRef.current) {
@@ -1024,6 +1114,78 @@ export default function MapPage() {
     }
   };
 
+  // Stands of the value view on the map: thin outlines, the selected one filled
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!standsLayerRef.current || !map.hasLayer(standsLayerRef.current)) {
+      standsLayerRef.current = new L.FeatureGroup().addTo(map);
+    }
+    const group = standsLayerRef.current;
+    group.clearLayers();
+    if (!forestValueResult || (!forestValueOpen && !highlightedStandId)) return;
+    forestValueResult.stands.forEach((stand) => {
+      if (!stand.geometry) return;
+      const selected = stand.standId === highlightedStandId;
+      const layer = L.geoJSON(stand.geometry as GeoJSON.Geometry, {
+        style: {
+          color: selected ? '#1d4ed8' : '#166534',
+          weight: selected ? 3 : 1.5,
+          fillColor: selected ? '#3b82f6' : '#22c55e',
+          fillOpacity: selected ? 0.35 : 0.08,
+        },
+      });
+      layer.bindTooltip(standTitle(stand.standNumber), { sticky: true });
+      group.addLayer(layer);
+      if (selected) layer.bringToFront();
+    });
+  }, [forestValueResult, forestValueOpen, highlightedStandId]);
+
+  const handleSelectStand = (standId: string) => {
+    if (selectedPropertyId === null) return;
+    setHighlightedStand({ propertyId: selectedPropertyId, standId });
+    const stand = forestValueResult?.stands.find((s) => s.standId === standId);
+    const bounds = stand ? toBounds(stand.geometry) : null;
+    const map = mapRef.current;
+    if (!map || !bounds) return;
+    const narrow = window.innerWidth < 900;
+    if (narrow) {
+      // The view covers the whole screen on mobile: step aside to show the stand
+      setForestValueOpen(false);
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    } else {
+      // Keep the stand clear of the side panel
+      const panelWidth = document.querySelector('.fv-panel')?.clientWidth ?? 0;
+      map.fitBounds(bounds, { paddingTopLeft: [40, 40], paddingBottomRight: [panelWidth + 40, 40], maxZoom: 16 });
+    }
+  };
+
+  const closeForestValue = () => {
+    setForestValueOpen(false);
+    setHighlightedStand(null);
+  };
+
+  const handleRequestOffers = (op: RecommendedOperation) => {
+    const stand = forestValueResult?.stands.find((s) => s.standId === op.standId);
+    if (!stand?.geometry) return;
+    const type = OPERATION_WORK_TYPE[op.type];
+    const amounts = [
+      op.estimatedRemovalM3 !== null ? `arvioitu kertymä noin ${op.estimatedRemovalM3} m³` : null,
+      op.estimatedIncomeEur !== null ? `arvioitu kantoraha noin ${op.estimatedIncomeEur.toLocaleString('fi-FI')} €` : null,
+    ].filter(Boolean);
+    setRequestDraft({
+      type,
+      title: `${OPERATION_LABEL[op.type]} – ${standTitle(op.standNumber).toLowerCase()}`,
+      note: `Ajankohta: ${op.year}. ${op.reason}${amounts.length ? ` (${amounts.join(', ')})` : ''}`,
+      pricing: suggestedPricing(type),
+    });
+    setPendingGeometry(stand.geometry);
+    setPendingGeometryType('area');
+    setActiveTool('request');
+    setShowForm(true);
+    closeForestValue();
+  };
+
   const handleSelectProperty = (property: Property) => {
     setSelectedPropertyId(property.id);
     setSelectedPropertyGeometry(property.geometry);
@@ -1081,9 +1243,9 @@ export default function MapPage() {
   };
 
   const handleOnSearch = async (propertyCode: string): Promise<CadastreFeature | null> => {
-    const code = propertyCode.trim();
+    const code = propertyCode.trim().replace(/\s*-\s*/g, '-').replace(/\s+/g, '-');
     if (!PROPERTY_CODE_REGEX.test(code)) {
-      setError('Kiinteistötunnus on väärässä muodossa');
+      setError('Kiinteistötunnus on väärässä muodossa. Anna se esim. muodossa 91-401-5-24.');
       return null;
     }
 
@@ -1111,7 +1273,7 @@ export default function MapPage() {
 
       const bounds = layer.getBounds();
       if (bounds.isValid()) {
-        mapRef.current?.fitBounds(bounds, { padding: [40, 40] });
+        mapRef.current?.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
       }
 
       renderSelectedHighlight(feature.geometry, '#0369a1');
@@ -1146,7 +1308,9 @@ export default function MapPage() {
         <div className="map-nav-left">
           <button
             className="sidebar-toggle"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
+            onClick={() => setSidebarOpen((isOpen) => !isOpen)}
+            aria-expanded={sidebarOpen}
+            aria-controls="map-sidebar"
             title="Valikko"
           >
             ☰
@@ -1172,7 +1336,7 @@ export default function MapPage() {
         </div>
       </nav>
 
-      <div className={`map-content ${isGuest ? 'has-guest-banner' : ''}`}>
+      <div className={`map-content ${isGuest ? 'has-guest-banner' : ''} ${sidebarOpen ? 'sidebar-open' : ''}`}>
         {isGuest && (
           <div className="guest-banner">
             <span>Demotila – mitään ei tallenneta</span>
@@ -1187,8 +1351,10 @@ export default function MapPage() {
           markings={markings}
           selectedPropertyId={selectedPropertyId}
           selectedProperty={selectedProperty}
-          forestData={forestData}
-          valuation={valuation}
+          onOpenForestValue={() => {
+            setForestValueOpen(true);
+            setSidebarOpen(false);
+          }}
           isSearching={searchLoading}
           onSearch={handleOnSearch}
           onSelectResult={handleSaveCadastreToProperties}
@@ -1220,7 +1386,7 @@ export default function MapPage() {
             {layerConfig.overlays?.kiinteistorajat && (
               <button
                 className={`layer-btn ${showCadastreOverlay ? 'active' : ''}`}
-                onClick={() => setShowCadastreOverlay((v) => !v)}
+                onClick={() => { setCadastreClickError(''); setShowCadastreOverlay((v) => !v); }}
                 title="Näytä kiinteistörajat ja tunnukset kartalla"
               >
                 Kiinteistörajat
@@ -1235,18 +1401,13 @@ export default function MapPage() {
               {selectedProperty.area_ha !== null && selectedProperty.area_ha !== undefined && (
                 <span>Pinta-ala: {Number(selectedProperty.area_ha).toFixed(2)} ha</span>
               )}
-              {forestData?.status === 'available' && forestData.data?.total_volume_m3 != null && (
-                <span>Puusto: {forestData.data.total_volume_m3.toFixed(0)} m³</span>
-              )}
-              {forestData?.status === 'not_available' && (
-                <span className="info-placeholder">Metsädata ei saatavilla</span>
-              )}
-              {valuation?.status === 'available' && valuation.data?.estimated_value_eur != null && (
-                <span>Arvio: {valuation.data.estimated_value_eur.toLocaleString('fi-FI')} €</span>
-              )}
-              {valuation?.status === 'not_available' && (
-                <span className="info-placeholder">Arviota ei saatavilla</span>
-              )}
+            </div>
+          )}
+
+          {mmlMapUnavailable && !mapNoticeDismissed && (
+            <div className="map-fallback-notice" role="status">
+              <span>Maanmittauslaitoksen kartta ei ole juuri nyt saatavilla, joten näytetään OpenStreetMap.</span>
+              <button onClick={() => setMapNoticeDismissed(true)} aria-label="Sulje ilmoitus">✕</button>
             </div>
           )}
 
@@ -1254,7 +1415,7 @@ export default function MapPage() {
             <div className="tile-loading-indicator" title="Ladataan karttatiloja..." />
           )}
 
-          {showCadastreOverlay && (cadastreClickLoading || clickedCadastre) && (
+          {showCadastreOverlay && layerConfig.overlays?.kiinteistorajat && !activeTool && (
             <div className="clicked-cadastre-panel">
               {cadastreClickLoading ? (
                 <span className="cadastre-click-loading">Haetaan kiinteistöä...</span>
@@ -1263,7 +1424,11 @@ export default function MapPage() {
                   <div className="clicked-cadastre-info">
                     <strong>{clickedCadastre.properties.propertyCode}</strong>
                     {clickedCadastre.properties.areaHa != null && (
-                      <span>{Number(clickedCadastre.properties.areaHa).toFixed(2)} ha</span>
+                      <span>
+                        {Number(clickedCadastre.properties.areaHa).toFixed(2)} ha
+                        {(clickedCadastre.properties.parcelCount ?? 1) > 1 &&
+                          ` · ${clickedCadastre.properties.parcelCount} palstaa`}
+                      </span>
                     )}
                   </div>
                   <div className="clicked-cadastre-name">
@@ -1294,7 +1459,13 @@ export default function MapPage() {
                     </button>
                   </div>
                 </>
-              ) : null}
+              ) : cadastreClickError ? (
+                <span className="cadastre-click-error" role="alert">⚠️ {cadastreClickError}</span>
+              ) : (
+                <span className="cadastre-click-hint">
+                  Valitse kiinteistö klikkaamalla sitä kartalla. Zoomaa lähemmäs, jos rajoja ei näy.
+                </span>
+              )}
             </div>
           )}
 
@@ -1318,9 +1489,14 @@ export default function MapPage() {
                 >
                   🔍 Hae kiinteistötunnuksella
                 </button>
-                <button className="btn btn-secondary btn-compact" onClick={() => startDraw('property')}>
-                  ✏️ Piirrä kartalle
-                </button>
+                {layerConfig.overlays?.kiinteistorajat && (
+                  <button
+                    className="btn btn-secondary btn-compact"
+                    onClick={() => { setEmptyNoticeDismissed(true); setShowCadastreOverlay(true); }}
+                  >
+                    🗺️ Valitse kartalta
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1335,7 +1511,8 @@ export default function MapPage() {
               onClose={() => setActivityOpen(false)}
             />
           ) : (
-            selectedPropertyId && !activeTool && !showForm && (
+            // Hidden while choosing a property on the cadastre layer: the panel uses the same spot
+            selectedPropertyId && !activeTool && !showForm && !(showCadastreOverlay && layerConfig.overlays?.kiinteistorajat) && (
               <button className="activity-fab" onClick={openActivity}>
                 ▶ Aloita aktiviteetti
               </button>
@@ -1352,13 +1529,6 @@ export default function MapPage() {
                 ✕<span>Peruuta</span>
               </button>
             )}
-            <button
-              className={`tool-btn ${activeTool === 'property' ? 'active' : ''}`}
-              onClick={() => (activeTool === 'property' ? startDraw(null) : startDraw('property'))}
-              title="Lisää kiinteistö"
-            >
-              🌳<span>Kiinteistö</span>
-            </button>
             <button
               className={`tool-btn ${activeTool === 'point' ? 'active' : ''}`}
               onClick={() => (activeTool === 'point' ? startDraw(null) : startDraw('point'))}
@@ -1440,6 +1610,25 @@ export default function MapPage() {
             </div>
           )}
 
+          {forestValueOpen && selectedProperty && (
+            <ForestValuePanel
+              property={selectedProperty}
+              entry={forestValue.entry}
+              onReload={() => forestValue.reload(true)}
+              onClose={closeForestValue}
+              selectedStandId={highlightedStandId}
+              onSelectStand={handleSelectStand}
+              onRequestOffers={isGuest ? undefined : handleRequestOffers}
+              onSubmitManual={isGuest ? undefined : forestValue.submitManual}
+            />
+          )}
+
+          {!forestValueOpen && highlightedStandId && (
+            <button type="button" className="fv-back-chip" onClick={() => setForestValueOpen(true)}>
+              ← Takaisin arvoon
+            </button>
+          )}
+
           {error && (
             <div className="map-error" onClick={() => setError('')}>
               ⚠️ {error}
@@ -1451,6 +1640,7 @@ export default function MapPage() {
       {showForm && activeTool === 'request' && (
         <WorkRequestForm
           parcelName={selectedProperty?.name ?? 'Palsta'}
+          initial={requestDraft}
           areaHa={pendingGeometry?.type === 'Polygon' ? calculateAreaHa(pendingGeometry) : null}
           onSubmit={handleCreateWorkRequest}
           onCancel={handleCancelForm}
@@ -1459,10 +1649,8 @@ export default function MapPage() {
 
       {showForm && activeTool !== 'request' && (
         <MarkingForm
-          isProperty={activeTool === 'property'}
           geometryType={pendingGeometryType}
           onSaveMarking={handleSaveMarking}
-          onSaveProperty={handleSaveProperty}
           onCancel={handleCancelForm}
         />
       )}

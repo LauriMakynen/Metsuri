@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { authService } from '../services/forestService';
+import { AuthBackdrop } from '../components/VideoBackdrop';
 
 // Step 1 of password reset: ask for the email address and send a reset link
 export default function ForgotPasswordPage() {
@@ -26,6 +27,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="auth-container">
+      <AuthBackdrop />
       <div className="auth-card">
         <div className="auth-logo">🔑</div>
         <h1 className="auth-title">Salasana unohtunut?</h1>

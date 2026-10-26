@@ -233,6 +233,27 @@ async function migrate() {
       'CREATE INDEX IF NOT EXISTS password_reset_tokens_user_idx ON password_reset_tokens(user_id)'
     );
 
+    // Forest parcel value: last computed result per property. Also served when
+    // the external APIs fail, so it is kept until the geometry changes.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS forest_value_cache (
+        property_id INTEGER PRIMARY KEY REFERENCES properties(id) ON DELETE CASCADE,
+        geometry_hash TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        result JSONB NOT NULL,
+        computed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    // Luke stumpage prices per price area
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS stumpage_price_cache (
+        region_code TEXT PRIMARY KEY,
+        prices JSONB NOT NULL,
+        fetched_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `);
+
     await client.query('COMMIT');
     console.log('Migration completed successfully');
   } catch (error) {

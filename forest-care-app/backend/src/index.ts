@@ -8,6 +8,8 @@ import markingsRoutes from './routes/markings';
 import cadastreRoutes from './routes/cadastre';
 import mapRoutes from './routes/map';
 import workRequestsRoutes from './routes/workRequests';
+import forestValueRoutes from './routes/forestValue';
+import { getAllowedOrigins, isAllowedOrigin } from './config/allowedOrigins';
 
 dotenv.config();
 
@@ -15,14 +17,10 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-const allowedOrigin = process.env.FRONTEND_URL || 'http://localhost:5173';
+const allowedOrigins = getAllowedOrigins(process.env.FRONTEND_URL, process.env.FRONTEND_URLS);
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    // Allow configured origin and any localhost port for development
-    if (origin === allowedOrigin || /^http:\/\/localhost:\d+$/.test(origin)) {
-      return callback(null, true);
-    }
+    if (isAllowedOrigin(origin, allowedOrigins)) return callback(null, true);
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
@@ -63,6 +61,7 @@ app.use('/api/markings', apiLimiter, markingsRoutes);
 app.use('/api/cadastre', cadastreLimiter, cadastreRoutes);
 app.use('/api/map', apiLimiter, mapRoutes);
 app.use('/api/work-requests', apiLimiter, workRequestsRoutes);
+app.use('/api/forest-value', apiLimiter, forestValueRoutes);
 
 // Health check endpoints
 app.get('/health', (_req, res) => {

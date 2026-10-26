@@ -1,7 +1,9 @@
 import { Router, Response } from 'express';
 import pool from '../db/pool';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
-import { isValidPropertyCode } from '../services/cadastreService';
+import { parsePropertyCode } from '../services/cadastreService';
+import { getForestValue, getManualForestValue } from '../services/forestValue/forestValueService';
+import { validateManualInput } from '../services/forestValue/manualStand';
 
 const router = Router();
 
@@ -62,14 +64,17 @@ router.post('/import', async (req: AuthRequest, res: Response): Promise<void> =>
     return;
   }
 
-  if (!isValidPropertyCode(property_code)) {
-    res.status(400).json({ error: 'Kiinteistötunnus on väärässä muodossa' });
+  // Store one canonical display form so the same parcel can't be saved twice in different spellings
+  const parsedCode = typeof property_code === 'string' ? parsePropertyCode(property_code) : null;
+  if (!parsedCode) {
+    res.status(400).json({ error: 'Kiinteistötunnus on väärässä muodossa (esim. 91-401-5-24)' });
     return;
   }
+  const propertyCode = parsedCode.display;
 
   const resolvedName = typeof name === 'string' && name.trim()
     ? name.trim()
-    : `Kiinteisto ${property_code}`;
+    : `Kiinteisto ${propertyCode}`;
 
   try {
     const result = await pool.query(
@@ -78,7 +83,7 @@ router.post('/import', async (req: AuthRequest, res: Response): Promise<void> =>
        RETURNING id, name, property_code, source, area_ha,
                  ST_AsGeoJSON(geometry)::json AS geometry,
                  created_at, updated_at`,
-      [req.userId, resolvedName, property_code, area_ha || null, JSON.stringify(geometry)]
+      [req.userId, resolvedName, propertyCode, area_ha || null, JSON.stringify(geometry)]
     );
 
     res.status(201).json(result.rows[0]);
@@ -196,76 +201,51 @@ router.delete('/:id', async (req: AuthRequest, res: Response): Promise<void> => 
   }
 });
 
-// GET /api/properties/:id/forest-data - Forest stand data for a property
-// Returns placeholder until Metsäkeskus API integration is connected.
-router.get('/:id/forest-data', async (req: AuthRequest, res: Response): Promise<void> => {
-  const { id } = req.params;
+// GET /api/properties/:id/forest-value - Timber value, stands and recommended operations
+// ?refresh=1 bypasses the result cache (external APIs are queried again)
+router.get('/:id/forest-value', async (req: AuthRequest, res: Response): Promise<void> => {
+  const propertyId = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(propertyId)) {
+    res.status(400).json({ error: 'Invalid property id' });
+    return;
+  }
   try {
-    const propCheck = await pool.query(
-      'SELECT id FROM properties WHERE id = $1 AND user_id = $2',
-      [id, req.userId]
-    );
-    if (propCheck.rows.length === 0) {
+    const response = await getForestValue(propertyId, req.userId as number, {
+      refresh: req.query.refresh === '1',
+    });
+    if (!response) {
       res.status(404).json({ error: 'Property not found' });
       return;
     }
-
-    const result = await pool.query(
-      `SELECT * FROM forest_stand_data
-       WHERE property_id = $1 AND user_id = $2
-       ORDER BY created_at DESC LIMIT 1`,
-      [id, req.userId]
-    );
-
-    if (result.rows.length === 0) {
-      res.json({
-        status: 'not_available',
-        message: 'Metsävaratietoja ei ole vielä saatavilla tälle kiinteistölle.',
-        data: null,
-      });
-      return;
-    }
-
-    res.json({ status: 'available', data: result.rows[0] });
+    res.json(response);
   } catch (error) {
-    console.error('Get forest data error:', error);
+    console.error('Get forest value error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// GET /api/properties/:id/valuation - Forest valuation for a property
-// Returns placeholder until timber price data integration is connected.
-router.get('/:id/valuation', async (req: AuthRequest, res: Response): Promise<void> => {
-  const { id } = req.params;
+// POST /api/properties/:id/forest-value/manual - Value from owner-entered basics
+// (species, ageYears, volumeM3PerHa) when there is no forest resource data
+router.post('/:id/forest-value/manual', async (req: AuthRequest, res: Response): Promise<void> => {
+  const propertyId = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(propertyId)) {
+    res.status(400).json({ error: 'Invalid property id' });
+    return;
+  }
+  const validated = validateManualInput(req.body);
+  if ('error' in validated) {
+    res.status(400).json({ error: validated.error });
+    return;
+  }
   try {
-    const propCheck = await pool.query(
-      'SELECT id FROM properties WHERE id = $1 AND user_id = $2',
-      [id, req.userId]
-    );
-    if (propCheck.rows.length === 0) {
+    const response = await getManualForestValue(propertyId, req.userId as number, validated.value);
+    if (!response) {
       res.status(404).json({ error: 'Property not found' });
       return;
     }
-
-    const result = await pool.query(
-      `SELECT * FROM forest_valuation
-       WHERE property_id = $1 AND user_id = $2
-       ORDER BY created_at DESC LIMIT 1`,
-      [id, req.userId]
-    );
-
-    if (result.rows.length === 0) {
-      res.json({
-        status: 'not_available',
-        message: 'Arviota ei voida laskea ilman puustotietoja.',
-        data: null,
-      });
-      return;
-    }
-
-    res.json({ status: 'available', data: result.rows[0] });
+    res.json(response);
   } catch (error) {
-    console.error('Get valuation error:', error);
+    console.error('Manual forest value error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
