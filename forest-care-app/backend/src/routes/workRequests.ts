@@ -223,6 +223,37 @@ router.post('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response)
   }
 });
 
+// DELETE /api/work-requests/:id/bids - Remove the authenticated user's own bid
+router.delete('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+
+  if (!/^\d+$/.test(id)) {
+    res.status(400).json({ error: 'Invalid id' });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      'DELETE FROM work_request_bids WHERE work_request_id = $1 AND user_id = $2 RETURNING id',
+      [id, req.userId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Tarjousta ei löytynyt' });
+      return;
+    }
+
+    const [updated] = await fetchPublicRequests(req.userId ?? null, { id: Number(id) });
+    if (!updated) {
+      res.status(404).json({ error: 'Työpyyntöä ei löytynyt tai se ei ole enää avoinna' });
+      return;
+    }
+    res.json(updated);
+  } catch (error) {
+    console.error('Delete bid error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // DELETE /api/work-requests/:id - Withdraw a work request (user must own it)
 router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params;

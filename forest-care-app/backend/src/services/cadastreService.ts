@@ -1,9 +1,18 @@
+import { area as turfArea } from '@turf/turf';
+import type { Feature, MultiPolygon, Polygon } from 'geojson';
+
 export type CadastreSource = 'mml' | 'mock';
 
 // Kiinteistötunnus: kunta (1–3) - kylä/rekisteriyksikkö (1–3) - tila (1–4) - yksikkö (1–4) digits,
 // as MML shows it without leading zeros (e.g. 91-2-9901-100), or the 14-digit canonical form.
 const DISPLAY_CODE_REGEX = /^(\d{1,3})-(\d{1,3})-(\d{1,4})-(\d{1,4})$/;
 const CANONICAL_CODE_REGEX = /^(\d{3})(\d{3})(\d{4})(\d{4})$/;
+
+const MML_FEATURES_BASE =
+  'https://avoin-paikkatieto.maanmittauslaitos.fi/kiinteisto-avoin/simple-features/v3/collections/PalstanSijaintitiedot/items';
+// A property can have many parcels (palstat); OGC API Features returns only 10 by default
+const MML_PARCEL_LIMIT = 100;
+const MML_TIMEOUT_MS = 10_000;
 
 interface ParsedPropertyCode {
   // MML "kiinteistotunnuksenEsitysmuoto", e.g. 91-2-9901-100
@@ -39,6 +48,14 @@ export class CadastreApiNotConfiguredError extends Error {
   }
 }
 
+/** Thrown when the MML service does not answer or answers with an error. Map to HTTP 503. */
+export class CadastreUnavailableError extends Error {
+  constructor() {
+    super('Maanmittauslaitoksen kiinteistöpalvelu ei vastaa juuri nyt. Yritä hetken kuluttua uudelleen.');
+    this.name = 'CadastreUnavailableError';
+  }
+}
+
 type Position = [number, number];
 type Geometry =
   | { type: 'Point'; coordinates: Position }
@@ -48,19 +65,16 @@ type Geometry =
 
 interface UnknownFeature {
   type: 'Feature';
-  geometry: Geometry;
-  properties?: Record<string, unknown>;
-}
-
-interface UnknownFeatureCollection {
-  type: 'FeatureCollection';
-  features: UnknownFeature[];
+  geometry: Geometry | null;
+  properties?: Record<string, unknown> | null;
 }
 
 export interface CadastreFeatureProperties {
   propertyCode: string;
   name: string;
   areaHa?: number;
+  // Number of separate parcels (palstat) the property consists of
+  parcelCount?: number;
   source: CadastreSource;
 }
 
@@ -76,85 +90,57 @@ function isFeature(value: unknown): value is UnknownFeature {
   return item.type === 'Feature' && !!item.geometry;
 }
 
-function isFeatureCollection(value: unknown): value is UnknownFeatureCollection {
+function isFeatureCollection(value: unknown): value is { type: 'FeatureCollection'; features: unknown[] } {
   if (!value || typeof value !== 'object') return false;
   const item = value as { type?: unknown; features?: unknown };
   return item.type === 'FeatureCollection' && Array.isArray(item.features);
 }
 
-function normalizeMmlResponse(data: unknown, propertyCode: string): CadastreFeature | null {
-  const withProps = (geometry: Geometry, sourceName?: string, areaHa?: number): CadastreFeature => ({
+function geodesicAreaHa(geometry: Polygon | MultiPolygon): number {
+  const feature: Feature<Polygon | MultiPolygon> = { type: 'Feature', geometry, properties: {} };
+  return Math.round((turfArea(feature) / 10_000) * 100) / 100;
+}
+
+/**
+ * Combine MML parcel features (PalstanSijaintitiedot: one feature per palsta) into one property.
+ * One parcel stays a Polygon; several become a MultiPolygon. The area is computed from the
+ * merged geometry so it always covers every parcel. Returns null when there is no polygon.
+ */
+export function mergeCadastreFeatures(data: unknown, propertyCode: string): CadastreFeature | null {
+  const features: UnknownFeature[] = isFeatureCollection(data)
+    ? data.features.filter(isFeature)
+    : isFeature(data)
+      ? [data]
+      : [];
+
+  const polygons: Position[][][] = [];
+  for (const feature of features) {
+    const geometry = feature.geometry;
+    if (geometry?.type === 'Polygon') polygons.push(geometry.coordinates);
+    else if (geometry?.type === 'MultiPolygon') polygons.push(...geometry.coordinates);
+  }
+  if (polygons.length === 0) return null;
+
+  const geometry: Polygon | MultiPolygon =
+    polygons.length === 1
+      ? { type: 'Polygon', coordinates: polygons[0] }
+      : { type: 'MultiPolygon', coordinates: polygons };
+
+  const displayCode = features
+    .map((f) => f.properties?.kiinteistotunnuksenEsitysmuoto)
+    .find((value): value is string => typeof value === 'string');
+
+  return {
     type: 'Feature',
-    geometry,
+    geometry: geometry as Geometry,
     properties: {
       propertyCode,
-      name: sourceName || `Kiinteisto ${propertyCode}`,
-      areaHa,
+      name: displayCode ?? `Kiinteistö ${propertyCode}`,
+      areaHa: geodesicAreaHa(geometry),
+      parcelCount: polygons.length,
       source: 'mml',
     },
-  });
-
-  if (isFeature(data)) {
-    const areaCandidate = (data.properties as { areaHa?: unknown; area_ha?: unknown; area?: unknown } | null)?.areaHa
-      ?? (data.properties as { areaHa?: unknown; area_ha?: unknown; area?: unknown } | null)?.area_ha
-      ?? (data.properties as { areaHa?: unknown; area_ha?: unknown; area?: unknown } | null)?.area;
-    const nameCandidate = (data.properties as { name?: unknown; propertyName?: unknown } | null)?.name
-      ?? (data.properties as { name?: unknown; propertyName?: unknown } | null)?.propertyName;
-    return withProps(
-      data.geometry as Geometry,
-      typeof nameCandidate === 'string' ? nameCandidate : undefined,
-      typeof areaCandidate === 'number' ? areaCandidate : undefined
-    );
-  }
-
-  if (isFeatureCollection(data) && data.features.length > 0) {
-    const first = data.features[0];
-    if (!first.geometry) return null;
-    type MmlProps = {
-      areaHa?: unknown; area_ha?: unknown; area?: unknown;
-      name?: unknown; propertyName?: unknown;
-      kiinteistotunnuksenEsitysmuoto?: unknown;
-    };
-    const props = first.properties as MmlProps | null;
-    const areaCandidate = props?.areaHa ?? props?.area_ha ?? props?.area;
-    const nameCandidate =
-      props?.kiinteistotunnuksenEsitysmuoto ?? props?.name ?? props?.propertyName;
-    return withProps(
-      first.geometry as Geometry,
-      typeof nameCandidate === 'string' ? nameCandidate : undefined,
-      typeof areaCandidate === 'number' ? areaCandidate : undefined
-    );
-  }
-
-  if (data && typeof data === 'object') {
-    const maybe = data as {
-      geometry?: Geometry;
-      name?: unknown;
-      propertyName?: unknown;
-      areaHa?: unknown;
-      area_ha?: unknown;
-      area?: unknown;
-    };
-    if (maybe.geometry) {
-      return withProps(
-        maybe.geometry,
-        typeof maybe.name === 'string'
-          ? maybe.name
-          : typeof maybe.propertyName === 'string'
-            ? maybe.propertyName
-            : undefined,
-        typeof maybe.areaHa === 'number'
-          ? maybe.areaHa
-          : typeof maybe.area_ha === 'number'
-            ? maybe.area_ha
-            : typeof maybe.area === 'number'
-              ? maybe.area
-              : undefined
-      );
-    }
-  }
-
-  return null;
+  };
 }
 
 function createMockFeature(propertyCode: string): CadastreFeature {
@@ -183,6 +169,7 @@ function createMockFeature(propertyCode: string): CadastreFeature {
       propertyCode,
       name: `Kiinteisto ${propertyCode}`,
       areaHa: 4,
+      parcelCount: 1,
       source: 'mock',
     },
   };
@@ -192,6 +179,54 @@ export function isValidPropertyCode(value: string): boolean {
   return typeof value === 'string' && parsePropertyCode(value) !== null;
 }
 
+/** GET JSON from MML. Returns null for 404; throws CadastreUnavailableError when MML is unreachable or fails. */
+async function fetchMmlJson(url: string, apiKey: string): Promise<unknown | null> {
+  const safeUrl = url.replace(apiKey, '***');
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { Accept: 'application/geo+json' },
+      signal: AbortSignal.timeout(MML_TIMEOUT_MS),
+    });
+  } catch (error) {
+    console.error(`[cadastre] MML did not respond: ${safeUrl}`, error instanceof Error ? error.message : error);
+    throw new CadastreUnavailableError();
+  }
+
+  const responseText = await response.text();
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    console.error(`[cadastre] MML API error ${response.status} for ${safeUrl}\n  Response body: ${responseText.slice(0, 500)}`);
+    throw new CadastreUnavailableError();
+  }
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    console.error(`[cadastre] Non-JSON response from MML: ${responseText.slice(0, 200)}`);
+    throw new CadastreUnavailableError();
+  }
+}
+
+/** Build the MML query URL for every parcel of one property from MML_CADASTRE_API_URL. */
+function propertyQueryUrl(urlTemplate: string, canonicalCode: string, apiKey: string): string {
+  const encodedCode = encodeURIComponent(canonicalCode);
+  // Use ?api-key= URL param – Basic auth causes HTTP 500 with Node.js undici/HTTP2
+  let url = urlTemplate
+    .replace('{propertyCode}', encodedCode)
+    .replace(/[?&]api-key=[^&]*/i, '') // remove existing api-key param if any
+    .replace(/&&/, '&')
+    .replace(/\?&/, '?');
+
+  const add = (param: string) => {
+    url = `${url}${url.includes('?') ? '&' : '?'}${param}`;
+  };
+  if (!url.includes(encodedCode)) add(`kiinteistotunnus=${encodedCode}`);
+  if (!/[?&]limit=/i.test(url)) add(`limit=${MML_PARCEL_LIMIT}`);
+  add(`api-key=${encodeURIComponent(apiKey)}`);
+  return url;
+}
+
+/** Whole property (all parcels) by kiinteistötunnus. Null when the code is invalid or not found. */
 export async function searchCadastreByPropertyCode(propertyCodeRaw: string): Promise<CadastreFeature | null> {
   const parsed = parsePropertyCode(propertyCodeRaw);
   if (!parsed) {
@@ -213,60 +248,21 @@ export async function searchCadastreByPropertyCode(propertyCodeRaw: string): Pro
     throw new CadastreApiNotConfiguredError();
   }
 
-  const canonicalPropertyCode = parsed.canonical;
-  const encodedCanonicalCode = encodeURIComponent(canonicalPropertyCode);
-  // Build URL from template – use ?api-key= URL param (Basic auth causes HTTP 500 with Node.js undici/HTTP2)
-  let targetUrl = urlTemplate
-    .replace('{propertyCode}', encodedCanonicalCode)
-    .replace(/[?&]api-key=[^&]*/i, '')  // remove existing api-key param if any
-    .replace(/&&/, '&')
-    .replace(/\?&/, '?');
+  const url = propertyQueryUrl(urlTemplate, parsed.canonical, apiKey);
+  console.log(`[cadastre] Querying MML: ${url.replace(apiKey, '***')} (input: ${propertyCode})`);
 
-  if (!targetUrl.includes(encodedCanonicalCode)) {
-    const glue = targetUrl.includes('?') ? '&' : '?';
-    targetUrl = `${targetUrl}${glue}kiinteistotunnus=${encodedCanonicalCode}`;
-  }
-
-  const glue = targetUrl.includes('?') ? '&' : '?';
-  targetUrl = `${targetUrl}${glue}api-key=${encodeURIComponent(apiKey)}`;
-
-  console.log(`[cadastre] Querying MML: ${targetUrl.replace(apiKey, '***')} (input: ${propertyCode}, canonical: ${canonicalPropertyCode})`);
-
-  const response = await fetch(targetUrl, {
-    headers: { Accept: 'application/geo+json' },
-  });
-
-  const responseText = await response.text();
-
-  if (response.status === 404) {
+  const data = await fetchMmlJson(url, apiKey);
+  if (data === null) {
     console.log(`[cadastre] Property not found: ${propertyCode}`);
     return null;
   }
-
-  if (!response.ok) {
-    console.error(
-      `[cadastre] MML API error ${response.status} for ${targetUrl}\n` +
-      `  Input: ${propertyCode}, canonical: ${canonicalPropertyCode}\n` +
-      `  Response body: ${responseText.slice(0, 500)}`
-    );
-    throw new Error(`MML request failed with status ${response.status}`);
-  }
-
-  let data: unknown;
-  try {
-    data = JSON.parse(responseText);
-  } catch {
-    console.error(`[cadastre] Non-JSON response from MML: ${responseText.slice(0, 200)}`);
-    throw new Error('MML returned non-JSON response');
-  }
-
-  return normalizeMmlResponse(data, propertyCode);
+  return mergeCadastreFeatures(data, propertyCode);
 }
 
 /**
- * Search for a property (palsta) at the given WGS84 coordinates.
- * Uses MML OGC API Features with a small bounding box around the click point.
- * Returns null if no property is found or MML is not configured.
+ * Property at the given WGS84 coordinates. Finds the clicked parcel, then loads the whole
+ * property by its kiinteistötunnus so that every parcel is included.
+ * Returns null if nothing is found or MML is not configured.
  */
 export async function searchCadastreByCoordinates(
   lat: number,
@@ -281,52 +277,34 @@ export async function searchCadastreByCoordinates(
   // CRS84 uses lon/lat axis order: bbox=minLon,minLat,maxLon,maxLat
   const delta = 0.00015;
   const bboxStr = `${lng - delta},${lat - delta},${lng + delta},${lat + delta}`;
-  // Use ?api-key= URL param — Basic auth causes HTTP 500 with Node.js undici/HTTP2
-  const url =
-    `https://avoin-paikkatieto.maanmittauslaitos.fi/kiinteisto-avoin/simple-features/v3` +
-    `/collections/PalstanSijaintitiedot/items` +
-    `?bbox=${bboxStr}&limit=1&api-key=${encodeURIComponent(apiKey)}`;
+  // Same collection as the property query (MML_CADASTRE_API_URL without its query string)
+  const base = process.env.MML_CADASTRE_API_URL?.split('?')[0] || MML_FEATURES_BASE;
+  const url = `${base}?bbox=${bboxStr}&limit=1&api-key=${encodeURIComponent(apiKey)}`;
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      headers: { Accept: 'application/geo+json' },
-    });
-  } catch (err) {
-    console.error('[cadastre] Coordinate search network error:', err);
-    return null;
-  }
+  const data = await fetchMmlJson(url, apiKey);
+  if (!isFeatureCollection(data)) return null;
+  const clicked = data.features.find(isFeature);
+  if (!clicked) return null;
 
-  if (!response.ok) return null;
-
-  let data: unknown;
-  try {
-    data = await response.json();
-  } catch {
-    return null;
-  }
-
-  if (!isFeatureCollection(data) || data.features.length === 0) return null;
-
-  const first = data.features[0];
-  if (!first.geometry) return null;
-
-  type MmlProps = { kiinteistotunnus?: unknown; kiinteistotunnuksenEsitysmuoto?: unknown };
-  const props = first.properties as MmlProps | null;
-  const displayCode =
-    typeof props?.kiinteistotunnuksenEsitysmuoto === 'string'
+  const props = clicked.properties ?? {};
+  const code =
+    typeof props.kiinteistotunnuksenEsitysmuoto === 'string'
       ? props.kiinteistotunnuksenEsitysmuoto
-      : typeof props?.kiinteistotunnus === 'string'
+      : typeof props.kiinteistotunnus === 'string'
         ? props.kiinteistotunnus
-        : 'Tuntematon';
+        : null;
+  const parsed = code ? parsePropertyCode(code) : null;
+  const displayCode = parsed?.display ?? code ?? 'Tuntematon';
 
-  return {
-    type: 'Feature',
-    geometry: first.geometry as Geometry,
-    properties: {
-      propertyCode: displayCode,
-      name: `Kiinteistö ${displayCode}`,
-      source: 'mml',
-    },
-  };
+  // Whole property; fall back to the clicked parcel if the property query fails.
+  // Without a configured property query URL the code search would return mock data, so skip it.
+  if (parsed && process.env.MML_CADASTRE_API_URL) {
+    try {
+      const whole = await searchCadastreByPropertyCode(parsed.canonical);
+      if (whole) return whole;
+    } catch (error) {
+      console.warn('[cadastre] Loading all parcels failed, using the clicked parcel only:', error);
+    }
+  }
+  return mergeCadastreFeatures(clicked, displayCode);
 }

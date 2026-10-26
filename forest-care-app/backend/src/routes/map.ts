@@ -44,6 +44,9 @@ router.get('/layers', authMiddleware, (_req: AuthRequest, res: Response) => {
       ortokuva:
         'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     },
+    overlays: {
+      kiinteistorajat: '/api/map/tiles/kiinteistorajat/{z}/{x}/{y}',
+    },
     attribution: 'OpenStreetMap / Esri',
   });
 });
