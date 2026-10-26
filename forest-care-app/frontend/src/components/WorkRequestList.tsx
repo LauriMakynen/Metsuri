@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { formatArea } from '../utils/measurement';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { TARGET_PRICE_LABEL, bidSummaryText, formatEur } from '../utils/bids';
+import WorkRequestPhotoGallery from './WorkRequestPhotos';
 import type { WorkRequest } from '../types';
 
 interface WorkRequestListProps {
@@ -10,6 +11,7 @@ interface WorkRequestListProps {
   canPublish: boolean;
   onNewRequest: () => void;
   onWithdraw: (requestId: number) => Promise<void>;
+  onUpdated: (updated: WorkRequest) => void;
 }
 
 // The owner's own work requests (planned work) on the selected parcel, with anonymous offers
@@ -19,6 +21,7 @@ export default function WorkRequestList({
   canPublish,
   onNewRequest,
   onWithdraw,
+  onUpdated,
 }: WorkRequestListProps) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [requestToWithdraw, setRequestToWithdraw] = useState<WorkRequest | null>(null);
@@ -80,6 +83,7 @@ export default function WorkRequestList({
                 )}
                 <small className="work-request-bids">💶 {bidSummaryText(r)}</small>
                 {r.note && <small className="work-request-note">{r.note}</small>}
+                <WorkRequestPhotoGallery requestId={r.id} photos={r.photos} editable onUpdated={onUpdated} />
                 <button className="btn-link" disabled={busyId === r.id} onClick={() => setRequestToWithdraw(r)}>
                   {busyId === r.id ? 'Perutaan...' : 'Peru työpyyntö'}
                 </button>

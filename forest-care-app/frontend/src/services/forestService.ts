@@ -221,6 +221,7 @@ function normalizePublicRequest(r: PublicWorkRequest): PublicWorkRequest {
     target_price_eur: normalizeNumber(r.target_price_eur),
     best_bid_eur: normalizeNumber(r.best_bid_eur),
     my_bid_eur: normalizeNumber(r.my_bid_eur),
+    photos: r.photos ?? [],
   };
 }
 
@@ -231,6 +232,7 @@ function normalizeOwnRequest(r: WorkRequest): WorkRequest {
     target_price_eur: normalizeNumber(r.target_price_eur),
     bid_count: r.bid_count ?? 0,
     best_bid_eur: normalizeNumber(r.best_bid_eur),
+    photos: r.photos ?? [],
   };
 }
 
@@ -264,6 +266,22 @@ export const workRequestsService = {
   withdraw: async (id: number): Promise<void> => {
     await api.delete(`/api/work-requests/${id}`);
   },
+  // Photo as a raw JPEG body; returns the request with its updated photo list
+  uploadPhoto: async (requestId: number, photo: Blob, takenAt: Date | null): Promise<WorkRequest> => {
+    const response = await api.post<WorkRequest>(`/api/work-requests/${requestId}/photos`, photo, {
+      headers: {
+        'Content-Type': photo.type || 'image/jpeg',
+        ...(takenAt ? { 'X-Taken-At': takenAt.toISOString() } : {}),
+      },
+      timeout: 60_000,
+    });
+    return normalizeOwnRequest(response.data);
+  },
+  deletePhoto: async (requestId: number, photoId: number): Promise<WorkRequest> => {
+    const response = await api.delete<WorkRequest>(`/api/work-requests/${requestId}/photos/${photoId}`);
+    return normalizeOwnRequest(response.data);
+  },
+  photoUrl: (photoId: number): string => `${api.defaults.baseURL ?? ''}/api/work-request-photos/${photoId}`,
 };
 
 export const cadastreService = {
