@@ -1225,3 +1225,57 @@ html, body, #root {
 .fv-manual-actions { display: flex; gap: 0.5rem; justify-content: flex-end; }
 .fv-panel-source .btn-link { font-size: inherit; }
 @media (prefers-reduced-motion: reduce) { .fv-spin { animation: none; } }
+
+/* Work request photos */
+.form-label { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+.form-label small { font-weight: 400; color: var(--text-light); }
+.photo-pick { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.photo-pick .btn { min-height: 44px; }
+.sidebar-item .photo-pick .btn {
+  min-height: 36px; padding: 0.3rem 0.7rem; font-size: 0.8rem;
+  background: var(--white); border: 1px solid var(--border);
+}
+/* Override the generic ".sidebar-item div" column layout */
+.sidebar-item .photo-gallery { flex: none; align-self: stretch; gap: 0.5rem; }
+.sidebar-item .photo-pick { flex-direction: row; flex: none; }
+.sidebar-item .photo-upload-failed { flex: none; gap: 0.4rem; }
+.photo-pick-status { color: var(--text-light); font-size: 0.82rem; }
+.photo-error-text { color: var(--error); font-size: 0.82rem; }
+.photo-grid {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 0.4rem;
+}
+.photo-thumb { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; background: #e5e7eb; }
+.photo-thumb > button:not(.photo-thumb-remove) { display: block; width: 100%; height: 100%; padding: 0; border: none; cursor: zoom-in; background: none; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-thumb-remove {
+  position: absolute; top: 3px; right: 3px; width: 26px; height: 26px; border-radius: 50%;
+  border: none; background: rgba(0,0,0,0.65); color: #fff; font-size: 0.8rem; cursor: pointer; line-height: 1;
+}
+.photo-gallery { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.4rem; }
+.request-card .photo-gallery { padding: 0 0.9rem 0.6rem; margin-top: 0; }
+.photo-upload-failed { display: flex; flex-direction: column; gap: 0.4rem; }
+.photo-upload-failed .photo-thumb { opacity: 0.6; outline: 2px solid var(--error); outline-offset: -2px; }
+.photo-upload-actions { display: flex; align-items: center; gap: 0.75rem; }
+.photo-error { margin-bottom: 0; font-size: 0.82rem; padding: 0.5rem 0.7rem; }
+
+.photo-lightbox { align-items: center; padding: 0.5rem; }
+.photo-lightbox-card {
+  background: #111; color: #fff; border-radius: var(--radius); overflow: hidden;
+  width: min(960px, 100%); max-height: 100%; display: flex; flex-direction: column;
+}
+.photo-lightbox-image { position: relative; display: flex; justify-content: center; background: #000; min-height: 0; }
+.photo-lightbox-image img { max-width: 100%; max-height: calc(100vh - 8rem); object-fit: contain; display: block; }
+.photo-nav {
+  position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%;
+  border: none; background: rgba(0,0,0,0.55); color: #fff; font-size: 1.8rem; line-height: 1; cursor: pointer;
+}
+.photo-nav.prev { left: 0.5rem; }
+.photo-nav.next { right: 0.5rem; }
+.photo-lightbox-bar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem;
+  padding: 0.6rem 0.8rem; font-size: 0.85rem;
+}
+.photo-lightbox-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.photo-lightbox-actions .btn { flex: none; }
+.photo-lightbox-error { margin: 0 0.8rem 0.8rem; }

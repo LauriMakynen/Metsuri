@@ -27,6 +27,7 @@ interface SidebarProps {
   canPublishRequests: boolean;
   onNewWorkRequest: () => void;
   onWithdrawWorkRequest: (requestId: number) => Promise<void>;
+  onWorkRequestUpdated: (updated: WorkRequest) => void;
 }
 
 export default function Sidebar({
@@ -46,6 +47,7 @@ export default function Sidebar({
   canPublishRequests,
   onNewWorkRequest,
   onWithdrawWorkRequest,
+  onWorkRequestUpdated,
 }: SidebarProps) {
   return (
     <aside id="map-sidebar" className={`map-sidebar ${isOpen ? 'open' : ''}`}>
@@ -70,6 +72,7 @@ export default function Sidebar({
           canPublish={canPublishRequests}
           onNewRequest={onNewWorkRequest}
           onWithdraw={onWithdrawWorkRequest}
+          onUpdated={onWorkRequestUpdated}
         />
 
         <MarkingList
