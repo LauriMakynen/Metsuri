@@ -574,6 +574,8 @@ export default function MapPage() {
     }
 
     const layer = L.geoJSON(geometry as GeoJSON.Geometry, {
+      // The highlight is visual only; it must not block clicks on properties or markings below it.
+      interactive: false,
       style: {
         color,
         weight: 4,
