@@ -501,14 +501,23 @@ export default function MapPage() {
   }, [isGuest]);
 
   // Publish the area just drawn with the "Työpyyntö" tool
-  const handleCreateWorkRequest = async (data: WorkRequestFormData) => {
-    if (!selectedPropertyId || !pendingGeometry) return;
+  const handleCreateWorkRequest = async (data: WorkRequestFormData): Promise<WorkRequest> => {
+    if (!selectedPropertyId || !pendingGeometry) throw new Error('Merkitse työn alue kartalle');
     const request = await workRequestsService.create({
       ...data,
       property_id: selectedPropertyId,
       geometry: pendingGeometry,
     });
     setWorkRequests((prev) => [request, ...prev]);
+    return request;
+  };
+
+  const handleWorkRequestUpdated = (updated: WorkRequest) => {
+    setWorkRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+  };
+
+  // Published (photos uploaded or given up): clear the drawing and show the request in the sidebar
+  const finishWorkRequest = () => {
     drawnLayersRef.current?.clearLayers();
     setRequestDraft(null);
     setShowForm(false);
@@ -1365,6 +1374,7 @@ export default function MapPage() {
           canPublishRequests={!isGuest}
           onNewWorkRequest={openNewWorkRequest}
           onWithdrawWorkRequest={handleWithdrawWorkRequest}
+          onWorkRequestUpdated={handleWorkRequestUpdated}
         />
 
         <div className="map-wrapper">
@@ -1643,6 +1653,8 @@ export default function MapPage() {
           initial={requestDraft}
           areaHa={pendingGeometry?.type === 'Polygon' ? calculateAreaHa(pendingGeometry) : null}
           onSubmit={handleCreateWorkRequest}
+          onUpdated={handleWorkRequestUpdated}
+          onDone={finishWorkRequest}
           onCancel={handleCancelForm}
         />
       )}

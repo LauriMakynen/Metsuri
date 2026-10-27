@@ -9,6 +9,7 @@ import cadastreRoutes from './routes/cadastre';
 import mapRoutes from './routes/map';
 import workRequestsRoutes from './routes/workRequests';
 import forestValueRoutes from './routes/forestValue';
+import workRequestPhotosRoutes from './routes/workRequestPhotos';
 import { getAllowedOrigins, isAllowedOrigin } from './config/allowedOrigins';
 
 dotenv.config();
@@ -54,6 +55,15 @@ const cadastreLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Photo views: a list page shows many thumbnails at once
+const photoLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1500,
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // API Routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/properties', apiLimiter, propertiesRoutes);
@@ -62,6 +72,7 @@ app.use('/api/cadastre', cadastreLimiter, cadastreRoutes);
 app.use('/api/map', apiLimiter, mapRoutes);
 app.use('/api/work-requests', apiLimiter, workRequestsRoutes);
 app.use('/api/forest-value', apiLimiter, forestValueRoutes);
+app.use('/api/work-request-photos', photoLimiter, workRequestPhotosRoutes);
 
 // Health check endpoints
 app.get('/health', (_req, res) => {
