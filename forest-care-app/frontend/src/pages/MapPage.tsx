@@ -135,6 +135,7 @@ function getMapLayerConfigFromEnv(): MapLayerConfig | null {
 export default function MapPage() {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const layerSwitcherRef = useRef<HTMLDivElement>(null);
   const drawControlRef = useRef<L.Control.Draw | null>(null);
   const drawnLayersRef = useRef<L.FeatureGroup | null>(null);
   const propertiesLayerRef = useRef<L.FeatureGroup | null>(null);
@@ -151,6 +152,8 @@ export default function MapPage() {
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
+  const [layerMenuOpen, setLayerMenuOpen] = useState(true);
+  const [drawMenuOpen, setDrawMenuOpen] = useState(true);
   // Guests start on an example parcel so the demo has something to try right away
   const [properties, setProperties] = useState<Property[]>(() => (isGuest ? [DEMO_PROPERTY] : []));
   const [markings, setMarkings] = useState<Marking[]>(() => (isGuest ? DEMO_MARKINGS : []));
@@ -196,6 +199,22 @@ export default function MapPage() {
   // Measurement tool state
   const [measurementPoints, setMeasurementPoints] = useState<[number, number][]>([]);
   const [measurementDistance, setMeasurementDistance] = useState<number | null>(null);
+
+  useEffect(() => {
+    const layerSwitcher = layerSwitcherRef.current;
+    if (!layerSwitcher) return;
+
+    const updateHeight = () => {
+      layerSwitcher.parentElement?.style.setProperty(
+        '--layer-switcher-height',
+        `${layerSwitcher.getBoundingClientRect().height}px`
+      );
+    };
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(layerSwitcher);
+    updateHeight();
+    return () => observer.disconnect();
+  }, []);
 
   const selectedProperty = useMemo(
     () => properties.find((p) => p.id === selectedPropertyId) ?? null,
@@ -1393,20 +1412,37 @@ export default function MapPage() {
         <div className="map-wrapper">
           <div ref={mapContainerRef} className="leaflet-map" />
 
-          <div className="layer-switcher" role="group" aria-label="Karttataso">
+          <div
+            ref={layerSwitcherRef}
+            className={`layer-switcher ${layerMenuOpen ? 'menu-open' : 'menu-closed'}`}
+            role="group"
+            aria-label="Karttataso"
+          >
             <button
-              className={`layer-btn ${activeBaseLayer === 'maastokartta' || activeBaseLayer === 'peruskartta' ? 'active' : ''}`}
-              onClick={() => setActiveBaseLayer('maastokartta')}
+              className="map-control-toggle"
+              onClick={() => setLayerMenuOpen((open) => !open)}
+              aria-expanded={layerMenuOpen}
+              aria-label="Karttatasot"
             >
-              Maastokartta
+              ▾
             </button>
-            <button
-              className={`layer-btn ${activeBaseLayer === 'ortokuva' ? 'active' : ''}`}
-              onClick={() => setActiveBaseLayer('ortokuva')}
-            >
-              Ortokuva
-            </button>
-            {layerConfig.overlays?.kiinteistorajat && (
+            {layerMenuOpen && (
+              <>
+                <button
+                  className={`layer-btn ${activeBaseLayer === 'maastokartta' || activeBaseLayer === 'peruskartta' ? 'active' : ''}`}
+                  onClick={() => setActiveBaseLayer('maastokartta')}
+                >
+                  Maastokartta
+                </button>
+                <button
+                  className={`layer-btn ${activeBaseLayer === 'ortokuva' ? 'active' : ''}`}
+                  onClick={() => setActiveBaseLayer('ortokuva')}
+                >
+                  Ortokuva
+                </button>
+              </>
+            )}
+            {layerMenuOpen && layerConfig.overlays?.kiinteistorajat && (
               <button
                 className={`layer-btn ${showCadastreOverlay ? 'active' : ''}`}
                 onClick={() => { setCadastreClickError(''); setShowCadastreOverlay((v) => !v); }}
@@ -1537,12 +1573,23 @@ export default function MapPage() {
             // Hidden while choosing a property on the cadastre layer: the panel uses the same spot
             selectedPropertyId && !activeTool && !showForm && !(showCadastreOverlay && layerConfig.overlays?.kiinteistorajat) && (
               <button className="activity-fab" onClick={openActivity}>
-                ▶ Aloita aktiviteetti
+                <span className="activity-fab-icon" aria-hidden="true">▶</span>
+                <span>Aloita aktiviteetti</span>
               </button>
             )
           )}
 
-          <div className="draw-toolbar">
+          <div className={`draw-toolbar ${drawMenuOpen ? 'menu-open' : 'menu-closed'}`}>
+            <button
+              className="map-control-toggle"
+              onClick={() => setDrawMenuOpen((open) => !open)}
+              aria-expanded={drawMenuOpen}
+              aria-label="Piirtotyökalut"
+            >
+              ▴
+            </button>
+            {drawMenuOpen && (
+              <>
             {activeTool && (
               <button
                 className="tool-btn cancel-btn"
@@ -1594,6 +1641,8 @@ export default function MapPage() {
             >
               📐<span>Mittaa</span>
             </button>
+              </>
+            )}
           </div>
 
           {activeTool === 'request' && !showForm && (
