@@ -5,10 +5,10 @@ import type {
   WorkRequest,
 } from '../types';
 import PropertySearch from './PropertySearch';
-import ActivePropertyCard from './ActivePropertyCard';
 import PropertyList from './PropertyList';
 import MarkingList from './MarkingList';
 import WorkRequestList from './WorkRequestList';
+import { useState } from 'react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -49,21 +49,26 @@ export default function Sidebar({
   onWithdrawWorkRequest,
   onWorkRequestUpdated,
 }: SidebarProps) {
+  const [openSection, setOpenSection] = useState<'properties' | 'requests' | 'markings' | null>('properties');
+
+  const toggleSection = (section: 'properties' | 'requests' | 'markings') => {
+    setOpenSection((current) => (current === section ? null : section));
+  };
+
   return (
     <aside id="map-sidebar" className={`map-sidebar ${isOpen ? 'open' : ''}`}>
       <PropertySearch onSearch={onSearch} onSelectResult={onSelectResult} isSearching={isSearching} />
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        <ActivePropertyCard
-          property={selectedProperty}
-          onOpenForestValue={onOpenForestValue}
-        />
-
         <PropertyList
           properties={properties}
           selectedId={selectedPropertyId}
+          selectedProperty={selectedProperty}
           onSelect={onSelectProperty}
           onDelete={onDeleteProperty}
+          onOpenForestValue={onOpenForestValue}
+          isOpen={openSection === 'properties'}
+          onToggle={() => toggleSection('properties')}
         />
 
         <WorkRequestList
@@ -73,12 +78,16 @@ export default function Sidebar({
           onNewRequest={onNewWorkRequest}
           onWithdraw={onWithdrawWorkRequest}
           onUpdated={onWorkRequestUpdated}
+          isOpen={openSection === 'requests'}
+          onToggle={() => toggleSection('requests')}
         />
 
         <MarkingList
           markings={markings}
           selectedPropertyId={selectedPropertyId}
           onDelete={onDeleteMarking}
+          isOpen={openSection === 'markings'}
+          onToggle={() => toggleSection('markings')}
         />
       </div>
     </aside>

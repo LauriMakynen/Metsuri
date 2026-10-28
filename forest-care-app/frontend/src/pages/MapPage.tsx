@@ -158,7 +158,7 @@ export default function MapPage() {
   const [pendingGeometry, setPendingGeometry] = useState<GeoJSONGeometry>(null);
   const [pendingGeometryType, setPendingGeometryType] = useState<GeometryType>('point');
   const [error, setError] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(() =>
     isGuest ? DEMO_PROPERTY.id : null
@@ -670,7 +670,13 @@ export default function MapPage() {
   }, [markings]);
 
   useEffect(() => {
-    if (!selectedPropertyGeometry) return;
+    if (!selectedPropertyGeometry) {
+      if (selectedHighlightLayerRef.current && mapRef.current) {
+        mapRef.current.removeLayer(selectedHighlightLayerRef.current);
+        selectedHighlightLayerRef.current = null;
+      }
+      return;
+    }
     renderSelectedHighlight(selectedPropertyGeometry, '#0f172a');
 
     const bounds = toBounds(selectedPropertyGeometry);
@@ -1198,6 +1204,11 @@ export default function MapPage() {
   };
 
   const handleSelectProperty = (property: Property) => {
+    if (selectedPropertyId === property.id) {
+      setSelectedPropertyId(null);
+      setSelectedPropertyGeometry(null);
+      return;
+    }
     setSelectedPropertyId(property.id);
     setSelectedPropertyGeometry(property.geometry);
     setSidebarOpen(true);
