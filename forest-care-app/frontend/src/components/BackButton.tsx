@@ -20,7 +20,7 @@ function hasUnsavedChanges() {
   );
 }
 
-export default function BackButton() {
+export default function BackButton({ fallbackPath = '/map' }: { fallbackPath?: string }) {
   const navigate = useNavigate();
 
   const handleBack = () => {
@@ -35,7 +35,7 @@ export default function BackButton() {
     if (typeof historyIndex === 'number' && historyIndex > 0) {
       navigate(-1);
     } else {
-      navigate('/map');
+      navigate(fallbackPath);
     }
   };
 

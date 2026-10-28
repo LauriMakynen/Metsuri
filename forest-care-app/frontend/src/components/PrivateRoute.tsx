@@ -3,7 +3,15 @@ import { useAuth } from '../hooks/useAuth';
 import type { ReactNode } from 'react';
 
 // Protects routes that require authentication or guest access
-export default function PrivateRoute({ children }: { children: ReactNode }) {
+export default function PrivateRoute({
+  children,
+  authenticatedOnly = false,
+}: {
+  children: ReactNode;
+  authenticatedOnly?: boolean;
+}) {
   const { isAuthenticated, isGuest } = useAuth();
-  return isAuthenticated || isGuest ? <>{children}</> : <Navigate to="/login" replace />;
+  return isAuthenticated || (!authenticatedOnly && isGuest)
+    ? <>{children}</>
+    : <Navigate to="/login" replace />;
 }
