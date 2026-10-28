@@ -49,10 +49,14 @@ export default function Sidebar({
   onWithdrawWorkRequest,
   onWorkRequestUpdated,
 }: SidebarProps) {
-  const [openSection, setOpenSection] = useState<'properties' | 'requests' | 'markings' | null>('properties');
+  const [openSections, setOpenSections] = useState({
+    properties: true,
+    requests: false,
+    markings: false,
+  });
 
   const toggleSection = (section: 'properties' | 'requests' | 'markings') => {
-    setOpenSection((current) => (current === section ? null : section));
+    setOpenSections((current) => ({ ...current, [section]: !current[section] }));
   };
 
   return (
@@ -67,7 +71,7 @@ export default function Sidebar({
           onSelect={onSelectProperty}
           onDelete={onDeleteProperty}
           onOpenForestValue={onOpenForestValue}
-          isOpen={openSection === 'properties'}
+          isOpen={openSections.properties}
           onToggle={() => toggleSection('properties')}
         />
 
@@ -78,7 +82,7 @@ export default function Sidebar({
           onNewRequest={onNewWorkRequest}
           onWithdraw={onWithdrawWorkRequest}
           onUpdated={onWorkRequestUpdated}
-          isOpen={openSection === 'requests'}
+          isOpen={openSections.requests}
           onToggle={() => toggleSection('requests')}
         />
 
@@ -86,7 +90,7 @@ export default function Sidebar({
           markings={markings}
           selectedPropertyId={selectedPropertyId}
           onDelete={onDeleteMarking}
-          isOpen={openSection === 'markings'}
+          isOpen={openSections.markings}
           onToggle={() => toggleSection('markings')}
         />
       </div>
