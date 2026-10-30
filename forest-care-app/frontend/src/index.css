@@ -329,6 +329,9 @@ html, body, #root {
 .forest-detail-section h3 { margin-bottom: 0.45rem; color: #14532d; font-size: 1rem; }
 .forest-detail-section p, .forest-detail-list span { color: #46564b; font-size: 0.9rem; line-height: 1.5; }
 .forest-value-main { color: #0f3d24 !important; font-size: 1.5rem !important; font-weight: 800; }
+.forest-value-summary-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.forest-value-summary-content { min-width: 0; }
+.forest-value-details-button { width: auto; flex: 0 0 auto; }
 .forest-detail-muted { margin-top: 0.3rem; color: var(--text-light) !important; font-size: 0.82rem !important; }
 .forest-growth-grid { display: grid; grid-template-columns: 1fr; gap: 0.5rem; margin-top: 0.6rem; }
 .forest-growth-grid div { padding: 0.6rem; border-radius: 9px; background: #f0fdf4; }
@@ -350,6 +353,19 @@ html, body, #root {
   .forest-property-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .forest-property-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .forest-growth-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .forest-value-summary-row { align-items: stretch; flex-direction: column; }
+  .forest-value-details-button { width: 100%; }
+}
+@media (max-width: 600px) {
+  .fv-panel-modal { inset: 10px; }
+}
+@media (max-width: 899px) {
+  .fv-panel-standalone {
+    inset: 56px 0 0;
+    width: 100%;
+  }
 }
 .panel-title { font-size: 0.82rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #14532d; margin-bottom: 0.7rem; }
 .forest-page .filter-panel { margin-bottom: 1rem; }
@@ -1113,6 +1129,23 @@ html, body, #root {
     border-left: 1px solid var(--border);
     box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
   }
+}
+.fv-panel-modal {
+  position: fixed;
+  inset: 20px;
+  width: auto;
+  z-index: 1300;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.24);
+}
+.fv-panel-standalone {
+  position: fixed;
+  inset: 56px 0 0 auto;
+  width: min(620px, 52vw);
+  z-index: 1300;
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
 }
 .fv-panel-header {
   display: flex;

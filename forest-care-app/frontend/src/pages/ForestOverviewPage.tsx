@@ -11,6 +11,7 @@ import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { formatArea } from '../utils/measurement';
 import { MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { OPERATION_LABEL, TIMING_LABEL, dataSourceLabel, formatEur, formatEurRange } from '../utils/forestValueFormat';
+import ForestValuePanel from '../components/forestValue/ForestValuePanel';
 import type { Marking, Property, WorkRequest } from '../types';
 
 function getCoordinates(property: Property): string | null {
@@ -44,8 +45,11 @@ function ForestDetails({
   markingsError: boolean;
   requestsError: boolean;
 }) {
-  const { entry } = useForestValue(property);
-  const valueResponse = entry?.response;
+  const navigate = useNavigate();
+  const forestValue = useForestValue(property);
+  const [forestValueOpen, setForestValueOpen] = useState(false);
+  const valueEntry = forestValue.entry;
+  const valueResponse = valueEntry?.response;
   const valueResult = valueResponse?.status === 'available' ? valueResponse.result : null;
   const openRequests = requests.filter((request) => request.status === 'open');
   const completed = sortByOperationDate(markings);
@@ -55,23 +59,34 @@ function ForestDetails({
     <div className="forest-details">
       <section className="forest-detail-section">
         <h3>Metsän arvioitu arvo</h3>
-        {entry?.status === 'loading' && <p role="status">Ladataan metsäarviota...</p>}
-        {entry?.status === 'failed' && <p role="alert">Metsäarvion lataaminen epäonnistui.</p>}
-        {valueResponse?.status === 'no_data' && <p>{valueResponse.message}</p>}
-        {valueResponse?.status === 'error' && <p role="alert">{valueResponse.message}</p>}
-        {valueResult && (
-          <>
-            <p className="forest-value-main">{formatEur(valueResult.value.midEur)}</p>
-            <p className="forest-detail-muted">
-              Arvioitu vaihteluväli {formatEurRange(valueResult.value.lowEur, valueResult.value.highEur)}
-              {' · '}{dataSourceLabel(valueResult)}
-            </p>
-            {valueResult.warnings.length > 0 && (
-              <ul className="forest-warning-list">
-                {valueResult.warnings.map((warning) => <li key={warning.code}>{warning.message}</li>)}
-              </ul>
+        <div className="forest-value-summary-row">
+          <div className="forest-value-summary-content">
+            {valueEntry?.status === 'loading' && <p role="status">Ladataan metsäarviota...</p>}
+            {valueEntry?.status === 'failed' && <p role="alert">Metsäarvion lataaminen epäonnistui.</p>}
+            {valueResponse?.status === 'no_data' && <p>{valueResponse.message}</p>}
+            {valueResponse?.status === 'error' && <p role="alert">{valueResponse.message}</p>}
+            {valueResult && (
+              <>
+                <p className="forest-value-main">{formatEur(valueResult.value.midEur)}</p>
+                <p className="forest-detail-muted">
+                  Arvioitu vaihteluväli {formatEurRange(valueResult.value.lowEur, valueResult.value.highEur)}
+                  {' · '}{dataSourceLabel(valueResult)}
+                </p>
+              </>
             )}
-          </>
+          </div>
+          <button
+            className="btn btn-primary forest-value-details-button"
+            type="button"
+            onClick={() => setForestValueOpen(true)}
+          >
+            Laske metsäpalstan arvo
+          </button>
+        </div>
+        {valueResult && valueResult.warnings.length > 0 && (
+          <ul className="forest-warning-list">
+            {valueResult.warnings.map((warning) => <li key={warning.code}>{warning.message}</li>)}
+          </ul>
         )}
         <dl className="forest-growth-grid">
           {['1 vuosi', '5 vuotta', '10 vuotta'].map((period) => (
@@ -140,6 +155,22 @@ function ForestDetails({
           </ul>
         )}
       </section>
+      {forestValueOpen && (
+        <ForestValuePanel
+          property={property}
+          entry={forestValue.entry}
+          onReload={() => forestValue.reload(true)}
+          onClose={() => setForestValueOpen(false)}
+          selectedStandId={null}
+          onSelectStand={(standId) => {
+            navigate(
+              `/map?propertyId=${property.id}&from=forests&standId=${encodeURIComponent(standId)}`
+            );
+          }}
+          presentation="standalone"
+          onSubmitManual={forestValue.submitManual}
+        />
+      )}
     </div>
   );
 }
@@ -248,7 +279,7 @@ function ForestCard({
           aria-expanded={detailsOpen}
           onClick={() => setDetailsOpen((open) => !open)}
         >
-          {detailsOpen ? 'Piilota lisätiedot' : 'Lisätietoja'}
+          {detailsOpen ? 'Piilota lisätiedot' : 'Lisätiedot'}
         </button>
         <button
           className="btn btn-primary"

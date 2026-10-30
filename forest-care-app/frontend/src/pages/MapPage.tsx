@@ -156,6 +156,7 @@ export default function MapPage() {
   const hasRequestedProperty =
     hasPropertyParameter && Number.isSafeInteger(requestedPropertyId) && requestedPropertyId > 0;
   const fromForestOverview = searchParams.get('from') === 'forests';
+  const requestedStandId = searchParams.get('standId');
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
   // Guests start on an example parcel so the demo has something to try right away
   const [properties, setProperties] = useState<Property[]>(() => (isGuest ? [DEMO_PROPERTY] : []));
@@ -180,9 +181,13 @@ export default function MapPage() {
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(FALLBACK_LAYER_CONFIG);
   const [activeBaseLayer, setActiveBaseLayer] = useState<BaseLayerKey>('maastokartta');
   const [showCadastreOverlay, setShowCadastreOverlay] = useState(false);
-  const [forestValueOpen, setForestValueOpen] = useState(false);
+  const [forestValueOpen, setForestValueOpen] = useState(() => Boolean(requestedStandId));
   // Stand highlighted from the value view; tied to the parcel so it resets on reselect
-  const [highlightedStand, setHighlightedStand] = useState<{ propertyId: number; standId: string } | null>(null);
+  const [highlightedStand, setHighlightedStand] = useState<{ propertyId: number; standId: string } | null>(() =>
+    requestedStandId && hasRequestedProperty
+      ? { propertyId: requestedPropertyId, standId: requestedStandId }
+      : null
+  );
   // Prefilled work request opened from a recommended operation
   const [requestDraft, setRequestDraft] = useState<WorkRequestDraft | null>(null);
   const [tileLoading, setTileLoading] = useState(false);
@@ -512,6 +517,26 @@ export default function MapPage() {
       mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
     }
   }, [hasPropertyParameter, propertiesLoaded, properties, requestedPropertyId]);
+
+  useEffect(() => {
+    if (!forestValueOpen || !highlightedStandId || !forestValueResult) return;
+    const stand = forestValueResult.stands.find((item) => item.standId === highlightedStandId);
+    const bounds = stand ? toBounds(stand.geometry) : null;
+    const map = mapRef.current;
+    if (!map || !bounds?.isValid()) return;
+
+    if (window.innerWidth < 900) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+      return;
+    }
+
+    const panelWidth = document.querySelector('.fv-panel')?.clientWidth ?? 0;
+    map.fitBounds(bounds, {
+      paddingTopLeft: [40, 40],
+      paddingBottomRight: [panelWidth + 40, 40],
+      maxZoom: 16,
+    });
+  }, [forestValueOpen, forestValueResult, highlightedStandId]);
 
   useEffect(() => {
     loadMarkings(selectedPropertyId).catch(() => setError('Tietojen lataaminen epäonnistui'));

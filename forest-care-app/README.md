@@ -100,6 +100,8 @@ forest-care-app/
 - Kirjautumisen jälkeen aloitusnäkymässä näkyvät avoimet työpyynnöt sekä **Minun metsäni** -painike.
 - Omat metsäpalstat -näkymä näyttää palstan nimen, pinta-alan, koordinaatit, kirjatut työt ja seuranta-ajat.
 - Palstan voi avata kartalla suoraan valittuna; takaisin-painike palauttaa omien metsien listaan.
+- Palstan lisätiedoissa näytetään metsän arvioitu arvo, ja erillisestä painikkeesta avautuvat arvion kaikki tiedot.
+- Arvion kuviolistasta valittu kuvio avautuu kartalla korostettuna ja kartan arvopaneeli näyttää samalla kuvion tiedot.
 - Metsän arvo näytetään vain, jos metsäarvion rajapinta palauttaa tiedon. Arvio- ja esimerkkidata merkitään sellaiseksi.
 - Toteutuneita tuottoja, käyntihistoriaa tai 1/5/10 vuoden arvonkehityshistoriaa ei näytetä ilman tallennettua lähdedataa.
 

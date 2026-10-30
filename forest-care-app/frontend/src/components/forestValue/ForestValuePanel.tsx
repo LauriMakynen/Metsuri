@@ -15,6 +15,7 @@ interface ForestValuePanelProps {
   onClose: () => void;
   selectedStandId: string | null;
   onSelectStand: (standId: string) => void;
+  presentation?: 'sidebar' | 'modal' | 'standalone';
   onRequestOffers?: (operation: RecommendedOperation) => void;
   // Absent for the guest demo, which always has data
   onSubmitManual?: (input: ManualStandInput) => Promise<void>;
@@ -66,7 +67,7 @@ function PanelSkeleton() {
   );
 }
 
-// "Laske metsäpalstan arvo": side panel on desktop, full screen on mobile
+// The value breakdown opens as a map sidebar or a standalone side panel.
 export default function ForestValuePanel({
   property,
   entry,
@@ -74,12 +75,14 @@ export default function ForestValuePanel({
   onClose,
   selectedStandId,
   onSelectStand,
+  presentation = 'sidebar',
   onRequestOffers,
   onSubmitManual,
 }: ForestValuePanelProps) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const isMobile = useIsMobile();
+  const isModal = presentation === 'modal' || isMobile;
   const [editingManual, setEditingManual] = useState(false);
 
   // Focus the panel when it opens and give focus back to the opener on close
@@ -95,8 +98,8 @@ export default function ForestValuePanel({
         onClose();
         return;
       }
-      // On mobile the view covers the page: keep Tab focus inside it
-      if (e.key !== 'Tab' || !isMobile || !panelRef.current) return;
+      // Keep keyboard focus inside full-screen and modal presentations
+      if (e.key !== 'Tab' || !isModal || !panelRef.current) return;
       const focusable = panelRef.current.querySelectorAll<HTMLElement>(
         'button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
       );
@@ -116,7 +119,7 @@ export default function ForestValuePanel({
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [onClose, isMobile]);
+  }, [onClose, isModal]);
 
   const response = entry?.response ?? null;
   const loading = entry?.status === 'loading';
@@ -185,7 +188,13 @@ export default function ForestValuePanel({
   }
 
   return (
-    <aside ref={panelRef} className="fv-panel" role="dialog" aria-modal={isMobile} aria-labelledby="fv-panel-title">
+    <aside
+      ref={panelRef}
+      className={`fv-panel${presentation === 'modal' ? ' fv-panel-modal' : ''}${presentation === 'standalone' ? ' fv-panel-standalone' : ''}`}
+      role="dialog"
+      aria-modal={isModal}
+      aria-labelledby="fv-panel-title"
+    >
       <header className="fv-panel-header">
         <div>
           <p className="fv-panel-kicker">Metsäpalstan arvo</p>
