@@ -865,12 +865,13 @@ html, body, #root {
 
 .activity-fab {
   position: absolute; left: 50%; transform: translateX(-50%); bottom: 6.5rem; z-index: 960;
-  background: var(--forest-green); color: var(--white); border: 3px solid var(--white);
+  /* Red so the activity stands out from the green map tools; white text 4.8:1 */
+  background: #dc2626; color: var(--white); border: 3px solid #000;
   border-radius: 999px; padding: 0.9rem 1.6rem; min-height: 56px;
   font-size: 1.05rem; font-weight: 700; font-family: inherit; cursor: pointer; white-space: nowrap;
-  box-shadow: 0 8px 24px rgba(5,46,22,0.35);
+  box-shadow: 0 8px 24px rgba(127,29,29,0.35);
 }
-.activity-fab:hover { background: var(--forest-green-light); }
+.activity-fab:hover { background: #b91c1c; }
 
 @media (max-width: 899px) {
   .activity-fab {
