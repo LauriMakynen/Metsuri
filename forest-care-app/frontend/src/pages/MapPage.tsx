@@ -33,6 +33,7 @@ import Sidebar from '../components/Sidebar';
 import ActivityTracker from '../components/ActivityTracker';
 import WorkRequestForm from '../components/WorkRequestForm';
 import ForestValuePanel from '../components/forestValue/ForestValuePanel';
+import BackButton from '../components/BackButton';
 import { useForestValue } from '../hooks/useForestValue';
 import { OPERATION_LABEL, OPERATION_WORK_TYPE, standTitle } from '../utils/forestValueFormat';
 import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
@@ -1356,6 +1357,7 @@ export default function MapPage() {
           >
             ☰
           </button>
+          <BackButton />
           <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä">🌲 Metsuri</Link>
         </div>
         <div className="map-nav-right">

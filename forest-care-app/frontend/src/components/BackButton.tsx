@@ -20,6 +20,7 @@ function hasUnsavedChanges() {
   );
 }
 
+// Back button for the left end of the top bar; shown on every page except the start page
 export default function BackButton() {
   const navigate = useNavigate();
 
@@ -35,16 +36,15 @@ export default function BackButton() {
     if (typeof historyIndex === 'number' && historyIndex > 0) {
       navigate(-1);
     } else {
-      navigate('/map');
+      // Opened directly (no in-app history): go to the start page
+      navigate('/start');
     }
   };
 
   return (
-    <div className="back-button-row">
-      <button type="button" className="btn btn-primary back-button" onClick={handleBack} aria-label="Takaisin">
-        <span aria-hidden="true">←</span>
-        Takaisin
-      </button>
-    </div>
+    <button type="button" className="nav-back-btn" onClick={handleBack} aria-label="Takaisin" title="Takaisin edelliseen näkymään">
+      <span className="nav-back-arrow" aria-hidden="true">←</span>
+      <span className="nav-back-label">Takaisin</span>
+    </button>
   );
 }
