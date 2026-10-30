@@ -105,6 +105,10 @@ forest-care-app/
 - Metsän arvo näytetään vain, jos metsäarvion rajapinta palauttaa tiedon. Arvio- ja esimerkkidata merkitään sellaiseksi.
 - Toteutuneita tuottoja, käyntihistoriaa tai 1/5/10 vuoden arvonkehityshistoriaa ei näytetä ilman tallennettua lähdedataa.
 
+### Työpyyntöjen selaaminen
+- Työn tarjoaja voi hakea avoimia työpyyntöjä otsikon, lisätietojen tai työtyypin perusteella.
+- Työpyynnöt voi järjestää uusimman, pinta-alan tai tarjousten määrän mukaan. Haku ja järjestys päivittävät sekä listan että kartan.
+
 ### Karta ja navigaatio
 - ✅ **Maanmittauslaitoksen (MML) karttatasot** – maastokartta, peruskartta, ortokuva, kiinteistörajat
 - ✅ **Mittakaavaviiva** – kartan vasemmassa alakulmassa

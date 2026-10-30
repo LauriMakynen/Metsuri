@@ -28,6 +28,42 @@ function sortByOperationDate(markings: Marking[]): Marking[] {
     .sort((a, b) => (b.operation_date ?? '').localeCompare(a.operation_date ?? ''));
 }
 
+function getLocalDate(): string {
+  const now = new Date();
+  const month = `${now.getMonth() + 1}`.padStart(2, '0');
+  const day = `${now.getDate()}`.padStart(2, '0');
+  return `${now.getFullYear()}-${month}-${day}`;
+}
+
+type FollowUpStatus = 'overdue' | 'due' | 'upcoming';
+
+interface FollowUpReminder {
+  property: Property;
+  marking: Marking;
+  status: FollowUpStatus;
+}
+
+function getFollowUpReminders(
+  properties: Property[],
+  markingsByProperty: Record<number, Marking[]>,
+  today: string
+): FollowUpReminder[] {
+  return properties.flatMap((property) =>
+    (markingsByProperty[property.id] ?? []).flatMap((marking) => {
+      const start = marking.follow_up_date_start ?? marking.follow_up_date_end;
+      const end = marking.follow_up_date_end ?? marking.follow_up_date_start;
+      if (!start || !end) return [];
+
+      const status: FollowUpStatus = end < today ? 'overdue' : start <= today ? 'due' : 'upcoming';
+      return [{ property, marking, status }];
+    })
+  ).sort((a, b) => {
+    const statusOrder: Record<FollowUpStatus, number> = { overdue: 0, due: 1, upcoming: 2 };
+    return statusOrder[a.status] - statusOrder[b.status]
+      || (a.marking.follow_up_date_start ?? '').localeCompare(b.marking.follow_up_date_start ?? '');
+  });
+}
+
 function ForestDetails({
   property,
   markings,
@@ -177,42 +213,28 @@ function ForestDetails({
 
 function ForestCard({
   property,
+  markings,
+  markingsLoading,
+  markingsError,
   requests,
   requestsLoading,
   requestsError,
 }: {
   property: Property;
+  markings: Marking[];
+  markingsLoading: boolean;
+  markingsError: boolean;
   requests: WorkRequest[];
   requestsLoading: boolean;
   requestsError: boolean;
 }) {
   const navigate = useNavigate();
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const [markings, setMarkings] = useState<Marking[]>([]);
-  const [markingsLoading, setMarkingsLoading] = useState(true);
-  const [markingsError, setMarkingsError] = useState(false);
   const coordinates = getCoordinates(property);
-
-  useEffect(() => {
-    let cancelled = false;
-    propertiesService.getMarkings(property.id)
-      .then((data) => {
-        if (!cancelled) setMarkings(data);
-      })
-      .catch(() => {
-        if (!cancelled) setMarkingsError(true);
-      })
-      .finally(() => {
-        if (!cancelled) setMarkingsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [property.id]);
 
   const datedMarkings = sortByOperationDate(markings);
   const lastWork = datedMarkings[0] ?? null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDate();
   const nextFollowUp = markings
     .filter((marking) => {
       const lastFollowUpDay = marking.follow_up_date_end ?? marking.follow_up_date_start;
@@ -312,6 +334,9 @@ export default function ForestOverviewPage() {
   const [requestsLoading, setRequestsLoading] = useState(true);
   const [error, setError] = useState('');
   const [requestsError, setRequestsError] = useState(false);
+  const [markingsByProperty, setMarkingsByProperty] = useState<Record<number, Marking[]>>({});
+  const [markingsLoading, setMarkingsLoading] = useState(true);
+  const [markingsErrorPropertyIds, setMarkingsErrorPropertyIds] = useState<number[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -340,6 +365,47 @@ export default function ForestOverviewPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (loading) return;
+    if (properties.length === 0) {
+      setMarkingsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMarkingsLoading(true);
+    Promise.all(properties.map(async (property) => {
+      try {
+        return { propertyId: property.id, markings: await propertiesService.getMarkings(property.id) };
+      } catch {
+        return { propertyId: property.id, markings: null };
+      }
+    }))
+      .then((results) => {
+        if (cancelled) return;
+        const successful = results.filter(
+          (result): result is { propertyId: number; markings: Marking[] } => result.markings !== null
+        );
+        setMarkingsByProperty(Object.fromEntries(successful.map(({ propertyId, markings }) => [propertyId, markings])));
+        setMarkingsErrorPropertyIds(
+          results.filter((result) => result.markings === null).map((result) => result.propertyId)
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setMarkingsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, properties]);
+
+  const reminders = getFollowUpReminders(properties, markingsByProperty, getLocalDate());
+  const reminderCounts = reminders.reduce(
+    (counts, reminder) => ({ ...counts, [reminder.status]: counts[reminder.status] + 1 }),
+    { overdue: 0, due: 0, upcoming: 0 }
+  );
+
   return (
     <div className="start-page forest-page">
       <SpruceForestBackdrop />
@@ -354,6 +420,60 @@ export default function ForestOverviewPage() {
         </header>
 
         {error && <p className="error-message" role="alert">{error}</p>}
+        {!loading && properties.length > 0 && (
+          <section className="follow-up-panel" aria-labelledby="follow-up-heading">
+            <div className="follow-up-heading">
+              <div>
+                <h2 id="follow-up-heading">Seurannan muistutukset</h2>
+                <p>Tarkista merkintöihin kirjatut suuntaa-antavat seuranta-ajat.</p>
+              </div>
+              <div className="follow-up-counts" aria-label="Muistutusten määrä">
+                <span className="follow-up-count overdue">{reminderCounts.overdue} myöhässä</span>
+                <span className="follow-up-count due">{reminderCounts.due} tänään</span>
+                <span className="follow-up-count upcoming">{reminderCounts.upcoming} tulossa</span>
+              </div>
+            </div>
+            {markingsLoading ? (
+              <p role="status">Ladataan seurantoja...</p>
+            ) : reminders.length === 0 ? (
+              <p className="follow-up-empty">Ei kirjattuja seurantoja tällä hetkellä.</p>
+            ) : (
+              <ul className="follow-up-list">
+                {reminders.map(({ property, marking, status }) => (
+                  <li className={`follow-up-item ${status}`} key={`${property.id}-${marking.id}`}>
+                    <div className="follow-up-item-info">
+                      <span className={`follow-up-status ${status}`}>
+                        {status === 'overdue' ? 'Myöhässä' : status === 'due' ? 'Tarkastus tänään' : 'Tulossa'}
+                      </span>
+                      <strong>{marking.title}</strong>
+                      <span>
+                        {property.name} · {MARKING_TYPE_LABELS[marking.type]} · Seuranta{' '}
+                        {formatDateRange(marking.follow_up_date_start ?? '', marking.follow_up_date_end ?? '')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary follow-up-map-button"
+                      onClick={() => navigate(`/map?propertyId=${property.id}&from=forests`)}
+                    >
+                      Avaa palsta kartalla
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {markingsErrorPropertyIds.length > 0 && (
+              <p className="follow-up-error" role="alert">
+                {markingsErrorPropertyIds.length === 1
+                  ? 'Yhden palstan seurantatietojen lataaminen epäonnistui.'
+                  : `${markingsErrorPropertyIds.length} palstan seurantatietojen lataaminen epäonnistui.`}
+              </p>
+            )}
+            <p className="follow-up-note">
+              Seuranta-ajat ovat suuntaa-antavia eivätkä korvaa metsän ammattilaisen arviota.
+            </p>
+          </section>
+        )}
         {loading ? (
           <p className="glass-panel" role="status">Ladataan omia metsäpalstoja...</p>
         ) : properties.length === 0 && !error ? (
@@ -364,6 +484,9 @@ export default function ForestOverviewPage() {
               <ForestCard
                 key={property.id}
                 property={property}
+                markings={markingsByProperty[property.id] ?? []}
+                markingsLoading={markingsLoading}
+                markingsError={markingsErrorPropertyIds.includes(property.id)}
                 requests={requests.filter((request) => request.property_id === property.id)}
                 requestsLoading={requestsLoading}
                 requestsError={requestsError}

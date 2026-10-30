@@ -272,6 +272,13 @@ html, body, #root {
 .start-cards { margin-top: -1.5rem; position: relative; z-index: 1; }
 
 /* Work requests (work provider side) */
+.request-search-controls { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, 0.4fr); gap: 0.75rem; margin-bottom: 1rem; }
+.request-search-field, .request-sort-field { display: flex; flex-direction: column; gap: 0.35rem; color: var(--text); font-size: 0.82rem; font-weight: 700; }
+.request-search-field input, .request-sort-field select {
+  width: 100%; height: 42px; min-height: 42px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--white); color: var(--text); padding: 0.55rem 0.7rem; font: inherit; font-weight: 400;
+}
+.request-search-field input:focus, .request-sort-field select:focus { outline: 2px solid var(--forest-green); outline-offset: 1px; }
 .type-filter { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
 .filter-chip {
   border: 1.5px solid var(--border); background: var(--white); color: var(--text);
@@ -290,6 +297,9 @@ html, body, #root {
 .requests-list { display: flex; flex-direction: column; gap: 0.6rem; }
 .requests-count { font-size: 0.95rem; color: var(--forest-green); }
 .requests-empty { color: var(--text-light); background: var(--white); border-radius: var(--radius); padding: 1rem; }
+@media (max-width: 600px) {
+  .request-search-controls { grid-template-columns: 1fr; }
+}
 
 /* Work providers page on a spruce forest backdrop; each feature sits in its own glass panel */
 .forest-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; }

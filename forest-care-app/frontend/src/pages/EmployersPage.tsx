@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -44,9 +44,26 @@ export default function EmployersPage() {
 
   const [requests, setRequests] = useState<PublicWorkRequest[]>([]);
   const [typeFilter, setTypeFilter] = useState<MarkingType | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'largest-area' | 'most-bids'>('newest');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const visibleRequests = useMemo(() => {
+    const query = searchQuery.trim().toLocaleLowerCase('fi-FI');
+    const filtered = requests.filter((request) =>
+      !query ||
+      `${request.title} ${request.note ?? ''} ${MARKING_TYPE_LABELS[request.type]}`
+        .toLocaleLowerCase('fi-FI')
+        .includes(query)
+    );
+
+    return filtered.sort((a, b) => {
+      if (sortOrder === 'largest-area') return (b.area_ha ?? -1) - (a.area_ha ?? -1);
+      if (sortOrder === 'most-bids') return b.bid_count - a.bid_count;
+      return b.created_at.localeCompare(a.created_at);
+    });
+  }, [requests, searchQuery, sortOrder]);
 
   // Create the map once
   useEffect(() => {
@@ -97,7 +114,7 @@ export default function EmployersPage() {
     group.clearLayers();
     layersByIdRef.current.clear();
 
-    requests.forEach((request) => {
+    visibleRequests.forEach((request) => {
       if (!request.geometry) return;
       const color = MARKING_COLORS[request.type];
       const layer = L.geoJSON(request.geometry as GeoJSON.Geometry, {
@@ -116,7 +133,7 @@ export default function EmployersPage() {
       map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
       fitPendingRef.current = false;
     }
-  }, [requests]);
+  }, [visibleRequests]);
 
   const handleBidPlaced = (updated: PublicWorkRequest) => {
     setRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
@@ -156,8 +173,35 @@ export default function EmployersPage() {
           </p>
         </header>
 
-        <section className="glass-panel filter-panel" aria-label="Suodata työtyypin mukaan">
-          <h2 className="panel-title">Työtyyppi</h2>
+        <section className="glass-panel filter-panel" aria-label="Hae ja suodata työpyyntöjä">
+          <div className="request-search-controls">
+            <label className="request-search-field">
+              <span>Hae työpyyntöjä</span>
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Otsikko, lisätiedot tai työtyyppi"
+              />
+            </label>
+            <label className="request-sort-field">
+              <span>Järjestä</span>
+              <select
+                value={sortOrder}
+                onChange={(event) => {
+                  const value = event.currentTarget.value;
+                  if (value === 'newest' || value === 'largest-area' || value === 'most-bids') {
+                    setSortOrder(value);
+                  }
+                }}
+              >
+                <option value="newest">Uusimmat ensin</option>
+                <option value="largest-area">Suurin pinta-ala</option>
+                <option value="most-bids">Eniten tarjouksia</option>
+              </select>
+            </label>
+          </div>
+          <h2 className="panel-title">Suodata työtyypin mukaan</h2>
           <div className="type-filter">
             <button
               className={`filter-chip ${typeFilter === null ? 'active' : ''}`}
@@ -187,16 +231,20 @@ export default function EmployersPage() {
 
           <section className="glass-panel requests-list">
             <h2 className="panel-title">
-              📢 {loading ? 'Ladataan työpyyntöjä...' : `Avoimet työpyynnöt (${requests.length})`}
+              📢 {loading
+                ? 'Ladataan työpyyntöjä...'
+                : `Avoimet työpyynnöt (${visibleRequests.length}${visibleRequests.length !== requests.length ? ` / ${requests.length}` : ''})`}
             </h2>
 
-            {!loading && requests.length === 0 && !error && (
+            {!loading && visibleRequests.length === 0 && !error && (
               <p className="requests-empty">
-                Ei avoimia työpyyntöjä{typeFilter ? ` tyypille ${MARKING_TYPE_LABELS[typeFilter].toLowerCase()}` : ''}.
+                {requests.length > 0
+                  ? 'Hakuehdoilla ei löytynyt työpyyntöjä.'
+                  : `Ei avoimia työpyyntöjä${typeFilter ? ` tyypille ${MARKING_TYPE_LABELS[typeFilter].toLowerCase()}` : ''}.`}
               </p>
             )}
 
-            {requests.map((request) => (
+            {visibleRequests.map((request) => (
               <WorkRequestCard
                 key={request.id}
                 request={request}
