@@ -5,10 +5,10 @@ import type {
   WorkRequest,
 } from '../types';
 import PropertySearch from './PropertySearch';
-import ActivePropertyCard from './ActivePropertyCard';
 import PropertyList from './PropertyList';
 import MarkingList from './MarkingList';
 import WorkRequestList from './WorkRequestList';
+import { useState } from 'react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -49,21 +49,30 @@ export default function Sidebar({
   onWithdrawWorkRequest,
   onWorkRequestUpdated,
 }: SidebarProps) {
+  const [openSections, setOpenSections] = useState({
+    properties: true,
+    requests: false,
+    markings: false,
+  });
+
+  const toggleSection = (section: 'properties' | 'requests' | 'markings') => {
+    setOpenSections((current) => ({ ...current, [section]: !current[section] }));
+  };
+
   return (
     <aside id="map-sidebar" className={`map-sidebar ${isOpen ? 'open' : ''}`}>
       <PropertySearch onSearch={onSearch} onSelectResult={onSelectResult} isSearching={isSearching} />
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        <ActivePropertyCard
-          property={selectedProperty}
-          onOpenForestValue={onOpenForestValue}
-        />
-
         <PropertyList
           properties={properties}
           selectedId={selectedPropertyId}
+          selectedProperty={selectedProperty}
           onSelect={onSelectProperty}
           onDelete={onDeleteProperty}
+          onOpenForestValue={onOpenForestValue}
+          isOpen={openSections.properties}
+          onToggle={() => toggleSection('properties')}
         />
 
         <WorkRequestList
@@ -73,12 +82,16 @@ export default function Sidebar({
           onNewRequest={onNewWorkRequest}
           onWithdraw={onWithdrawWorkRequest}
           onUpdated={onWorkRequestUpdated}
+          isOpen={openSections.requests}
+          onToggle={() => toggleSection('requests')}
         />
 
         <MarkingList
           markings={markings}
           selectedPropertyId={selectedPropertyId}
           onDelete={onDeleteMarking}
+          isOpen={openSections.markings}
+          onToggle={() => toggleSection('markings')}
         />
       </div>
     </aside>
