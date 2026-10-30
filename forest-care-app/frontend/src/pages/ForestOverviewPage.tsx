@@ -328,6 +328,7 @@ function ForestCard({
 }
 
 export default function ForestOverviewPage() {
+  const navigate = useNavigate();
   const [properties, setProperties] = useState<Property[]>([]);
   const [requests, setRequests] = useState<WorkRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -367,13 +368,7 @@ export default function ForestOverviewPage() {
 
   useEffect(() => {
     if (loading) return;
-    if (properties.length === 0) {
-      setMarkingsLoading(false);
-      return;
-    }
-
     let cancelled = false;
-    setMarkingsLoading(true);
     Promise.all(properties.map(async (property) => {
       try {
         return { propertyId: property.id, markings: await propertiesService.getMarkings(property.id) };
