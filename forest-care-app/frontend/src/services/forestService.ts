@@ -12,6 +12,7 @@ import type {
   WorkRequest,
   PublicWorkRequest,
   NewWorkRequest,
+  Region,
 } from '../types';
 
 function normalizeDate(value: unknown): string | null {
@@ -238,11 +239,13 @@ function normalizeOwnRequest(r: WorkRequest): WorkRequest {
 
 export const workRequestsService = {
   // Public: open requests for work providers (works without login)
-  getOpen: async (type?: MarkingType): Promise<PublicWorkRequest[]> => {
-    const response = await api.get<PublicWorkRequest[]>('/api/work-requests', {
-      params: type ? { type } : undefined,
-    });
+  getOpen: async (filters: { type?: MarkingType; region?: string } = {}): Promise<PublicWorkRequest[]> => {
+    const response = await api.get<PublicWorkRequest[]>('/api/work-requests', { params: filters });
     return response.data.map(normalizePublicRequest);
+  },
+  getRegions: async (): Promise<Region[]> => {
+    const response = await api.get<Region[]>('/api/work-requests/regions');
+    return response.data;
   },
   getMine: async (): Promise<WorkRequest[]> => {
     const response = await api.get<WorkRequest[]>('/api/work-requests/mine');

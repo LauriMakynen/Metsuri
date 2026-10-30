@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import pool from './pool';
+import { REGIONS } from '../services/regions';
 
 // Database migration script - creates all required tables
 async function migrate() {
@@ -270,6 +271,25 @@ async function migrate() {
         fetched_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
       )
     `);
+
+    // Finnish regions (maakunnat) for filtering work requests by region. Boundaries come from
+    // data/regions.json and are refreshed on every run, so a new boundary file just needs a migrate.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS regions (
+        code TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        geometry GEOMETRY(MultiPolygon, 4326) NOT NULL
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS regions_geometry_idx ON regions USING GIST (geometry)');
+    for (const region of REGIONS.features) {
+      await client.query(
+        `INSERT INTO regions (code, name, geometry)
+         VALUES ($1, $2, ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326)))
+         ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, geometry = EXCLUDED.geometry`,
+        [region.properties.code, region.properties.name, JSON.stringify(region.geometry)]
+      );
+    }
 
     await client.query('COMMIT');
     console.log('Migration completed successfully');
