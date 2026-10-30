@@ -25,9 +25,10 @@ export default function ActivePropertyCard({
 
   return (
     <div style={{ padding: '1rem', borderBottom: '1px solid #e5e7eb', backgroundColor: '#fafafa' }}>
-      <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.5rem', color: '#166534' }}>
-        📍 {property.name}
+      <h3 style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.25rem', color: '#166534', textTransform: 'uppercase' }}>
+        📍 Tarkasteltava kiinteistö
       </h3>
+      <div style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: '0.5rem' }}>{property.name}</div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.85rem' }}>
         {property.property_code && (
