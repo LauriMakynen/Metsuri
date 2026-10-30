@@ -109,6 +109,15 @@ export interface PublicWorkRequest extends WorkRequestBase {
   // Only meaningful for a logged-in viewer
   is_own: boolean;
   my_bid_eur: number | null;
+  // Region (maakunta) the request lies in; null if it could not be determined
+  region_code: string | null;
+  region_name: string | null;
+}
+
+// Finnish region (maakunta) for filtering work requests
+export interface Region {
+  code: string;
+  name: string;
 }
 
 export interface CadastreFeatureProperties {

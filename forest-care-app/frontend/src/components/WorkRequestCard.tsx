@@ -4,12 +4,15 @@ import { workRequestsService } from '../services/forestService';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { formatArea } from '../utils/measurement';
 import { formatDate } from '../utils/dateFormatting';
+import { formatDistance } from '../utils/distance';
 import { BEST_BID_LABEL, PRICING_HINT, TARGET_PRICE_LABEL, formatEur } from '../utils/bids';
 import WorkRequestPhotoGallery from './WorkRequestPhotos';
 import type { PublicWorkRequest } from '../types';
 
 interface WorkRequestCardProps {
   request: PublicWorkRequest;
+  // Distance from the viewer's location, when the distance filter is on
+  distanceKm?: number | null;
   selected: boolean;
   canBid: boolean;
   onFocus: () => void;
@@ -20,6 +23,7 @@ interface WorkRequestCardProps {
 // One open work request for work providers: details, anonymous best offer and a bid form
 export default function WorkRequestCard({
   request,
+  distanceKm = null,
   selected,
   canBid,
   onFocus,
@@ -97,6 +101,13 @@ export default function WorkRequestCard({
           {request.area_ha ? `📐 ${formatArea(request.area_ha)} · ` : ''}
           Julkaistu {formatDate(request.created_at.slice(0, 10))}
         </span>
+        {(request.region_name || distanceKm !== null) && (
+          <span className="request-meta">
+            📍 {[request.region_name, distanceKm !== null ? `${formatDistance(distanceKm)} sinusta` : null]
+              .filter(Boolean)
+              .join(' · ')}
+          </span>
+        )}
         {request.note && <span className="request-note">{request.note}</span>}
       </button>
       <WorkRequestPhotoGallery requestId={request.id} photos={request.photos} />
