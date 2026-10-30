@@ -32,7 +32,7 @@ forest-care-app/
 │   ├── src/
 │   │   ├── components/
 │   │   ├── hooks/    # useAuth (context)
-│   │   ├── pages/    # Start, Login, Register, salasanan palautus, Map, Employers
+│   │   ├── pages/    # Start, Omat metsät, Login, Register, salasanan palautus, Map, Employers
 │   │   ├── services/ # API-kutsut
 │   │   ├── types/    # TypeScript-tyypit
 │   │   └── utils/    # mm. vierailijatilan demodata
@@ -95,6 +95,15 @@ forest-care-app/
 ---
 
 ## Ominaisuudet
+
+### Aloitusnäkymä ja omat metsät
+- Kirjautumisen jälkeen aloitusnäkymässä näkyvät avoimet työpyynnöt sekä **Minun metsäni** -painike.
+- Omat metsäpalstat -näkymä näyttää palstan nimen, pinta-alan, koordinaatit, kirjatut työt ja seuranta-ajat.
+- Palstan voi avata kartalla suoraan valittuna; takaisin-painike palauttaa omien metsien listaan.
+- Palstan lisätiedoissa näytetään metsän arvioitu arvo, ja erillisestä painikkeesta avautuvat arvion kaikki tiedot.
+- Arvion kuviolistasta valittu kuvio avautuu kartalla korostettuna ja kartan arvopaneeli näyttää samalla kuvion tiedot.
+- Metsän arvo näytetään vain, jos metsäarvion rajapinta palauttaa tiedon. Arvio- ja esimerkkidata merkitään sellaiseksi.
+- Toteutuneita tuottoja, käyntihistoriaa tai 1/5/10 vuoden arvonkehityshistoriaa ei näytetä ilman tallennettua lähdedataa.
 
 ### Karta ja navigaatio
 - ✅ **Maanmittauslaitoksen (MML) karttatasot** – maastokartta, peruskartta, ortokuva, kiinteistörajat

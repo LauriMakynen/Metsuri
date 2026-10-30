@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -151,6 +151,13 @@ export default function MapPage() {
 
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedPropertyId = Number(searchParams.get('propertyId'));
+  const hasPropertyParameter = searchParams.has('propertyId');
+  const hasRequestedProperty =
+    hasPropertyParameter && Number.isSafeInteger(requestedPropertyId) && requestedPropertyId > 0;
+  const fromForestOverview = searchParams.get('from') === 'forests';
+  const requestedStandId = searchParams.get('standId');
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
   const [layerMenuOpen, setLayerMenuOpen] = useState(true);
   const [drawMenuOpen, setDrawMenuOpen] = useState(true);
@@ -177,9 +184,13 @@ export default function MapPage() {
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(FALLBACK_LAYER_CONFIG);
   const [activeBaseLayer, setActiveBaseLayer] = useState<BaseLayerKey>('maastokartta');
   const [showCadastreOverlay, setShowCadastreOverlay] = useState(false);
-  const [forestValueOpen, setForestValueOpen] = useState(false);
+  const [forestValueOpen, setForestValueOpen] = useState(() => Boolean(requestedStandId));
   // Stand highlighted from the value view; tied to the parcel so it resets on reselect
-  const [highlightedStand, setHighlightedStand] = useState<{ propertyId: number; standId: string } | null>(null);
+  const [highlightedStand, setHighlightedStand] = useState<{ propertyId: number; standId: string } | null>(() =>
+    requestedStandId && hasRequestedProperty
+      ? { propertyId: requestedPropertyId, standId: requestedStandId }
+      : null
+  );
   // Prefilled work request opened from a recommended operation
   const [requestDraft, setRequestDraft] = useState<WorkRequestDraft | null>(null);
   const [tileLoading, setTileLoading] = useState(false);
@@ -232,13 +243,23 @@ export default function MapPage() {
     const props = await propertiesService.getAll();
     setProperties(props);
     setPropertiesLoaded(true);
+    const requestedProperty = hasRequestedProperty
+      ? props.find((property) => property.id === requestedPropertyId)
+      : undefined;
+    const initialProperty = requestedProperty ?? props[0];
     // "Avaa oma metsäpalsta" should land on the parcel, not on the whole of Finland
-    if (props.length > 0 && !autoSelectedRef.current) {
+    if (initialProperty && !autoSelectedRef.current) {
       autoSelectedRef.current = true;
-      setSelectedPropertyId((current) => current ?? props[0].id);
-      setSelectedPropertyGeometry((current) => current ?? props[0].geometry);
+      setSelectedPropertyId(initialProperty.id);
+      setSelectedPropertyGeometry(initialProperty.geometry);
     }
-  }, [isGuest]);
+    if (hasPropertyParameter && !requestedProperty) {
+      setError('Valittua metsäpalstaa ei löytynyt. Tarkista omat metsäsi.');
+    }
+    if (requestedProperty) {
+      setSidebarOpen(true);
+    }
+  }, [hasPropertyParameter, hasRequestedProperty, isGuest, requestedPropertyId]);
 
   const loadMarkings = useCallback(async (propertyId?: number | null) => {
     if (isGuest) return;
@@ -505,6 +526,36 @@ export default function MapPage() {
   useEffect(() => {
     refreshData();
   }, [refreshData]);
+
+  useEffect(() => {
+    if (!propertiesLoaded || !hasPropertyParameter) return;
+    const property = properties.find((item) => item.id === requestedPropertyId);
+    if (!property) return;
+    const bounds = toBounds(property.geometry);
+    if (bounds?.isValid() && mapRef.current) {
+      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
+    }
+  }, [hasPropertyParameter, propertiesLoaded, properties, requestedPropertyId]);
+
+  useEffect(() => {
+    if (!forestValueOpen || !highlightedStandId || !forestValueResult) return;
+    const stand = forestValueResult.stands.find((item) => item.standId === highlightedStandId);
+    const bounds = stand ? toBounds(stand.geometry) : null;
+    const map = mapRef.current;
+    if (!map || !bounds?.isValid()) return;
+
+    if (window.innerWidth < 900) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+      return;
+    }
+
+    const panelWidth = document.querySelector('.fv-panel')?.clientWidth ?? 0;
+    map.fitBounds(bounds, {
+      paddingTopLeft: [40, 40],
+      paddingBottomRight: [panelWidth + 40, 40],
+      maxZoom: 16,
+    });
+  }, [forestValueOpen, forestValueResult, highlightedStandId]);
 
   useEffect(() => {
     loadMarkings(selectedPropertyId).catch(() => setError('Tietojen lataaminen epäonnistui'));
@@ -1347,6 +1398,16 @@ export default function MapPage() {
     <div className={`map-page ${activityOpen ? 'activity-mode' : ''}`}>
       <nav className="map-nav">
         <div className="map-nav-left">
+          {fromForestOverview && (
+            <button
+              className="map-back-button"
+              type="button"
+              onClick={() => navigate('/omat-metsat')}
+              aria-label="Takaisin omiin metsiin"
+            >
+              <span aria-hidden="true">←</span> Takaisin
+            </button>
+          )}
           <button
             className="sidebar-toggle"
             onClick={() => setSidebarOpen((isOpen) => !isOpen)}
