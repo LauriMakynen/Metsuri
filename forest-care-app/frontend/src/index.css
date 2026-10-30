@@ -290,6 +290,21 @@ html, body, #root {
 .requests-list { display: flex; flex-direction: column; gap: 0.6rem; }
 .requests-count { font-size: 0.95rem; color: var(--forest-green); }
 .requests-empty { color: var(--text-light); background: var(--white); border-radius: var(--radius); padding: 1rem; }
+.region-filter { display: flex; flex-direction: column; max-width: 320px; margin-top: 0.9rem; }
+.region-filter .panel-title { margin-bottom: 0.4rem; }
+.region-filter select {
+  border: 1.5px solid var(--border); border-radius: 10px; background: var(--white); color: var(--text);
+  padding: 0.45rem 0.7rem; font-size: 0.95rem; font-family: inherit; min-height: 40px;
+}
+.nearby-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1rem; margin-bottom: 0.6rem; }
+.nearby-toggle { flex-shrink: 0; }
+.nearby-range { display: flex; flex-direction: column; gap: 0.2rem; flex: 1; min-width: 180px; font-size: 0.85rem; color: var(--text); }
+.nearby-range input { width: 100%; accent-color: #2563eb; min-height: 28px; }
+.nearby-notice {
+  font-size: 0.88rem; color: #1e3a8a; background: #eff6ff; border: 1px solid #bfdbfe;
+  border-radius: 10px; padding: 0.5rem 0.75rem; margin-bottom: 0.6rem;
+}
+.nearby-notice.error { color: #991b1b; background: #fef2f2; border-color: #fecaca; }
 
 /* Work providers page on a spruce forest backdrop; each feature sits in its own glass panel */
 .forest-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
