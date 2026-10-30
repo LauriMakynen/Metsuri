@@ -1,12 +1,6 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import TopNav from '../components/TopNav';
-import { workRequestsService } from '../services/forestService';
-import { MARKING_TYPE_LABELS } from '../utils/markingTypes';
-import { formatArea } from '../utils/measurement';
-import { formatDate } from '../utils/dateFormatting';
-import type { PublicWorkRequest } from '../types';
 
 // Spruce treeline silhouette used at the bottom edge of the hero
 const TREELINE_PATH =
@@ -34,29 +28,6 @@ const PROVIDER_FEATURES = [
 export default function StartPage() {
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
-  const [requests, setRequests] = useState<PublicWorkRequest[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(true);
-  const [requestsError, setRequestsError] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    workRequestsService
-      .getOpen()
-      .then((data) => {
-        if (cancelled) return;
-        setRequests(data);
-        setRequestsError('');
-      })
-      .catch(() => {
-        if (!cancelled) setRequestsError('Työpyyntöjen lataaminen epäonnistui.');
-      })
-      .finally(() => {
-        if (!cancelled) setRequestsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const goToLogin = () => {
     logout();
@@ -94,11 +65,6 @@ export default function StartPage() {
             </button>
           )}
 
-          {!requestsLoading && !requestsError && requests.length > 0 && (
-            <p className="hero-stat">
-              <span className="hero-stat-dot" /> {requests.length} avointa työpyyntöä juuri nyt
-            </p>
-          )}
         </div>
 
         <svg className="hero-treeline" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
@@ -108,41 +74,6 @@ export default function StartPage() {
       </section>
 
       <main className="start-content start-cards">
-        <section className="start-requests-panel" aria-labelledby="start-requests-title">
-          <div className="start-requests-heading">
-            <div>
-              <p className="start-section-eyebrow">Ajankohtaista</p>
-              <h2 id="start-requests-title">Työpyynnöt</h2>
-            </div>
-            <button className="btn btn-secondary start-requests-link" onClick={() => navigate('/tyontarjoajat')}>
-              Katso kaikki
-            </button>
-          </div>
-          {requestsLoading ? (
-            <p className="requests-empty" role="status">Ladataan työpyyntöjä...</p>
-          ) : requestsError ? (
-            <p className="error-message" role="alert">{requestsError}</p>
-          ) : requests.length === 0 ? (
-            <p className="requests-empty">Ei avoimia työpyyntöjä.</p>
-          ) : (
-            <ul className="start-request-list">
-              {requests.map((request) => (
-                <li className="start-request-item" key={request.id}>
-                  <div className="start-request-main">
-                    <span className="start-request-type">{MARKING_TYPE_LABELS[request.type]}</span>
-                    <h3>{request.title}</h3>
-                    <p>
-                      {request.area_ha !== null ? `${formatArea(request.area_ha)} · ` : ''}
-                      Julkaistu {formatDate(request.created_at.slice(0, 10))}
-                    </p>
-                  </div>
-                  <span className="start-request-status">Avoin</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
         <div className="start-grid">
           <section className="choice-card">
             <div className="choice-icon">🌲</div>
