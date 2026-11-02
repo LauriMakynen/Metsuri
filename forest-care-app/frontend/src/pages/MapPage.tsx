@@ -158,9 +158,10 @@ export default function MapPage() {
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
   // "Hoida omaa metsää" opens /map?hoida=<property id>: forest care mode on that parcel
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const careMode = searchParams.has('hoida');
-  const carePropertyId = Number(searchParams.get('hoida')) || null;
+  // Read once: later the URL follows the selected parcel (below) without reloading the data
+  const [carePropertyId] = useState(() => Number(searchParams.get('hoida')) || null);
   const [careLocation, setCareLocation] = useState<CareLocation>(() =>
     'geolocation' in navigator
       ? { status: 'locating' }
@@ -1023,6 +1024,13 @@ export default function MapPage() {
     setSidebarOpen(false);
     startDraw('request');
   };
+
+  // Care mode: keep ?hoida= on the selected parcel, so a reload or shared link opens the same forest
+  useEffect(() => {
+    if (!careMode || isGuest || selectedPropertyId === null) return;
+    if (searchParams.get('hoida') === String(selectedPropertyId)) return;
+    setSearchParams({ hoida: String(selectedPropertyId) }, { replace: true });
+  }, [careMode, isGuest, selectedPropertyId, searchParams, setSearchParams]);
 
   // Care mode: follow the user's GPS position on the map (the activity tracker has its own while open)
   useEffect(() => {
