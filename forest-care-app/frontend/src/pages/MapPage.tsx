@@ -35,7 +35,7 @@ import WorkRequestForm from '../components/WorkRequestForm';
 import ForestValuePanel from '../components/forestValue/ForestValuePanel';
 import BackButton from '../components/BackButton';
 import { useForestValue } from '../hooks/useForestValue';
-import { OPERATION_LABEL, OPERATION_WORK_TYPE, standTitle } from '../utils/forestValueFormat';
+import { OPERATION_LABEL, OPERATION_WORK_TYPE, isCareOperation, standTitle } from '../utils/forestValueFormat';
 import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
 import { bidSummaryText, suggestedPricing } from '../utils/bids';
 import type { ActivityResult } from '../components/ActivityTracker';
@@ -1259,7 +1259,39 @@ export default function MapPage() {
     }
     const group = standsLayerRef.current;
     group.clearLayers();
-    if (!forestValueResult || (!forestValueOpen && !highlightedStandId)) return;
+    if (!forestValueResult) return;
+
+    // Care mode: stands that need work are clickable and highlight their recommendations in the sidebar
+    if (careMode && !forestValueOpen) {
+      const careOps = forestValueResult.operations.filter(isCareOperation);
+      forestValueResult.stands.forEach((stand) => {
+        const op = careOps.find((o) => o.standId === stand.standId);
+        if (!stand.geometry || !op) return;
+        const selected = stand.standId === highlightedStandId;
+        const color = MARKING_COLORS[OPERATION_WORK_TYPE[op.type]];
+        const layer = L.geoJSON(stand.geometry as GeoJSON.Geometry, {
+          style: {
+            color: selected ? '#1d4ed8' : color,
+            weight: selected ? 3.5 : 2,
+            dashArray: selected ? undefined : '6 4',
+            fillColor: selected ? '#3b82f6' : color,
+            fillOpacity: selected ? 0.4 : 0.18,
+          },
+          bubblingMouseEvents: false,
+        });
+        layer.bindTooltip(`${standTitle(stand.standNumber)} · ${OPERATION_LABEL[op.type]}`, { sticky: true });
+        layer.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          setHighlightedStand({ propertyId: forestValueResult.propertyId, standId: stand.standId });
+          setSidebarOpen(true);
+        });
+        group.addLayer(layer);
+        if (selected) layer.bringToFront();
+      });
+      return;
+    }
+
+    if (!forestValueOpen && !highlightedStandId) return;
     forestValueResult.stands.forEach((stand) => {
       if (!stand.geometry) return;
       const selected = stand.standId === highlightedStandId;
@@ -1275,7 +1307,7 @@ export default function MapPage() {
       group.addLayer(layer);
       if (selected) layer.bringToFront();
     });
-  }, [forestValueResult, forestValueOpen, highlightedStandId]);
+  }, [forestValueResult, forestValueOpen, highlightedStandId, careMode]);
 
   const handleSelectStand = (standId: string) => {
     if (selectedPropertyId === null) return;
@@ -1516,6 +1548,8 @@ export default function MapPage() {
                   onShowLocation: showCarePosition,
                   needed: careNeeded,
                   onSelectStand: showCareStand,
+                  activeStandId: highlightedStandId,
+                  onClearStand: () => setHighlightedStand(null),
                   onRequestOffers: isGuest ? undefined : handleRequestOffers,
                 }
               : null
@@ -1808,7 +1842,7 @@ export default function MapPage() {
             />
           )}
 
-          {!forestValueOpen && highlightedStandId && (
+          {!forestValueOpen && highlightedStandId && !careMode && (
             <button type="button" className="fv-back-chip" onClick={() => setForestValueOpen(true)}>
               ← Takaisin arvoon
             </button>

@@ -125,6 +125,13 @@ export const OPERATION_WORK_TYPE: Record<OperationType, MarkingType> = {
   planting: 'istutus',
 };
 
+// Work the owner plans and orders in forest care mode; soil preparation stays in the value view
+const CARE_WORK_TYPES: MarkingType[] = ['vesakonhoito', 'harvennus', 'avohakkuu', 'istutus'];
+
+export function isCareOperation(op: { type: OperationType }): boolean {
+  return CARE_WORK_TYPES.includes(OPERATION_WORK_TYPE[op.type]);
+}
+
 export function standTitle(standNumber: string | null): string {
   return standNumber ? `Kuvio ${standNumber}` : 'Kuvio';
 }

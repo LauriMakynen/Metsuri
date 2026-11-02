@@ -1,17 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { formatArea } from '../utils/measurement';
 import { formatDistance } from '../utils/distance';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
-import { OPERATION_LABEL, OPERATION_WORK_TYPE, TIMING_LABEL, TIMING_ORDER, standTitle } from '../utils/forestValueFormat';
-import type { MarkingType, Marking, Property, RecommendedOperation } from '../types';
+import {
+  OPERATION_LABEL,
+  OPERATION_WORK_TYPE,
+  TIMING_LABEL,
+  TIMING_ORDER,
+  isCareOperation,
+  standTitle,
+} from '../utils/forestValueFormat';
+import type { Marking, Property, RecommendedOperation } from '../types';
 
 // Without "Näytä kaikki" the list stays short, so the sidebar does not fill up over the years
 const RECENT_LIMIT = 5;
 const RECENT_OPEN_STORAGE_KEY = 'metsuri.care.recentOpen';
 const NEEDED_OPEN_STORAGE_KEY = 'metsuri.care.neededOpen';
-// Work the owner plans and orders; soil preparation and other side work stay in the value view
-const NEEDED_WORK_TYPES: MarkingType[] = ['vesakonhoito', 'harvennus', 'avohakkuu', 'istutus'];
 
 // Recommended operations come from the forest value calculation (Metsäkeskus or forestry rules)
 export type CareNeededOperations =
@@ -33,6 +38,9 @@ interface ForestCarePanelProps {
   onDeleteMarking: (id: number) => void;
   needed: CareNeededOperations;
   onSelectStand: (standId: string) => void;
+  // Stand chosen on the map or in the list; its recommendations are highlighted
+  activeStandId: string | null;
+  onClearStand: () => void;
   // Absent when the viewer cannot publish work requests (guest demo)
   onRequestOffers?: (operation: RecommendedOperation) => void;
 }
@@ -76,6 +84,8 @@ export default function ForestCarePanel({
   onDeleteMarking,
   needed,
   onSelectStand,
+  activeStandId,
+  onClearStand,
   onRequestOffers,
 }: ForestCarePanelProps) {
   const [recentOpen, setRecentOpen] = useState(() => readOpen(RECENT_OPEN_STORAGE_KEY));
@@ -83,6 +93,22 @@ export default function ForestCarePanel({
   const [showAll, setShowAll] = useState(false);
   // Last year shown in the recommendations; null = every year available
   const [untilYear, setUntilYear] = useState<number | null>(null);
+  const neededRef = useRef<HTMLDivElement>(null);
+
+  // A stand picked on the map opens the list and shows all of its years (adjusted during render)
+  const [shownActiveStand, setShownActiveStand] = useState(activeStandId);
+  if (activeStandId !== shownActiveStand) {
+    setShownActiveStand(activeStandId);
+    if (activeStandId) {
+      setNeededOpen(true);
+      setUntilYear(null);
+    }
+  }
+
+  useEffect(() => {
+    if (!activeStandId) return;
+    neededRef.current?.querySelector('.care-needed-item.active')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [activeStandId]);
 
   const toggleRecent = () => {
     storeOpen(RECENT_OPEN_STORAGE_KEY, !recentOpen);
@@ -105,8 +131,9 @@ export default function ForestCarePanel({
 
   const allNeeded =
     needed.status === 'ready'
-      ? needed.operations.filter((op) => NEEDED_WORK_TYPES.includes(OPERATION_WORK_TYPE[op.type]))
+      ? needed.operations.filter(isCareOperation)
       : [];
+  const activeStandOps = activeStandId ? allNeeded.filter((op) => op.standId === activeStandId) : [];
   const neededYears = [...new Set(allNeeded.map((op) => op.year))].sort((a, b) => a - b);
   const lastNeededYear = neededYears.length > 0 ? neededYears[neededYears.length - 1] : null;
   const neededOperations =
@@ -157,7 +184,18 @@ export default function ForestCarePanel({
         <span className={`sidebar-chevron ${neededOpen ? 'open' : ''}`} aria-hidden="true">⌄</span>
       </button>
       {neededOpen && (
-        <div className="care-needed">
+        <div className="care-needed" ref={neededRef}>
+          {activeStandOps.length > 0 && (
+            <div className="care-needed-active" role="status">
+              <span>
+                Valittu <strong>{standTitle(activeStandOps[0].standNumber)}</strong> ·{' '}
+                {activeStandOps.length === 1 ? '1 toimenpide' : `${activeStandOps.length} toimenpidettä`}
+              </span>
+              <button className="btn-link" onClick={onClearStand}>
+                Poista valinta
+              </button>
+            </div>
+          )}
           {needed.status === 'loading' ? (
             <p className="care-needed-empty">Lasketaan suositeltuja toimenpiteitä...</p>
           ) : needed.status === 'unavailable' ? (
@@ -194,7 +232,10 @@ export default function ForestCarePanel({
                     </h4>
                     <ul>
                       {group.items.map((op, index) => (
-                        <li key={`${op.standId}-${op.type}-${index}`} className="care-needed-item">
+                        <li
+                          key={`${op.standId}-${op.type}-${index}`}
+                          className={`care-needed-item ${op.standId === activeStandId ? 'active' : ''}`}
+                        >
                           <span
                             className="care-recent-dot"
                             style={{ color: MARKING_COLORS[OPERATION_WORK_TYPE[op.type]] }}

@@ -20,6 +20,8 @@ export interface SidebarCareMode {
   onShowLocation: () => void;
   needed: CareNeededOperations;
   onSelectStand: (standId: string) => void;
+  activeStandId: string | null;
+  onClearStand: () => void;
   onRequestOffers?: (operation: RecommendedOperation) => void;
 }
 
@@ -90,6 +92,8 @@ export default function Sidebar({
             onDeleteMarking={onDeleteMarking}
             needed={care.needed}
             onSelectStand={care.onSelectStand}
+            activeStandId={care.activeStandId}
+            onClearStand={care.onClearStand}
             onRequestOffers={care.onRequestOffers}
           />
         )}
