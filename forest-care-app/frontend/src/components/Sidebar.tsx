@@ -107,6 +107,7 @@ export default function Sidebar({
           onOpenForestValue={onOpenForestValue}
           isOpen={openSections.properties}
           onToggle={() => toggleSection('properties')}
+          title={care ? 'Tietoa valitusta metsästä' : undefined}
         />
 
         <WorkRequestList
