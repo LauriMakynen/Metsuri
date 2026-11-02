@@ -83,6 +83,7 @@ export default function Sidebar({
             location={care.location}
             onStartActivity={care.onStartActivity}
             onShowLocation={care.onShowLocation}
+            onDeleteMarking={onDeleteMarking}
           />
         )}
 
@@ -108,13 +109,16 @@ export default function Sidebar({
           onToggle={() => toggleSection('requests')}
         />
 
-        <MarkingList
-          markings={markings}
-          selectedPropertyId={selectedPropertyId}
-          onDelete={onDeleteMarking}
-          isOpen={openSections.markings}
-          onToggle={() => toggleSection('markings')}
-        />
+        {/* In care mode done work is listed under "Viimeisimmät toimenpiteet" instead */}
+        {!care && (
+          <MarkingList
+            markings={markings}
+            selectedPropertyId={selectedPropertyId}
+            onDelete={onDeleteMarking}
+            isOpen={openSections.markings}
+            onToggle={() => toggleSection('markings')}
+          />
+        )}
       </div>
     </aside>
   );

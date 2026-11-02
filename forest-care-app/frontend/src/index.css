@@ -324,7 +324,7 @@ html, body, #root {
 .care-recent-list { background: var(--white); }
 .care-recent-item { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.5rem 1rem; border-bottom: 1px solid #f3f4f6; }
 .care-recent-dot { line-height: 1.4; }
-.care-recent-text { display: flex; flex-direction: column; min-width: 0; font-size: 0.88rem; }
+.care-recent-text { display: flex; flex-direction: column; flex: 1; min-width: 0; font-size: 0.88rem; }
 .care-recent-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .care-recent-text small { color: var(--text-light); }
 .care-recent-more { padding: 0.35rem 1rem; }

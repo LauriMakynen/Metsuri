@@ -20,6 +20,7 @@ interface ForestCarePanelProps {
   location: CareLocation;
   onStartActivity: () => void;
   onShowLocation: () => void;
+  onDeleteMarking: (id: number) => void;
 }
 
 function readRecentOpen(): boolean {
@@ -42,13 +43,15 @@ function locationText(location: CareLocation): string {
   return `Olet ${formatDistance(location.distanceKm)} päässä palstasta.`;
 }
 
-// Forest care mode ("Hoida omaa metsää"): what matters when heading out to work on the parcel
+// Forest care mode ("Hoida omaa metsää"): what matters when heading out to work on the parcel.
+// The latest operations list replaces the separate "Tehdyt työt" section in this mode.
 export default function ForestCarePanel({
   property,
   markings,
   location,
   onStartActivity,
   onShowLocation,
+  onDeleteMarking,
 }: ForestCarePanelProps) {
   const [recentOpen, setRecentOpen] = useState(readRecentOpen);
   const [showAll, setShowAll] = useState(false);
@@ -134,7 +137,20 @@ export default function ForestCarePanel({
                     {MARKING_TYPE_LABELS[m.type]} · {formatDate(markingDate(m))}
                     {m.area_ha != null ? ` · ${formatArea(m.area_ha)}` : ''}
                   </small>
+                  {(m.follow_up_date_start || m.follow_up_date_end) && (
+                    <small>
+                      Tarkastus: {formatDateRange(m.follow_up_date_start ?? '', m.follow_up_date_end ?? '')}
+                    </small>
+                  )}
                 </span>
+                <button
+                  className="btn-icon delete"
+                  onClick={() => onDeleteMarking(m.id)}
+                  title="Poista"
+                  aria-label={`Poista ${m.title}`}
+                >
+                  🗑
+                </button>
               </li>
             ))
           )}
