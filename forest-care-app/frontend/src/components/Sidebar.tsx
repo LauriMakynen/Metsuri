@@ -11,6 +11,7 @@ import MarkingList from './MarkingList';
 import WorkRequestList from './WorkRequestList';
 import ForestCarePanel from './ForestCarePanel';
 import type { CareLocation, CareNeededOperations } from './ForestCarePanel';
+import type { ParcelArea } from '../utils/parcelAreas';
 import { useState } from 'react';
 
 // Forest care mode ("Hoida omaa metsää") adds a care summary on top of the usual sections
@@ -22,6 +23,7 @@ export interface SidebarCareMode {
   onSelectStand: (standId: string) => void;
   activeStandId: string | null;
   onClearStand: () => void;
+  onShowArea: (area: ParcelArea) => void;
   onRequestOffers?: (operation: RecommendedOperation) => void;
 }
 
@@ -94,6 +96,7 @@ export default function Sidebar({
             onSelectStand={care.onSelectStand}
             activeStandId={care.activeStandId}
             onClearStand={care.onClearStand}
+            onShowArea={care.onShowArea}
             onRequestOffers={care.onRequestOffers}
           />
         )}

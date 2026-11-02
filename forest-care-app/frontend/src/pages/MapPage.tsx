@@ -41,6 +41,8 @@ import { bidSummaryText, suggestedPricing } from '../utils/bids';
 import type { ActivityResult } from '../components/ActivityTracker';
 import type { CareLocation, CareNeededOperations } from '../components/ForestCarePanel';
 import { parcelProximity } from '../utils/distance';
+import { parcelAreas } from '../utils/parcelAreas';
+import type { ParcelArea } from '../utils/parcelAreas';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -127,6 +129,14 @@ function toBounds(geometry: GeoJSONGeometry): L.LatLngBounds | null {
   const layer = L.geoJSON(geometry as GeoJSON.Geometry);
   if (layer.getLayers().length === 0) return null;
   return layer.getBounds();
+}
+
+// The open sidebar lies on top of the map: keep fitted areas clear of it, unless it covers
+// most of a narrow screen (then the area would get squeezed into a sliver)
+function fitPadding(): L.FitBoundsOptions {
+  const sidebarWidth = document.querySelector('.map-sidebar.open')?.clientWidth ?? 0;
+  const left = sidebarWidth > 0 && window.innerWidth - sidebarWidth >= 320 ? sidebarWidth + 40 : 40;
+  return { paddingTopLeft: [left, 40], paddingBottomRight: [40, 40] };
 }
 
 function getMapLayerConfigFromEnv(): MapLayerConfig | null {
@@ -269,7 +279,7 @@ export default function MapPage() {
         .map((p) => ({ type: 'Feature', properties: {}, geometry: p.geometry as GeoJSON.Geometry })),
     } as GeoJSON.FeatureCollection).getBounds();
     if (bounds.isValid() && mapRef.current) {
-      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
+      mapRef.current.fitBounds(bounds, { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
     }
   }, [isGuest, careMode, carePropertyId]);
 
@@ -733,7 +743,7 @@ export default function MapPage() {
 
     const bounds = toBounds(selectedPropertyGeometry);
     if (bounds && mapRef.current) {
-      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
+      mapRef.current.fitBounds(bounds, { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
     }
   }, [selectedPropertyGeometry, renderSelectedHighlight]);
 
@@ -1059,7 +1069,7 @@ export default function MapPage() {
         const parcelBounds = selectedPropertyGeometry ? toBounds(selectedPropertyGeometry) : null;
         if (!careFittedRef.current && parcelBounds?.isValid() && proximity && proximity.distanceKm <= 30) {
           careFittedRef.current = true;
-          map.fitBounds(parcelBounds.extend(latLng), { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
+          map.fitBounds(parcelBounds.extend(latLng), { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
         }
       },
       (err) => {
@@ -1079,6 +1089,36 @@ export default function MapPage() {
       careLocationLayerRef.current = null;
     };
   }, [careMode, activityOpen, selectedPropertyGeometry]);
+
+  // Care mode: number the separate areas of a multi-area property on the map ("Alue 1, 2, …")
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!careMode || !map) return;
+    const areas = parcelAreas(selectedPropertyGeometry);
+    if (areas.length < 2) return;
+    const layer = L.layerGroup(
+      areas.map((area) =>
+        L.marker(area.labelPosition, {
+          icon: L.divIcon({ className: 'care-area-label', html: String(area.number), iconSize: [26, 26] }),
+          title: `Alue ${area.number}`,
+          interactive: false,
+          keyboard: false,
+        })
+      )
+    ).addTo(map);
+    return () => {
+      map.removeLayer(layer);
+    };
+  }, [careMode, selectedPropertyGeometry]);
+
+  const showCareArea = (area: ParcelArea) => {
+    const bounds = toBounds(area.geometry);
+    if (!bounds?.isValid() || !mapRef.current) return;
+    // On a narrow screen the sidebar closes to show the area, so no room is left for it
+    const narrow = window.innerWidth < 900;
+    mapRef.current.fitBounds(bounds, { ...(narrow ? { padding: [40, 40] } : fitPadding()), maxZoom: FIT_MAX_ZOOM });
+    if (narrow) setSidebarOpen(false);
+  };
 
   const showCarePosition = () => {
     const position = carePositionRef.current;
@@ -1558,6 +1598,7 @@ export default function MapPage() {
                   onSelectStand: showCareStand,
                   activeStandId: highlightedStandId,
                   onClearStand: () => setHighlightedStand(null),
+                  onShowArea: showCareArea,
                   onRequestOffers: isGuest ? undefined : handleRequestOffers,
                 }
               : null

@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import TopNav from '../components/TopNav';
 import { propertiesService, workRequestsService } from '../services/forestService';
 import { formatArea } from '../utils/measurement';
+import { parcelAreaCount } from '../utils/parcelAreas';
 import type { Property } from '../types';
 
 // Spruce treeline silhouette used at the bottom edge of the hero
@@ -188,7 +189,11 @@ export default function StartPage() {
                     <span className="care-picker-text">
                       <strong>{property.name}</strong>
                       <small>
-                        {[property.property_code, property.area_ha ? formatArea(property.area_ha) : null]
+                        {[
+                          property.property_code,
+                          property.area_ha ? formatArea(property.area_ha) : null,
+                          parcelAreaCount(property.geometry) > 1 ? `${parcelAreaCount(property.geometry)} aluetta` : null,
+                        ]
                           .filter(Boolean)
                           .join(' · ') || 'Oma palsta'}
                       </small>

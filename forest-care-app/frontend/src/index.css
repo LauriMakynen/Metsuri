@@ -303,6 +303,20 @@ html, body, #root {
 .care-eyebrow { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #b45309; }
 .care-title { font-size: 1.1rem; color: var(--text); margin-top: 0.15rem; overflow-wrap: anywhere; }
 .care-meta { color: var(--text-light); }
+.care-meta strong { color: #b45309; }
+.care-areas { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+.care-area-chip {
+  display: inline-flex; align-items: center; gap: 0.35rem; min-height: 32px; padding: 0.2rem 0.6rem 0.2rem 0.25rem;
+  border: 1.5px solid #fcd34d; border-radius: 999px; background: var(--white); color: var(--text);
+  font: inherit; font-size: 0.8rem; cursor: pointer;
+}
+.care-area-chip:hover, .care-area-chip:focus-visible { border-color: #d97706; background: #fffbeb; }
+.care-area-number, .care-area-label {
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 50%;
+  background: #b45309; color: var(--white); font-weight: 800;
+}
+.care-area-number { width: 22px; height: 22px; font-size: 0.75rem; }
+.care-area-label { font-size: 0.85rem; border: 2px solid var(--white); box-shadow: 0 2px 6px rgba(0,0,0,0.35); }
 .care-empty { padding: 0 1rem 0.9rem; color: var(--text-light); font-size: 0.9rem; }
 .care-panel > .care-eyebrow { padding: 0.9rem 1rem 0.3rem; }
 .btn.care-start-btn {

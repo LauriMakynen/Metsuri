@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { formatArea } from '../utils/measurement';
 import { formatDistance } from '../utils/distance';
+import { parcelAreas } from '../utils/parcelAreas';
+import type { ParcelArea } from '../utils/parcelAreas';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import {
   OPERATION_LABEL,
@@ -41,6 +43,8 @@ interface ForestCarePanelProps {
   // Stand chosen on the map or in the list; its recommendations are highlighted
   activeStandId: string | null;
   onClearStand: () => void;
+  // Zooms the map to one separate area of a multi-area property
+  onShowArea: (area: ParcelArea) => void;
   // Absent when the viewer cannot publish work requests (guest demo)
   onRequestOffers?: (operation: RecommendedOperation) => void;
 }
@@ -86,6 +90,7 @@ export default function ForestCarePanel({
   onSelectStand,
   activeStandId,
   onClearStand,
+  onShowArea,
   onRequestOffers,
 }: ForestCarePanelProps) {
   const [recentOpen, setRecentOpen] = useState(() => readOpen(RECENT_OPEN_STORAGE_KEY));
@@ -129,6 +134,8 @@ export default function ForestCarePanel({
     );
   }
 
+  const areas = parcelAreas(property.geometry);
+
   const allNeeded =
     needed.status === 'ready'
       ? needed.operations.filter(isCareOperation)
@@ -160,7 +167,27 @@ export default function ForestCarePanel({
       <div className="care-head">
         <p className="care-eyebrow">🪓 Hoidettava metsä</p>
         <h3 className="care-title">{property.name}</h3>
-        {property.area_ha ? <small className="care-meta">📐 {formatArea(property.area_ha)}</small> : null}
+        {(property.area_ha || areas.length > 1) && (
+          <small className="care-meta">
+            📐 {property.area_ha ? formatArea(property.area_ha) : ''}
+            {areas.length > 1 && (
+              <>
+                {property.area_ha ? ' · ' : ''}
+                <strong>{areas.length} erillistä aluetta</strong>
+              </>
+            )}
+          </small>
+        )}
+        {areas.length > 1 && (
+          <div className="care-areas" role="group" aria-label="Metsän erilliset alueet">
+            {areas.map((area) => (
+              <button key={area.number} className="care-area-chip" onClick={() => onShowArea(area)}>
+                <span className="care-area-number" aria-hidden="true">{area.number}</span>
+                Alue {area.number} · {formatArea(area.areaHa)}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <button className="btn care-start-btn" onClick={onStartActivity}>
