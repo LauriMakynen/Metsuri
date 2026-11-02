@@ -3,13 +3,14 @@ import type {
   Marking,
   CadastreFeature,
   WorkRequest,
+  RecommendedOperation,
 } from '../types';
 import PropertySearch from './PropertySearch';
 import PropertyList from './PropertyList';
 import MarkingList from './MarkingList';
 import WorkRequestList from './WorkRequestList';
 import ForestCarePanel from './ForestCarePanel';
-import type { CareLocation } from './ForestCarePanel';
+import type { CareLocation, CareNeededOperations } from './ForestCarePanel';
 import { useState } from 'react';
 
 // Forest care mode ("Hoida omaa metsää") adds a care summary on top of the usual sections
@@ -17,6 +18,9 @@ export interface SidebarCareMode {
   location: CareLocation;
   onStartActivity: () => void;
   onShowLocation: () => void;
+  needed: CareNeededOperations;
+  onSelectStand: (standId: string) => void;
+  onRequestOffers?: (operation: RecommendedOperation) => void;
 }
 
 interface SidebarProps {
@@ -84,6 +88,9 @@ export default function Sidebar({
             onStartActivity={care.onStartActivity}
             onShowLocation={care.onShowLocation}
             onDeleteMarking={onDeleteMarking}
+            needed={care.needed}
+            onSelectStand={care.onSelectStand}
+            onRequestOffers={care.onRequestOffers}
           />
         )}
 

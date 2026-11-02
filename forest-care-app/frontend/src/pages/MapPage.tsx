@@ -39,7 +39,7 @@ import { OPERATION_LABEL, OPERATION_WORK_TYPE, standTitle } from '../utils/fores
 import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
 import { bidSummaryText, suggestedPricing } from '../utils/bids';
 import type { ActivityResult } from '../components/ActivityTracker';
-import type { CareLocation } from '../components/ForestCarePanel';
+import type { CareLocation, CareNeededOperations } from '../components/ForestCarePanel';
 import { parcelProximity } from '../utils/distance';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -1079,6 +1079,19 @@ export default function MapPage() {
     if (window.innerWidth < 900) setSidebarOpen(false);
   };
 
+  // "Toimenpiteitä tarvitaan" in care mode: the value calculation's recommended operations
+  const careNeeded: CareNeededOperations = forestValueResult
+    ? { status: 'ready', operations: forestValueResult.operations }
+    : forestValue.entry?.status === 'failed' ||
+        (forestValue.entry?.status === 'ready' && forestValue.entry.response?.status !== 'available')
+      ? { status: 'unavailable' }
+      : { status: 'loading' };
+
+  const showCareStand = (standId: string) => {
+    handleSelectStand(standId);
+    if (window.innerWidth < 900) setSidebarOpen(false);
+  };
+
   const openActivity = () => {
     if (!selectedPropertyId) {
       setError('Valitse ensin palsta, jolla aktiviteetti tehdään.');
@@ -1497,7 +1510,14 @@ export default function MapPage() {
           onWorkRequestUpdated={handleWorkRequestUpdated}
           care={
             careMode
-              ? { location: careLocation, onStartActivity: openActivity, onShowLocation: showCarePosition }
+              ? {
+                  location: careLocation,
+                  onStartActivity: openActivity,
+                  onShowLocation: showCarePosition,
+                  needed: careNeeded,
+                  onSelectStand: showCareStand,
+                  onRequestOffers: isGuest ? undefined : handleRequestOffers,
+                }
               : null
           }
         />
