@@ -272,6 +272,17 @@ async function migrate() {
       )
     `);
 
+    // Stands the owner marked as field ("Tämä on pelto"): left out of the forest value and
+    // recommendations. Stand ids are the forest data source's ids (Metsäkeskus, or mock).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS forest_field_marks (
+        property_id INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+        stand_id TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (property_id, stand_id)
+      )
+    `);
+
     // Finnish regions (maakunnat) for filtering work requests by region. Boundaries come from
     // data/regions.json and are refreshed on every run, so a new boundary file just needs a migrate.
     await client.query(`

@@ -24,6 +24,7 @@ export interface SidebarCareMode {
   activeStandId: string | null;
   onClearStand: () => void;
   onShowArea: (area: ParcelArea) => void;
+  onMarkField?: (standId: string, isField: boolean) => Promise<void>;
   onRequestOffers?: (operation: RecommendedOperation) => void;
 }
 
@@ -97,6 +98,7 @@ export default function Sidebar({
             activeStandId={care.activeStandId}
             onClearStand={care.onClearStand}
             onShowArea={care.onShowArea}
+            onMarkField={care.onMarkField}
             onRequestOffers={care.onRequestOffers}
           />
         )}

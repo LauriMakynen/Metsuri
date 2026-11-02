@@ -1129,7 +1129,12 @@ export default function MapPage() {
 
   // "Toimenpiteitä tarvitaan" in care mode: the value calculation's recommended operations
   const careNeeded: CareNeededOperations = forestValueResult
-    ? { status: 'ready', operations: forestValueResult.operations }
+    ? {
+        status: 'ready',
+        operations: forestValueResult.operations,
+        fields: forestValueResult.fields ?? [],
+        fieldsUnavailable: forestValueResult.warnings.some((w) => w.code === 'fields_unavailable'),
+      }
     : forestValue.entry?.status === 'failed' ||
         (forestValue.entry?.status === 'ready' && forestValue.entry.response?.status !== 'available')
       ? { status: 'unavailable' }
@@ -1311,6 +1316,20 @@ export default function MapPage() {
 
     // Care mode: stands that need work are clickable and highlight their recommendations in the sidebar
     if (careMode && !forestValueOpen) {
+      // Fields first, so stands stay on top; they get no recommendations
+      (forestValueResult.fields ?? []).forEach((field) => {
+        if (!field.geometry) return;
+        const layer = L.geoJSON(field.geometry as GeoJSON.Geometry, {
+          style: { color: '#a16207', weight: 1.5, dashArray: '2 4', fillColor: '#facc15', fillOpacity: 0.3 },
+          bubblingMouseEvents: false,
+        });
+        layer.bindTooltip(
+          `🌾 Pelto · ${formatArea(field.areaHa)}` +
+            (field.source === 'owner' ? ` (${standTitle(field.standNumber).toLowerCase()} merkitty pelloksi)` : ' (peltolohkorekisteri)'),
+          { sticky: true }
+        );
+        group.addLayer(layer);
+      });
       const careOps = forestValueResult.operations.filter(isCareOperation);
       forestValueResult.stands.forEach((stand) => {
         const op = careOps.find((o) => o.standId === stand.standId);
@@ -1599,6 +1618,7 @@ export default function MapPage() {
                   activeStandId: highlightedStandId,
                   onClearStand: () => setHighlightedStand(null),
                   onShowArea: showCareArea,
+                  onMarkField: isGuest ? undefined : forestValue.setFieldMark,
                   onRequestOffers: isGuest ? undefined : handleRequestOffers,
                 }
               : null

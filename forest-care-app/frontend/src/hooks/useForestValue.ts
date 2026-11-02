@@ -89,5 +89,15 @@ export function useForestValue(property: Property | null) {
     [key, propertyId]
   );
 
-  return { entry, reload, submitManual };
+  // Throws on failure so the caller can show an error
+  const setFieldMark = useCallback(
+    async (standId: string, isField: boolean) => {
+      if (!key || propertyId === null || propertyId < 0) return;
+      const response = await propertiesService.setFieldMark(propertyId, standId, isField);
+      setEntry(key, { status: 'ready', response, fetchedAt: Date.now() });
+    },
+    [key, propertyId]
+  );
+
+  return { entry, reload, submitManual, setFieldMark };
 }

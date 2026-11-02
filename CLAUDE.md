@@ -57,6 +57,8 @@ Koodi on kansiossa `forest-care-app/` (React + Vite + Leaflet / Express + TypeSc
 - `FOREST_DATA_MODE=mock` (oletus ilman WFS-osoitetta) tuottaa esimerkkikuviot; `live` hakee Metsäkeskuksen
   WFS:stä (`v2:stand`, v1 poistuu 6/2027). Luken hinnat: `LUKE_PXWEB_PRICE_URL`, varahinnat `config/`.
 - Tulokset välimuistissa `forest_value_cache` (24 h), hinnat `stumpage_price_cache`.
+- Pellot (`fields.ts`) leikataan kuvioista pois: Ruokaviraston peltolohkorekisteri (WFS, `FIELD_DATA_MODE=off` ohittaa)
+  ja omistajan "Tämä on pelto" -merkinnät (`forest_field_marks`). Pelloille ei arvoa eikä suosituksia.
 
 ## Frontendin sudenkuopat
 - API kutsutaan samasta osoitteesta (Viten proxy `/api`); `VITE_API_URL` vain tuotannossa.

@@ -13,7 +13,7 @@ import {
   isCareOperation,
   standTitle,
 } from '../utils/forestValueFormat';
-import type { Marking, Property, RecommendedOperation } from '../types';
+import type { FieldArea, Marking, Property, RecommendedOperation } from '../types';
 
 // Without "Näytä kaikki" the list stays short, so the sidebar does not fill up over the years
 const RECENT_LIMIT = 5;
@@ -24,7 +24,13 @@ const NEEDED_OPEN_STORAGE_KEY = 'metsuri.care.neededOpen';
 export type CareNeededOperations =
   | { status: 'loading' }
   | { status: 'unavailable' }
-  | { status: 'ready'; operations: RecommendedOperation[] };
+  | {
+      status: 'ready';
+      operations: RecommendedOperation[];
+      fields: FieldArea[];
+      // The field parcel register could not be checked
+      fieldsUnavailable: boolean;
+    };
 
 export type CareLocation =
   | { status: 'locating' }
@@ -45,6 +51,8 @@ interface ForestCarePanelProps {
   onClearStand: () => void;
   // Zooms the map to one separate area of a multi-area property
   onShowArea: (area: ParcelArea) => void;
+  // Marks a stand as field or undoes it; absent for guests (nothing is saved in the demo)
+  onMarkField?: (standId: string, isField: boolean) => Promise<void>;
   // Absent when the viewer cannot publish work requests (guest demo)
   onRequestOffers?: (operation: RecommendedOperation) => void;
 }
@@ -91,6 +99,7 @@ export default function ForestCarePanel({
   activeStandId,
   onClearStand,
   onShowArea,
+  onMarkField,
   onRequestOffers,
 }: ForestCarePanelProps) {
   const [recentOpen, setRecentOpen] = useState(() => readOpen(RECENT_OPEN_STORAGE_KEY));
@@ -99,6 +108,22 @@ export default function ForestCarePanel({
   // Last year shown in the recommendations; null = every year available
   const [untilYear, setUntilYear] = useState<number | null>(null);
   const neededRef = useRef<HTMLDivElement>(null);
+  const [fieldBusy, setFieldBusy] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState('');
+
+  const markField = async (standId: string, isField: boolean) => {
+    if (!onMarkField) return;
+    setFieldBusy(standId);
+    setFieldError('');
+    try {
+      await onMarkField(standId, isField);
+      if (isField) onClearStand();
+    } catch {
+      setFieldError(isField ? 'Pelloksi merkitseminen epäonnistui.' : 'Merkinnän peruminen epäonnistui.');
+    } finally {
+      setFieldBusy(null);
+    }
+  };
 
   // A stand picked on the map opens the list and shows all of its years (adjusted during render)
   const [shownActiveStand, setShownActiveStand] = useState(activeStandId);
@@ -141,6 +166,10 @@ export default function ForestCarePanel({
       ? needed.operations.filter(isCareOperation)
       : [];
   const activeStandOps = activeStandId ? allNeeded.filter((op) => op.standId === activeStandId) : [];
+  const fields = needed.status === 'ready' ? needed.fields : [];
+  const fieldAreaHa = fields.reduce((sum, f) => sum + f.areaHa, 0);
+  const registerFields = fields.filter((f) => f.source === 'register');
+  const ownerFields = fields.filter((f) => f.source === 'owner');
   const neededYears = [...new Set(allNeeded.map((op) => op.year))].sort((a, b) => a - b);
   const lastNeededYear = neededYears.length > 0 ? neededYears[neededYears.length - 1] : null;
   const neededOperations =
@@ -203,6 +232,46 @@ export default function ForestCarePanel({
         )}
       </div>
 
+      {(fields.length > 0 || (needed.status === 'ready' && needed.fieldsUnavailable) || fieldError) && (
+        <div className="care-fields" role="status">
+          {fields.length > 0 && (
+            <p>
+              🌾 <strong>Peltoa {formatArea(fieldAreaHa)}</strong> – pelloille ei lasketa puuston arvoa eikä anneta
+              metsänhoitosuosituksia.
+            </p>
+          )}
+          {registerFields.length > 0 && (
+            <small>
+              Ruokaviraston peltolohkorekisteri:{' '}
+              {registerFields.length === 1 ? '1 peltolohko' : `${registerFields.length} peltolohkoa`},{' '}
+              {formatArea(registerFields.reduce((sum, f) => sum + f.areaHa, 0))}
+            </small>
+          )}
+          {ownerFields.map((field) => (
+            <div key={field.standId} className="care-field-mark">
+              <small>
+                {standTitle(field.standNumber)} merkitty pelloksi · {formatArea(field.areaHa)}
+              </small>
+              {onMarkField && field.standId && (
+                <button
+                  className="btn-link"
+                  onClick={() => markField(field.standId as string, false)}
+                  disabled={fieldBusy !== null}
+                >
+                  {fieldBusy === field.standId ? 'Perutaan...' : 'Peru'}
+                </button>
+              )}
+            </div>
+          ))}
+          {needed.status === 'ready' && needed.fieldsUnavailable && (
+            <small className="care-fields-warn">
+              Peltolohkorekisteriä ei saatu tarkistettua. Jos jokin kuvio on pelto, merkitse se pelloksi.
+            </small>
+          )}
+          {fieldError && <small className="care-fields-warn">{fieldError}</small>}
+        </div>
+      )}
+
       <button className="sidebar-section-header care-needed-header" onClick={toggleNeeded} aria-expanded={neededOpen}>
         <h3>
           🪵 Suositellut toimenpiteet ({allNeeded.length})
@@ -218,9 +287,21 @@ export default function ForestCarePanel({
                 Valittu <strong>{standTitle(activeStandOps[0].standNumber)}</strong> ·{' '}
                 {activeStandOps.length === 1 ? '1 toimenpide' : `${activeStandOps.length} toimenpidettä`}
               </span>
-              <button className="btn-link" onClick={onClearStand}>
-                Poista valinta
-              </button>
+              <span className="care-needed-active-actions">
+                {onMarkField && activeStandId && (
+                  <button
+                    className="care-field-btn"
+                    onClick={() => markField(activeStandId, true)}
+                    disabled={fieldBusy !== null}
+                    title="Kuvio on oikeasti peltoa: sille ei anneta metsänhoitosuosituksia"
+                  >
+                    {fieldBusy === activeStandId ? 'Merkitään...' : '🌾 Tämä on pelto'}
+                  </button>
+                )}
+                <button className="btn-link" onClick={onClearStand}>
+                  Poista valinta
+                </button>
+              </span>
             </div>
           )}
           {needed.status === 'loading' ? (
