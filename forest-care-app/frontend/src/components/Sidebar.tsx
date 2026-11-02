@@ -8,7 +8,16 @@ import PropertySearch from './PropertySearch';
 import PropertyList from './PropertyList';
 import MarkingList from './MarkingList';
 import WorkRequestList from './WorkRequestList';
+import ForestCarePanel from './ForestCarePanel';
+import type { CareLocation } from './ForestCarePanel';
 import { useState } from 'react';
+
+// Forest care mode ("Hoida omaa metsää") adds a care summary on top of the usual sections
+export interface SidebarCareMode {
+  location: CareLocation;
+  onStartActivity: () => void;
+  onShowLocation: () => void;
+}
 
 interface SidebarProps {
   isOpen: boolean;
@@ -28,6 +37,7 @@ interface SidebarProps {
   onNewWorkRequest: () => void;
   onWithdrawWorkRequest: (requestId: number) => Promise<void>;
   onWorkRequestUpdated: (updated: WorkRequest) => void;
+  care?: SidebarCareMode | null;
 }
 
 export default function Sidebar({
@@ -48,9 +58,11 @@ export default function Sidebar({
   onNewWorkRequest,
   onWithdrawWorkRequest,
   onWorkRequestUpdated,
+  care = null,
 }: SidebarProps) {
   const [openSections, setOpenSections] = useState({
-    properties: true,
+    // In care mode the parcel is already chosen, so the parcel list starts collapsed
+    properties: !care,
     requests: false,
     markings: false,
   });
@@ -64,6 +76,16 @@ export default function Sidebar({
       <PropertySearch onSearch={onSearch} onSelectResult={onSelectResult} isSearching={isSearching} />
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
+        {care && (
+          <ForestCarePanel
+            property={selectedProperty}
+            markings={selectedPropertyId ? markings : []}
+            location={care.location}
+            onStartActivity={care.onStartActivity}
+            onShowLocation={care.onShowLocation}
+          />
+        )}
+
         <PropertyList
           properties={properties}
           selectedId={selectedPropertyId}

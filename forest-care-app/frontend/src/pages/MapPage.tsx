@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -39,6 +39,8 @@ import { OPERATION_LABEL, OPERATION_WORK_TYPE, standTitle } from '../utils/fores
 import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
 import { bidSummaryText, suggestedPricing } from '../utils/bids';
 import type { ActivityResult } from '../components/ActivityTracker';
+import type { CareLocation } from '../components/ForestCarePanel';
+import { parcelProximity } from '../utils/distance';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -149,9 +151,21 @@ export default function MapPage() {
   const measurementLayerRef = useRef<L.FeatureGroup | null>(null);
   const autoSelectedRef = useRef(false);
   const requestsLayerRef = useRef<L.FeatureGroup | null>(null);
+  const careLocationLayerRef = useRef<L.LayerGroup | null>(null);
+  const carePositionRef = useRef<L.LatLng | null>(null);
+  const careFittedRef = useRef(false);
 
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
+  // "Hoida omaa metsää" opens /map?hoida=<property id>: forest care mode on that parcel
+  const [searchParams] = useSearchParams();
+  const careMode = searchParams.has('hoida');
+  const carePropertyId = Number(searchParams.get('hoida')) || null;
+  const [careLocation, setCareLocation] = useState<CareLocation>(() =>
+    'geolocation' in navigator
+      ? { status: 'locating' }
+      : { status: 'unavailable', message: 'Selaimesi ei tue sijainnin käyttöä.' }
+  );
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
   const [layerMenuOpen, setLayerMenuOpen] = useState(true);
   const [drawMenuOpen, setDrawMenuOpen] = useState(true);
@@ -233,13 +247,30 @@ export default function MapPage() {
     const props = await propertiesService.getAll();
     setProperties(props);
     setPropertiesLoaded(true);
-    // "Avaa oma metsäpalsta" should land on the parcel, not on the whole of Finland
-    if (props.length > 0 && !autoSelectedRef.current) {
-      autoSelectedRef.current = true;
-      setSelectedPropertyId((current) => current ?? props[0].id);
-      setSelectedPropertyGeometry((current) => current ?? props[0].geometry);
+    if (props.length === 0 || autoSelectedRef.current) return;
+    autoSelectedRef.current = true;
+    if (careMode) {
+      // Care mode lands on the chosen parcel; with a single parcel the choice was skipped
+      const careProperty = props.find((p) => p.id === carePropertyId) ?? (props.length === 1 ? props[0] : null);
+      if (careProperty) {
+        setSelectedPropertyId(careProperty.id);
+        setSelectedPropertyGeometry(careProperty.geometry);
+      } else {
+        setError('Valittua metsää ei löytynyt. Valitse hoidettava palsta sivupalkista.');
+      }
+      return;
     }
-  }, [isGuest]);
+    // "Avaa oma metsäpalsta" shows all own parcels without choosing one
+    const bounds = L.geoJSON({
+      type: 'FeatureCollection',
+      features: props
+        .filter((p) => p.geometry)
+        .map((p) => ({ type: 'Feature', properties: {}, geometry: p.geometry as GeoJSON.Geometry })),
+    } as GeoJSON.FeatureCollection).getBounds();
+    if (bounds.isValid() && mapRef.current) {
+      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
+    }
+  }, [isGuest, careMode, carePropertyId]);
 
   const loadMarkings = useCallback(async (propertyId?: number | null) => {
     if (isGuest) return;
@@ -993,6 +1024,61 @@ export default function MapPage() {
     startDraw('request');
   };
 
+  // Care mode: follow the user's GPS position on the map (the activity tracker has its own while open)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!careMode || activityOpen || !map || !('geolocation' in navigator)) return;
+    const layer = L.layerGroup().addTo(map);
+    careLocationLayerRef.current = layer;
+    const watchId = navigator.geolocation.watchPosition(
+      ({ coords }) => {
+        const latLng = L.latLng(coords.latitude, coords.longitude);
+        carePositionRef.current = latLng;
+        layer.clearLayers();
+        L.circle(latLng, {
+          radius: coords.accuracy, color: '#2563eb', weight: 1, fillOpacity: 0.08, interactive: false,
+        }).addTo(layer);
+        L.circleMarker(latLng, { radius: 8, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 })
+          .bindTooltip('Olet tässä')
+          .addTo(layer);
+        const proximity = parcelProximity(selectedPropertyGeometry, { lat: coords.latitude, lng: coords.longitude });
+        setCareLocation({
+          status: 'ok',
+          onParcel: proximity?.onParcel ?? false,
+          distanceKm: proximity?.distanceKm ?? null,
+        });
+        // Show the user and the parcel together once, when they are near each other
+        const parcelBounds = selectedPropertyGeometry ? toBounds(selectedPropertyGeometry) : null;
+        if (!careFittedRef.current && parcelBounds?.isValid() && proximity && proximity.distanceKm <= 30) {
+          careFittedRef.current = true;
+          map.fitBounds(parcelBounds.extend(latLng), { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
+        }
+      },
+      (err) => {
+        setCareLocation({
+          status: 'unavailable',
+          message:
+            err.code === err.PERMISSION_DENIED
+              ? 'Sijainnin käyttö estettiin. Salli sijainti selaimen asetuksista.'
+              : 'Sijaintia ei saatu juuri nyt.',
+        });
+      },
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 }
+    );
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      map.removeLayer(layer);
+      careLocationLayerRef.current = null;
+    };
+  }, [careMode, activityOpen, selectedPropertyGeometry]);
+
+  const showCarePosition = () => {
+    const position = carePositionRef.current;
+    if (!position || !mapRef.current) return;
+    mapRef.current.setView(position, Math.max(mapRef.current.getZoom(), 15));
+    if (window.innerWidth < 900) setSidebarOpen(false);
+  };
+
   const openActivity = () => {
     if (!selectedPropertyId) {
       setError('Valitse ensin palsta, jolla aktiviteetti tehdään.');
@@ -1409,6 +1495,11 @@ export default function MapPage() {
           onNewWorkRequest={openNewWorkRequest}
           onWithdrawWorkRequest={handleWithdrawWorkRequest}
           onWorkRequestUpdated={handleWorkRequestUpdated}
+          care={
+            careMode
+              ? { location: careLocation, onStartActivity: openActivity, onShowLocation: showCarePosition }
+              : null
+          }
         />
 
         <div className="map-wrapper">
