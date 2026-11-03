@@ -305,6 +305,7 @@ function ForestCard({
 }
 
 export default function ForestOverviewPage() {
+  const navigate = useNavigate();
   const [properties, setProperties] = useState<Property[]>([]);
   const [requests, setRequests] = useState<WorkRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -349,13 +350,27 @@ export default function ForestOverviewPage() {
           <p className="forest-eyebrow">🌲 Metsänomistajalle</p>
           <h1>Minun metsäni</h1>
           <p>Katso omien metsäpalstojesi tilanne ja siirry valitsemasi palstan karttanäkymään.</p>
+          {/* The map works without a parcel too: browse it or add a new parcel there */}
+          {!loading && properties.length > 0 && (
+            <button className="btn btn-secondary btn-compact forest-map-link" onClick={() => navigate('/map')}>
+              🗺️ Avaa kartta
+            </button>
+          )}
         </header>
 
         {error && <p className="error-message" role="alert">{error}</p>}
         {loading ? (
           <p className="glass-panel" role="status">Ladataan omia metsäpalstoja...</p>
         ) : properties.length === 0 && !error ? (
-          <p className="glass-panel">Sinulle ei ole vielä tallennettuja metsäpalstoja.</p>
+          <div className="glass-panel forest-empty">
+            <p>
+              Sinulle ei ole vielä tallennettuja metsäpalstoja. Lisää metsäsi kartalla hakemalla
+              kiinteistötunnuksella tai valitsemalla kiinteistö kartalta.
+            </p>
+            <button className="btn btn-primary" onClick={() => navigate('/map')}>
+              🗺️ Avaa kartta ja lisää metsä
+            </button>
+          </div>
         ) : (
           <section className="forest-property-list" aria-label="Omat metsäpalstat">
             {properties.map((property) => (
