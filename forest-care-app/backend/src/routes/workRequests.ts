@@ -8,6 +8,7 @@ import {
   parseTakenAt,
 } from '../services/workRequestPhotos';
 import { REGIONS, isValidRegionCode } from '../services/regions';
+import { FOREST_WORK_TYPES, checkWorkArea, landCheckEnabled, workAreaWarning } from '../services/workAreaCheck';
 
 const router = Router();
 
@@ -16,6 +17,7 @@ const VALID_GEOMETRIES = ['Polygon', 'MultiPolygon', 'Point'];
 const MAX_NOTE_LENGTH = 1000;
 const MAX_TITLE_LENGTH = 255;
 const MAX_EUR = 10_000_000;
+const BOUNDARY_TOLERANCE_M = 25;
 
 // Chosen by the owner when publishing:
 // owner_receives = timber sale (the buyer pays the owner) → highest offer is best,
@@ -66,6 +68,8 @@ function isValidEur(value: unknown): value is number {
 /**
  * Open work requests as shown to work providers. Owner and bidder identities are never
  * exposed; with a logged-in viewer, is_own and my_bid_eur describe that viewer only.
+ * Logged-in viewers also see the property the work is on (kiinteistötunnus and boundary),
+ * but not the owner's own name for it, which may contain the owner's name.
  */
 async function fetchPublicRequests(
   viewerId: number | null,
@@ -93,8 +97,14 @@ async function fetchPublicRequests(
             COALESCE(wr.user_id = $1, false) AS is_own,
             mine.my_bid_eur,
             region.code AS region_code,
-            region.name AS region_name
+            region.name AS region_name,
+            CASE WHEN $1::int IS NOT NULL THEN prop.property_code END AS property_code,
+            CASE WHEN $1::int IS NOT NULL THEN prop.area_ha END AS property_area_ha,
+            CASE WHEN $1::int IS NOT NULL THEN ST_AsGeoJSON(prop.geometry, 6)::json END AS property_geometry
      FROM work_requests wr
+     -- Only when the work area is on the property (older requests may not be)
+     LEFT JOIN properties prop ON prop.id = wr.property_id
+       AND ST_Intersects(prop.geometry, ST_Buffer(wr.geometry::geography, ${BOUNDARY_TOLERANCE_M})::geometry)
      ${BID_SUMMARY_JOIN}
      -- Region containing the request; the nearest one catches coastal spots outside the generalised borders
      LEFT JOIN LATERAL (
@@ -127,8 +137,9 @@ async function fetchOwnRequests(userId: number, id?: number) {
     where += ' AND wr.id = $2';
   }
   const result = await pool.query(
-    `SELECT ${REQUEST_COLUMNS}, wr.property_id, wr.status, wr.updated_at
+    `SELECT ${REQUEST_COLUMNS}, wr.property_id, wr.status, wr.updated_at, prop.property_code
      FROM work_requests wr
+     LEFT JOIN properties prop ON prop.id = wr.property_id
      ${BID_SUMMARY_JOIN}
      WHERE ${where}
      ORDER BY wr.created_at DESC`,
@@ -180,7 +191,7 @@ router.get('/mine', authMiddleware, async (req: AuthRequest, res: Response): Pro
 
 // POST /api/work-requests - Publish planned work on one of the user's parcels
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { property_id, type, title, geometry, note, pricing, target_price_eur } = req.body ?? {};
+  const { property_id, type, title, geometry, note, pricing, target_price_eur, confirm_land_check } = req.body ?? {};
 
   if (!Number.isInteger(property_id)) {
     res.status(400).json({ error: 'property_id is required' });
@@ -212,13 +223,31 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promis
   }
 
   try {
-    const propCheck = await pool.query('SELECT id FROM properties WHERE id = $1 AND user_id = $2', [
-      property_id,
-      req.userId,
-    ]);
+    // The request is tied to the property: its work area must lie within the property's
+    // boundary (a few metres of slack for drawing along the edge)
+    const propCheck = await pool.query(
+      `SELECT ST_Within(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326),
+                        ST_Buffer(geometry::geography, $4)::geometry) AS inside
+       FROM properties WHERE id = $1 AND user_id = $2`,
+      [property_id, req.userId, JSON.stringify(geometry), BOUNDARY_TOLERANCE_M]
+    );
     if (propCheck.rows.length === 0) {
       res.status(404).json({ error: 'Property not found' });
       return;
+    }
+    if (propCheck.rows[0].inside === false) {
+      res.status(400).json({ error: 'Työn alueen pitää olla valitun kiinteistön rajojen sisällä' });
+      return;
+    }
+    // Forest work on a field or a built-up area: the owner confirms before it is published
+    if (FOREST_WORK_TYPES.includes(type) && confirm_land_check !== true && landCheckEnabled()) {
+      // A failed check never blocks publishing
+      const land = await checkWorkArea(geometry).catch(() => ({ fieldShare: null, forestShare: null }));
+      const warning = workAreaWarning(type, land);
+      if (warning) {
+        res.status(409).json({ error: warning, code: 'land_check' });
+        return;
+      }
     }
 
     // Area is computed on the server from the geometry (geodesic), not trusted from the client

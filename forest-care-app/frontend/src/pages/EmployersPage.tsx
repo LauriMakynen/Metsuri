@@ -151,6 +151,13 @@ export default function EmployersPage() {
 
     visibleRequests.forEach(({ request, distance }) => {
       if (!request.geometry) return;
+      // The whole property as a dashed outline around the work area (logged-in viewers only)
+      if (request.property_geometry) {
+        L.geoJSON(request.property_geometry as GeoJSON.Geometry, {
+          style: { color: '#0f3d24', weight: 2, dashArray: '6 5', fill: false },
+          interactive: false,
+        }).addTo(group);
+      }
       const color = MARKING_COLORS[request.type];
       const layer = L.geoJSON(request.geometry as GeoJSON.Geometry, {
         style: { color, weight: 3, fillColor: color, fillOpacity: 0.3 },
@@ -232,8 +239,12 @@ export default function EmployersPage() {
     const map = mapRef.current;
     if (!layer || !map) return;
     const bounds = layer.getBounds();
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+    // Show the whole property when its boundary is known, so the work area is seen in context
+    const view = request.property_geometry
+      ? L.geoJSON(request.property_geometry as GeoJSON.Geometry).getBounds().extend(bounds)
+      : bounds;
+    if (view.isValid()) {
+      map.fitBounds(view, { padding: [40, 40], maxZoom: 16 });
     }
     layer.openPopup(bounds.isValid() ? bounds.getCenter() : undefined);
     mapContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });

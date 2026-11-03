@@ -1397,9 +1397,8 @@ export default function MapPage() {
     group.clearLayers();
     if (!forestValueResult) return;
 
-    // Care mode: stands that need work are clickable and highlight their recommendations in the sidebar
-    if (careMode && !forestValueOpen) {
-      // Fields first, so stands stay on top; they get no recommendations
+    // Fields first, so stands stay on top; they get no value and no recommendations
+    const addFieldLayers = () => {
       (forestValueResult.fields ?? []).forEach((field) => {
         if (!field.geometry) return;
         const layer = L.geoJSON(field.geometry as GeoJSON.Geometry, {
@@ -1413,6 +1412,11 @@ export default function MapPage() {
         );
         group.addLayer(layer);
       });
+    };
+
+    // Care mode: stands that need work are clickable and highlight their recommendations in the sidebar
+    if (careMode && !forestValueOpen) {
+      addFieldLayers();
       const careOps = forestValueResult.operations.filter(isCareOperation);
       forestValueResult.stands.forEach((stand) => {
         const op = careOps.find((o) => o.standId === stand.standId);
@@ -1442,6 +1446,7 @@ export default function MapPage() {
     }
 
     if (!forestValueOpen && !highlightedStandId) return;
+    addFieldLayers();
     forestValueResult.stands.forEach((stand) => {
       if (!stand.geometry) return;
       const selected = stand.standId === highlightedStandId;
