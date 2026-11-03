@@ -9,6 +9,7 @@ import EmployersPage from './pages/EmployersPage';
 import ForestOverviewPage from './pages/ForestOverviewPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import HelpPage from './pages/HelpPage';
 
 function AppLayout() {
   return <Outlet />;
@@ -24,6 +25,7 @@ function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/ohje" element={<HelpPage />} />
             <Route
               path="/start"
               element={

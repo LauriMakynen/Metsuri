@@ -17,6 +17,7 @@ import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { getFollowUpRecommendation } from '../utils/followUpRecommendation';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { DEMO_MARKINGS, DEMO_PROPERTY } from '../utils/demoData';
+import { shouldShowHelpTooltip } from '../utils/helpTooltip';
 import type {
   Property,
   Marking,
@@ -136,6 +137,7 @@ export default function MapPage() {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const layerSwitcherRef = useRef<HTMLDivElement>(null);
+  const activityFabRef = useRef<HTMLButtonElement>(null);
   const drawControlRef = useRef<L.Control.Draw | null>(null);
   const drawnLayersRef = useRef<L.FeatureGroup | null>(null);
   const propertiesLayerRef = useRef<L.FeatureGroup | null>(null);
@@ -161,6 +163,7 @@ export default function MapPage() {
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
   const [layerMenuOpen, setLayerMenuOpen] = useState(true);
   const [drawMenuOpen, setDrawMenuOpen] = useState(true);
+  const [showHelpTooltip, setShowHelpTooltip] = useState(() => shouldShowHelpTooltip());
   // Guests start on an example parcel so the demo has something to try right away
   const [properties, setProperties] = useState<Property[]>(() => (isGuest ? [DEMO_PROPERTY] : []));
   const [markings, setMarkings] = useState<Marking[]>(() => (isGuest ? DEMO_MARKINGS : []));
@@ -226,6 +229,29 @@ export default function MapPage() {
     updateHeight();
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    const mapPage = mapContainerRef.current?.closest<HTMLElement>('.map-page');
+    const activityFab = activityFabRef.current;
+    if (!mapPage || !activityFab) return;
+
+    const updatePosition = () => {
+      mapPage.style.setProperty(
+        '--activity-help-top',
+        `${activityFab.getBoundingClientRect().bottom + 12}px`,
+      );
+    };
+
+    const observer = new ResizeObserver(updatePosition);
+    observer.observe(activityFab);
+    window.addEventListener('resize', updatePosition);
+    updatePosition();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updatePosition);
+      mapPage.style.removeProperty('--activity-help-top');
+    };
+  }, [selectedPropertyId, activeTool, showForm, showCadastreOverlay, activityOpen]);
 
   const selectedProperty = useMemo(
     () => properties.find((p) => p.id === selectedPropertyId) ?? null,
@@ -1420,7 +1446,25 @@ export default function MapPage() {
           <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä">🌲 Metsuri</Link>
         </div>
         <div className="map-nav-right">
-          {isGuest ? (
+        <Link to="/ohje" className="nav-help-link" aria-label="Avaa käyttöohje" title="Käyttöohje">
+          ?
+          {showHelpTooltip && <span className="nav-help-tooltip">
+            Tarvitsetko apua?
+            <button
+              type="button"
+              className="nav-help-tooltip-close"
+              aria-label="Sulje ohjeteksti"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setShowHelpTooltip(false);
+              }}
+            >
+              ×
+            </button>
+          </span>}
+        </Link>
+        {isGuest ? (
             <>
               <span className="user-email guest-label">Vierailija</span>
               <button className="btn btn-small btn-primary" onClick={() => { logout(); navigate('/login'); }}>
@@ -1633,7 +1677,7 @@ export default function MapPage() {
           ) : (
             // Hidden while choosing a property on the cadastre layer: the panel uses the same spot
             selectedPropertyId && !activeTool && !showForm && !(showCadastreOverlay && layerConfig.overlays?.kiinteistorajat) && (
-              <button className="activity-fab" onClick={openActivity}>
+              <button ref={activityFabRef} className="activity-fab" onClick={openActivity}>
                 <span className="activity-fab-icon" aria-hidden="true">▶</span>
                 <span>Aloita aktiviteetti</span>
               </button>
