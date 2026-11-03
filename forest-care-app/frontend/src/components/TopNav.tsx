@@ -1,13 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import BackButton from './BackButton';
+import { shouldShowHelpTooltip } from '../utils/helpTooltip';
 
 // Top navigation bar shared by the start and employer pages
 export default function TopNav() {
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
+  const [showHelpTooltip, setShowHelpTooltip] = useState(() => shouldShowHelpTooltip());
 
   // Start each page from the top instead of keeping the previous page's scroll position
   useEffect(() => {
@@ -26,6 +28,24 @@ export default function TopNav() {
         <Link to="/start" className="map-nav-title nav-home-link">🌲 Metsuri</Link>
       </div>
       <div className="map-nav-right">
+        <Link to="/ohje" className="nav-help-link" aria-label="Avaa käyttöohje" title="Käyttöohje">
+          ?
+          {showHelpTooltip && <span className="nav-help-tooltip">
+            Tarvitsetko apua?
+            <button
+              type="button"
+              className="nav-help-tooltip-close"
+              aria-label="Sulje ohjeteksti"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setShowHelpTooltip(false);
+              }}
+            >
+              ×
+            </button>
+          </span>}
+        </Link>
         {isGuest ? (
           <>
             <span className="user-email guest-label">Vierailija</span>

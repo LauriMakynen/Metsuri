@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import TopNav from '../components/TopNav';
-import { propertiesService, workRequestsService } from '../services/forestService';
+import { propertiesService } from '../services/forestService';
 import { formatArea } from '../utils/measurement';
 import { parcelAreaCount } from '../utils/parcelAreas';
 import type { Property } from '../types';
@@ -34,25 +34,17 @@ const PROVIDER_FEATURES = [
 export default function StartPage() {
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
-  const [openRequestCount, setOpenRequestCount] = useState<number | null>(null);
   // Parcels to choose from after "Hoida omaa metsää"; null while the picker is closed
   const [careChoices, setCareChoices] = useState<Property[] | null>(null);
   const [careLoading, setCareLoading] = useState(false);
   const [careError, setCareError] = useState('');
-
-  useEffect(() => {
-    workRequestsService
-      .getOpen()
-      .then((requests) => setOpenRequestCount(requests.length))
-      .catch(() => setOpenRequestCount(null));
-  }, []);
 
   const goToLogin = () => {
     logout();
     navigate('/login');
   };
 
-  const openOwnForest = isGuest ? goToLogin : () => navigate('/map');
+  const openOwnForest = isGuest ? goToLogin : () => navigate('/omat-metsat');
 
   const openCare = (property: Property) => navigate(`/map?hoida=${property.id}`);
 
@@ -95,7 +87,7 @@ export default function StartPage() {
               🪓 {careLoading ? 'Haetaan metsiä...' : 'Hoida omaa metsää'}
             </button>
             <button className="hero-btn hero-btn-primary" onClick={openOwnForest}>
-              🌲 {isGuest ? 'Kirjaudu omalle palstalle' : 'Avaa oma metsäpalsta'}
+              🌲 {isGuest ? 'Kirjaudu omalle palstalle' : 'Minun metsäni'}
             </button>
             <button className="hero-btn hero-btn-secondary" onClick={() => navigate('/tyontarjoajat')}>
               🤝 Selaa työpyyntöjä
@@ -110,11 +102,6 @@ export default function StartPage() {
             </button>
           )}
 
-          {openRequestCount !== null && openRequestCount > 0 && (
-            <p className="hero-stat">
-              <span className="hero-stat-dot" /> {openRequestCount} avointa työpyyntöä juuri nyt
-            </p>
-          )}
         </div>
 
         <svg className="hero-treeline" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
@@ -138,7 +125,7 @@ export default function StartPage() {
                 🪓 Hoida omaa metsää
               </button>
               <button className="btn btn-primary" onClick={openOwnForest}>
-                {isGuest ? 'Kirjaudu omalle palstalle' : 'Avaa oma metsäpalsta'}
+                {isGuest ? 'Kirjaudu omalle palstalle' : 'Minun metsäni'}
               </button>
               {isGuest && (
                 <button className="btn-link choice-demo-link" onClick={() => navigate('/map')}>

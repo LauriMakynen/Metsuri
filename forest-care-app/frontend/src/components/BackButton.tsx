@@ -21,7 +21,7 @@ function hasUnsavedChanges() {
 }
 
 // Back button for the left end of the top bar; shown on every page except the start page
-export default function BackButton() {
+export default function BackButton({ fallbackPath = '/start' }: { fallbackPath?: string }) {
   const navigate = useNavigate();
 
   const handleBack = () => {
@@ -36,8 +36,8 @@ export default function BackButton() {
     if (typeof historyIndex === 'number' && historyIndex > 0) {
       navigate(-1);
     } else {
-      // Opened directly (no in-app history): go to the start page
-      navigate('/start');
+      // Opened directly (no in-app history): go to the fallback page
+      navigate(fallbackPath);
     }
   };
 
