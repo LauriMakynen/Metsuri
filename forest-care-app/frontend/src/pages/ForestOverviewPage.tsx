@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import BackButton from '../components/BackButton';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
 import TopNav from '../components/TopNav';
 import { propertiesService, workRequestsService } from '../services/forestService';
@@ -344,7 +343,6 @@ export default function ForestOverviewPage() {
     <div className="start-page forest-page">
       <SpruceForestBackdrop />
       <TopNav />
-      <BackButton fallbackPath="/start" />
 
       <main className="start-content forest-content">
         <header className="forest-hero">

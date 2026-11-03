@@ -181,11 +181,27 @@ export type ForestValueWarningCode =
   | 'no_forest_land' // parcel is not forest land
   | 'partial_coverage' // stands cover only part of the parcel
   | 'fallback_prices' // Luke prices unavailable, config prices used
-  | 'stale_cache'; // external API failed, showing the last cached result
+  | 'stale_cache' // external API failed, showing the last cached result
+  | 'field_area' // part of the parcel is field, left out of the valuation
+  | 'fields_unavailable'; // the field parcel register could not be checked
 
 export interface ForestValueWarning {
   code: ForestValueWarningCode;
   message: string;
+}
+
+/** Field (pelto) on the parcel: no timber value, no forest management recommendations. */
+export interface FieldArea {
+  /** register = Ruokavirasto's field parcel register, owner = the owner marked a stand as field */
+  source: 'register' | 'owner';
+  /** Peruslohkotunnus for register fields */
+  fieldId: string | null;
+  /** The stand the owner marked, so the mark can be undone */
+  standId: string | null;
+  standNumber: string | null;
+  /** Part of the parcel; EPSG:3067 in the backend, WGS84 in API responses. */
+  geometry: PolygonGeometry;
+  areaHa: number;
 }
 
 export interface ForestValueResult {
@@ -203,6 +219,8 @@ export interface ForestValueResult {
   valueByAssortment: Record<TimberAssortment, number>;
   stands: StandValuation[];
   operations: RecommendedOperation[];
+  /** Fields left out of the valuation. Missing in results cached before fields were checked. */
+  fields?: FieldArea[];
   data: {
     provider: ForestDataProvider;
     /** Oldest and newest inventory year among the stands. */

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import BackButton from './BackButton';
 import { shouldShowHelpTooltip } from '../utils/helpTooltip';
 
 // Top navigation bar shared by the start and employer pages
@@ -23,6 +24,7 @@ export default function TopNav() {
   return (
     <nav className="map-nav">
       <div className="map-nav-left">
+        {pathname !== '/start' && <BackButton />}
         <Link to="/start" className="map-nav-title nav-home-link">🌲 Metsuri</Link>
       </div>
       <div className="map-nav-right">

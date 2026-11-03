@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import BackButton from '../components/BackButton';
 import TopNav from '../components/TopNav';
 import WorkRequestCard from '../components/WorkRequestCard';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
@@ -244,7 +243,6 @@ export default function EmployersPage() {
     <div className="start-page forest-page">
       <SpruceForestBackdrop />
       <TopNav />
-      <BackButton />
 
       <main className="start-content forest-content">
         <header className="forest-hero">

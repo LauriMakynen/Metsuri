@@ -226,7 +226,20 @@ export type ForestValueWarningCode =
   | 'no_forest_land'
   | 'partial_coverage'
   | 'fallback_prices'
-  | 'stale_cache';
+  | 'stale_cache'
+  | 'field_area'
+  | 'fields_unavailable';
+
+// Field (pelto) on the parcel: no timber value, no forest management recommendations
+export interface FieldArea {
+  // register = Ruokavirasto's field parcel register, owner = the owner marked a stand as field
+  source: 'register' | 'owner';
+  fieldId: string | null;
+  standId: string | null;
+  standNumber: string | null;
+  geometry: GeoJSONGeometry;
+  areaHa: number;
+}
 
 export interface ForestValueWarning {
   code: ForestValueWarningCode;
@@ -246,6 +259,8 @@ export interface ForestValueResult {
   valueByAssortment: Record<TimberAssortment, number>;
   stands: StandValuation[];
   operations: RecommendedOperation[];
+  // Missing in results computed before fields were checked
+  fields?: FieldArea[];
   data: {
     provider: 'metsakeskus' | 'mock' | 'manual';
     inventoryYearMin: number | null;
