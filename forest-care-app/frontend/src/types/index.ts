@@ -101,6 +101,8 @@ export interface NewWorkRequest {
   note: string;
   pricing: Pricing;
   target_price_eur: number;
+  // The owner confirmed publishing although the area does not look like forest
+  confirm_land_check?: boolean;
 }
 
 // Open work request as shown publicly to work providers (no owner or bidder details)

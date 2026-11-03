@@ -703,6 +703,15 @@ html, body, #root {
 .pricing-tag.owner_receives { background: #dcfce7; color: #166534; }
 .pricing-tag.owner_pays { background: #e0f2fe; color: #075985; }
 
+/* Publishing forest work on a field or a built-up area: the owner confirms */
+.land-warning {
+  display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem;
+  background: #fffbeb; border: 1px solid #fcd34d; color: #78350f; border-radius: var(--radius-sm); padding: 0.8rem 0.9rem;
+}
+.land-warning p { font-size: 0.88rem; line-height: 1.45; }
+.land-warning-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
+.land-warning-actions .btn { width: auto; flex: none; }
+
 /* Work request card: facts, the property, then the anonymous offers and the bid form */
 .request-facts { display: flex; flex-wrap: wrap; gap: 0.3rem 0.9rem; font-size: 0.8rem; color: var(--text-light); margin-top: 0.1rem; }
 .request-property {

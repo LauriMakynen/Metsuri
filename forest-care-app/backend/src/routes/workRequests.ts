@@ -8,6 +8,7 @@ import {
   parseTakenAt,
 } from '../services/workRequestPhotos';
 import { REGIONS, isValidRegionCode } from '../services/regions';
+import { FOREST_WORK_TYPES, checkWorkArea, landCheckEnabled, workAreaWarning } from '../services/workAreaCheck';
 
 const router = Router();
 
@@ -190,7 +191,7 @@ router.get('/mine', authMiddleware, async (req: AuthRequest, res: Response): Pro
 
 // POST /api/work-requests - Publish planned work on one of the user's parcels
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { property_id, type, title, geometry, note, pricing, target_price_eur } = req.body ?? {};
+  const { property_id, type, title, geometry, note, pricing, target_price_eur, confirm_land_check } = req.body ?? {};
 
   if (!Number.isInteger(property_id)) {
     res.status(400).json({ error: 'property_id is required' });
@@ -237,6 +238,16 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promis
     if (propCheck.rows[0].inside === false) {
       res.status(400).json({ error: 'Työn alueen pitää olla valitun kiinteistön rajojen sisällä' });
       return;
+    }
+    // Forest work on a field or a built-up area: the owner confirms before it is published
+    if (FOREST_WORK_TYPES.includes(type) && confirm_land_check !== true && landCheckEnabled()) {
+      // A failed check never blocks publishing
+      const land = await checkWorkArea(geometry).catch(() => ({ fieldShare: null, forestShare: null }));
+      const warning = workAreaWarning(type, land);
+      if (warning) {
+        res.status(409).json({ error: warning, code: 'land_check' });
+        return;
+      }
     }
 
     // Area is computed on the server from the geometry (geodesic), not trusted from the client

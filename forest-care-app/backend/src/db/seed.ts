@@ -103,12 +103,26 @@ const OWNERS: SeedOwner[] = [
   },
   {
     email: 'omistaja2@metsuri.test',
-    parcel: { name: 'Kuhmoisten palsta', areaHa: 24.0, geometry: rect(25.25, 61.62, 600, 400) },
+    // Real forest property in Kuhmoinen (MML 291-410-10-52): no fields, 99 % Metsäkeskus stands
+    parcel: {
+      name: 'Kuhmoisten palsta',
+      propertyCode: '291-410-10-52',
+      areaHa: 25.06,
+      legacyNames: ['Kuhmoisten palsta'],
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [25.120303, 61.624937], [25.111632, 61.622143], [25.106933, 61.626474], [25.11558, 61.627544],
+          [25.11554, 61.627738], [25.116404, 61.627902], [25.116976, 61.627874], [25.117241, 61.627915],
+          [25.120303, 61.624937],
+        ]],
+      },
+    },
     markings: [
       {
         type: 'istutus',
         title: 'Männyn istutus',
-        geometry: rect(25.2535, 61.6215, 120, 90),
+        geometry: rect(25.11228, 61.62359, 120, 90),
         areaHa: 1.1,
         operationDate: '2019-05-20',
       },
@@ -117,7 +131,7 @@ const OWNERS: SeedOwner[] = [
       {
         type: 'avohakkuu',
         title: 'Päätehakkuu, varttunut kuusikko',
-        geometry: rect(25.247, 61.621, 200, 160),
+        geometry: rect(25.11161, 61.62503, 200, 160),
         note: 'Leimikko valmis, talvikorjuu. Arvioitu kertymä n. 900 m³.',
         targetPriceEur: 18000,
         bids: [
@@ -128,14 +142,14 @@ const OWNERS: SeedOwner[] = [
       {
         type: 'istutus',
         title: 'Kuusentaimien istutus',
-        geometry: rect(25.254, 61.619, 150, 120),
+        geometry: rect(25.11562, 61.62474, 150, 120),
         note: 'Istutus keväällä 2027, n. 3 200 taimea.',
         targetPriceEur: 1600,
       },
       {
         type: 'muu_tyo',
         title: 'Metsäautotien rummun vaihto',
-        geometry: { type: 'Point', coordinates: [25.2445, 61.6185] },
+        geometry: { type: 'Point', coordinates: [25.11161, 61.62272] },
         note: 'Rumpu painunut, vaihto ennen talvikorjuuta.',
         targetPriceEur: 1500,
         bids: [{ provider: 'yrittaja2@metsuri.test', amountEur: 1450 }],
@@ -161,12 +175,27 @@ const OWNERS: SeedOwner[] = [
   },
   {
     email: 'omistaja3@metsuri.test',
-    parcel: { name: 'Rautavaaran metsä', areaHa: 31.5, geometry: rect(28.3, 63.49, 700, 450) },
+    // Real forest property in Rautavaara (MML 687-410-13-26): no fields, all Metsäkeskus stands.
+    // The earlier example rectangle lay in the village centre.
+    parcel: {
+      name: 'Rautavaaran metsä',
+      propertyCode: '687-410-13-26',
+      areaHa: 34.98,
+      legacyNames: ['Rautavaaran metsä'],
+      geometry: {
+        type: 'Polygon',
+        coordinates: [[
+          [28.200755, 63.435386], [28.192586, 63.439504], [28.189375, 63.438972], [28.187942, 63.440699],
+          [28.1896, 63.441023], [28.191625, 63.441588], [28.191849, 63.441481], [28.19722, 63.442588],
+          [28.197029, 63.442779], [28.197383, 63.442858], [28.207629, 63.435849], [28.200755, 63.435386],
+        ]],
+      },
+    },
     markings: [
       {
         type: 'vesakonhoito',
         title: 'Varhaishoito',
-        geometry: rect(28.304, 63.4915, 140, 100),
+        geometry: rect(28.20172, 63.43651, 140, 100),
         areaHa: 1.4,
         operationDate: '2024-07-10',
       },
@@ -175,7 +204,7 @@ const OWNERS: SeedOwner[] = [
       {
         type: 'harvennus',
         title: 'Ensiharvennus, männikkö',
-        geometry: rect(28.296, 63.491, 240, 170),
+        geometry: rect(28.19975, 63.43837, 240, 170),
         note: 'Kohde kantava myös kesällä.',
         targetPriceEur: 4500,
         bids: [{ provider: 'yrittaja2@metsuri.test', amountEur: 4800 }],
@@ -183,7 +212,7 @@ const OWNERS: SeedOwner[] = [
       {
         type: 'vesakonhoito',
         title: 'Taimikonhoito, rauduskoivu',
-        geometry: rect(28.305, 63.488, 180, 120),
+        geometry: rect(28.19582, 63.43987, 180, 120),
         note: 'Tiheä vesakko, kiire ennen ensi kesää.',
         targetPriceEur: 850,
         bids: [
