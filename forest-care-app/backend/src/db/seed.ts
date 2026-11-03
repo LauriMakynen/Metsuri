@@ -29,8 +29,9 @@ interface SeedRequest {
 
 interface SeedOwner {
   email: string;
-  // propertyCode set = a real MML property (source 'cadastre'); otherwise a drawn example ('manual')
-  parcel: { name: string; areaHa: number; geometry: Geometry; propertyCode?: string };
+  // propertyCode set = a real MML property (source 'cadastre'); otherwise a drawn example ('manual').
+  // legacyNames: earlier seed versions of this parcel, moved here with their markings on the next seed run
+  parcel: { name: string; areaHa: number; geometry: Geometry; propertyCode?: string; legacyNames?: string[] };
   markings: SeedMarking[];
   requests: SeedRequest[];
 }
@@ -59,16 +60,17 @@ const OWNERS: SeedOwner[] = [
   {
     email: 'admin@metsuri.test',
     parcel: {
-      // Real forest property in Jämsä, Keski-Suomi (MML INSPIRE cadastral parcel 182-432-8-10)
+      // Real forest property in Jämsä, Keski-Suomi (MML 182-423-5-63): all forest, no fields in
+      // Ruokavirasto's field register, covered by Metsäkeskus stands
       name: 'Testipalsta (Jämsä)',
-      propertyCode: '182-432-8-10',
-      areaHa: 10.05,
+      propertyCode: '182-423-5-63',
+      areaHa: 9.97,
+      legacyNames: ['Testipalsta', 'Testipalsta (Jämsä)'],
       geometry: {
         type: 'Polygon',
         coordinates: [[
-          [24.994196, 61.997709], [24.999806, 61.999482], [25.001252, 61.999926],
-          [25.002225, 62.000237], [24.994387, 62.001166], [24.992195, 61.999105],
-          [24.994196, 61.997709],
+          [25.118758, 62.087909], [25.110659, 62.08661], [25.109559, 62.088086],
+          [25.11714, 62.090208], [25.118758, 62.087909],
         ]],
       },
     },
@@ -76,14 +78,14 @@ const OWNERS: SeedOwner[] = [
       {
         type: 'harvennus',
         title: 'Ensiharvennus, kuusikko',
-        geometry: rect(24.9955, 61.999, 120, 90),
+        geometry: rect(25.11186, 62.08769, 120, 90),
         areaHa: 1.08,
         operationDate: '2025-10-14',
       },
       {
         type: 'vesakonhoito',
         title: 'Taimikon vesakonhoito',
-        geometry: rect(24.996, 62.0005, 90, 70),
+        geometry: rect(25.11462, 62.08787, 90, 70),
         areaHa: 0.63,
         operationDate: '2026-06-02',
       },
@@ -92,7 +94,7 @@ const OWNERS: SeedOwner[] = [
       {
         type: 'vesakonhoito',
         title: 'Taimikonhoito, eteläosa',
-        geometry: rect(24.9985, 61.9997, 100, 70),
+        geometry: rect(25.11692, 62.08823, 100, 70),
         note: 'Toive: syksy 2026. Tieyhteys hyvä.',
         targetPriceEur: 700,
         bids: [{ provider: 'yrittaja@metsuri.test', amountEur: 650 }],
@@ -203,12 +205,50 @@ async function upsertUser(email: string, passwordHash: string): Promise<number> 
   return result.rows[0].id;
 }
 
+// An older seed parcel (e.g. one lying partly on a field) is replaced in place by the current
+// one; its seed markings and requests move along so the example data stays on forest
+async function moveLegacyParcel(owner: SeedOwner, propertyId: number) {
+  await pool.query(
+    `UPDATE properties SET name = $2, property_code = $3, source = 'cadastre', area_ha = $4,
+                           geometry = ST_GeomFromGeoJSON($5)
+     WHERE id = $1`,
+    [propertyId, owner.parcel.name, owner.parcel.propertyCode, owner.parcel.areaHa, JSON.stringify(owner.parcel.geometry)]
+  );
+  for (const m of owner.markings) {
+    await pool.query(
+      'UPDATE markings SET geometry = ST_GeomFromGeoJSON($3), area_ha = $4 WHERE property_id = $1 AND title = $2',
+      [propertyId, m.title, JSON.stringify(m.geometry), m.areaHa]
+    );
+  }
+  for (const r of owner.requests) {
+    await pool.query(
+      `UPDATE work_requests
+       SET geometry = ST_GeomFromGeoJSON($3),
+           area_ha = CASE WHEN GeometryType(ST_GeomFromGeoJSON($3)) = 'POINT' THEN NULL
+                          ELSE ROUND((ST_Area(ST_GeomFromGeoJSON($3)::geography) / 10000)::numeric, 2) END
+       WHERE property_id = $1 AND title = $2`,
+      [propertyId, r.title, JSON.stringify(r.geometry)]
+    );
+  }
+  // The cached value and field marks refer to the old boundary's stands
+  await pool.query('DELETE FROM forest_value_cache WHERE property_id = $1', [propertyId]);
+  await pool.query('DELETE FROM forest_field_marks WHERE property_id = $1', [propertyId]);
+  console.log(`Testipalsta siirretty: ${owner.email} → ${owner.parcel.propertyCode}`);
+}
+
 async function seedOwner(owner: SeedOwner, ownerId: number, providerIds: Record<string, number>) {
   // The oldest parcel is the one seed created; owners may have added their own parcels later
-  const existing = await pool.query('SELECT id FROM properties WHERE user_id = $1 ORDER BY id LIMIT 1', [ownerId]);
+  const existing = await pool.query(
+    'SELECT id, name, property_code FROM properties WHERE user_id = $1 ORDER BY id LIMIT 1',
+    [ownerId]
+  );
   let propertyId: number;
   if (existing.rows.length > 0) {
     propertyId = existing.rows[0].id;
+    const { name, property_code: code } = existing.rows[0];
+    if (owner.parcel.propertyCode && code !== owner.parcel.propertyCode && owner.parcel.legacyNames?.includes(name)) {
+      await moveLegacyParcel(owner, propertyId);
+    }
   } else {
     const property = await pool.query(
       `INSERT INTO properties (user_id, name, property_code, source, area_ha, geometry)

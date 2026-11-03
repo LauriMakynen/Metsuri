@@ -398,6 +398,7 @@ export async function getDemoForestValue(): Promise<ForestValueResponse> {
     return { status: 'available', stale: false, result: demoCache.result };
   }
   const parcel = await wgs84ToTm35(DEMO_PARCEL_WGS84);
+  const registerFields = await loadRegisterFields(parcel);
   const result = await buildForestValue({
     propertyId: -1,
     parcel,
@@ -405,9 +406,11 @@ export async function getDemoForestValue(): Promise<ForestValueResponse> {
     stands: generateMockStands(parcel, 0),
     provider: 'mock',
     municipality: null,
+    registerFields,
   });
   if (!result) return { status: 'no_data', message: NO_DATA_MESSAGE };
-  demoCache = { result, at: Date.now() };
+  // Without the field check the result is shown but not kept, so the next visit tries again
+  if (registerFields !== null) demoCache = { result, at: Date.now() };
   return { status: 'available', stale: false, result };
 }
 
@@ -452,6 +455,8 @@ export async function getGuestForestValue(
     stands: generateMockStands(parcel, seedFromGeometry(geometryWgs84)),
     provider: 'mock',
     municipality: municipalityFromPropertyCode(propertyCode),
+    // Fields are left out in the demo too
+    registerFields: await loadRegisterFields(parcel),
   });
   if (!result) return { status: 'no_data', message: NO_DATA_MESSAGE };
   return { status: 'available', stale: false, result };
