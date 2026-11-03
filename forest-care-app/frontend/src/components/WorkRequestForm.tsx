@@ -14,10 +14,11 @@ export interface WorkRequestFormData {
   note: string;
   pricing: Pricing;
   target_price_eur: number;
+  confirm_land_check?: boolean;
 }
 
 // Prefill, e.g. from a recommended operation of the forest value view
-export type WorkRequestDraft = Omit<WorkRequestFormData, 'target_price_eur'>;
+export type WorkRequestDraft = Omit<WorkRequestFormData, 'target_price_eur' | 'confirm_land_check'>;
 
 interface WorkRequestFormProps {
   parcelName: string;
@@ -54,6 +55,7 @@ export default function WorkRequestForm({
   // Set once the request is published; then only the photo upload can still be pending
   const [created, setCreated] = useState<WorkRequest | null>(null);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [landWarning, setLandWarning] = useState<string | null>(null);
   useReleaseOnUnmount(photos);
 
   const removePhoto = (key: string) => {
@@ -76,10 +78,7 @@ export default function WorkRequestForm({
     else onDone();
   };
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (created) return uploadTo(created, photos);
-
+  const publish = async (confirmLandCheck: boolean) => {
     const priceValue = Number(price.replace(/\s/g, '').replace(',', '.'));
     if (!type) return setError('Valitse toimenpide');
     if (!pricing) return setError('Valitse, onko kyse puukaupasta vai palvelutyöstä');
@@ -87,6 +86,7 @@ export default function WorkRequestForm({
 
     setSending(true);
     setError('');
+    setLandWarning(null);
     let request: WorkRequest;
     try {
       request = await onSubmit({
@@ -95,16 +95,25 @@ export default function WorkRequestForm({
         note: note.trim(),
         pricing,
         target_price_eur: priceValue,
+        ...(confirmLandCheck ? { confirm_land_check: true } : {}),
       });
     } catch (err: unknown) {
-      const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
-      setError(message || 'Työpyynnön julkaisu epäonnistui');
+      const data = (err as { response?: { data?: { error?: string; code?: string } } }).response?.data;
+      // The area does not look like forest: the owner decides whether to publish anyway
+      if (data?.code === 'land_check') setLandWarning(data.error ?? 'Työn alue ei näytä metsältä.');
+      else setError(data?.error || 'Työpyynnön julkaisu epäonnistui');
       setSending(false);
       return;
     }
     if (photos.length === 0) return onDone();
     setCreated(request);
     await uploadTo(request, photos);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (created) return uploadTo(created, photos);
+    await publish(false);
   };
 
   // After publishing, closing keeps the request even if some photos were not saved
@@ -131,6 +140,21 @@ export default function WorkRequestForm({
         </p>
 
         {error && <div className="error-message">{error}</div>}
+
+        {landWarning && (
+          <div className="land-warning" role="alert">
+            <strong>⚠️ Alue ei näytä metsältä</strong>
+            <p>{landWarning}</p>
+            <div className="land-warning-actions">
+              <button type="button" className="btn btn-secondary btn-compact" onClick={onCancel} disabled={sending}>
+                Peruuta ja korjaa alue
+              </button>
+              <button type="button" className="btn btn-primary btn-compact" onClick={() => publish(true)} disabled={sending}>
+                {sending ? 'Julkaistaan...' : 'Julkaise silti'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {created ? (
           <form onSubmit={handleSubmit} className="modal-form">

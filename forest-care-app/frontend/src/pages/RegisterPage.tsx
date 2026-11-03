@@ -22,7 +22,8 @@ export default function RegisterPage() {
     try {
       const data = await authService.register(email, password);
       login(data.token, data.user);
-      navigate('/start');
+      // A new account has no forests yet: ask for them right away (skippable)
+      navigate('/lisaa-metsa');
     } catch (err: unknown) {
       const message =
         err && typeof err === 'object' && 'response' in err

@@ -88,6 +88,7 @@ interface WorkRequestBase extends BidSummary {
 // A forest owner's own work request
 export interface WorkRequest extends WorkRequestBase {
   property_id: number | null;
+  property_code: string | null;
   status: 'open' | 'closed';
   updated_at: string;
 }
@@ -100,6 +101,8 @@ export interface NewWorkRequest {
   note: string;
   pricing: Pricing;
   target_price_eur: number;
+  // The owner confirmed publishing although the area does not look like forest
+  confirm_land_check?: boolean;
 }
 
 // Open work request as shown publicly to work providers (no owner or bidder details)
@@ -109,6 +112,10 @@ export interface PublicWorkRequest extends WorkRequestBase {
   // Only meaningful for a logged-in viewer
   is_own: boolean;
   my_bid_eur: number | null;
+  // The property the work is on; only for logged-in viewers (null otherwise)
+  property_code: string | null;
+  property_area_ha: number | null;
+  property_geometry: GeoJSONGeometry;
   // Region (maakunta) the request lies in; null if it could not be determined
   region_code: string | null;
   region_name: string | null;
