@@ -10,6 +10,7 @@ import ForestOverviewPage from './pages/ForestOverviewPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import HelpPage from './pages/HelpPage';
+import AddForestPage from './pages/AddForestPage';
 
 function AppLayout() {
   return <Outlet />;
@@ -47,6 +48,14 @@ function App() {
               element={
                 <PrivateRoute authenticatedOnly>
                   <ForestOverviewPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/lisaa-metsa"
+              element={
+                <PrivateRoute authenticatedOnly>
+                  <AddForestPage />
                 </PrivateRoute>
               }
             />

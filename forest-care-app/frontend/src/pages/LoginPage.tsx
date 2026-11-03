@@ -5,6 +5,7 @@ import { authService } from '../services/forestService';
 import { useAuth } from '../hooks/useAuth';
 import axios from 'axios';
 import { AuthBackdrop } from '../components/VideoBackdrop';
+import { pathAfterLogin } from '../utils/addForestPrompt';
 
 // Login page - authenticates existing users
 export default function LoginPage() {
@@ -23,7 +24,7 @@ export default function LoginPage() {
     try {
       const data = await authService.login(email, password);
       login(data.token, data.user);
-      navigate('/start');
+      navigate(await pathAfterLogin(data.user.id));
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
         if (!err.response) {

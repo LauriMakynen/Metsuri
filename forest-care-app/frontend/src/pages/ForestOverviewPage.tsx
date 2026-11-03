@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
+import AddForestByCode from '../components/AddForestByCode';
 import TopNav from '../components/TopNav';
 import { propertiesService, workRequestsService } from '../services/forestService';
 import { useForestValue } from '../hooks/useForestValue';
@@ -352,9 +353,14 @@ export default function ForestOverviewPage() {
           <p>Katso omien metsäpalstojesi tilanne ja siirry valitsemasi palstan karttanäkymään.</p>
           {/* The map works without a parcel too: browse it or add a new parcel there */}
           {!loading && properties.length > 0 && (
-            <button className="btn btn-secondary btn-compact forest-map-link" onClick={() => navigate('/map')}>
-              🗺️ Avaa kartta
-            </button>
+            <div className="forest-hero-actions">
+              <button className="btn btn-primary btn-compact" onClick={() => navigate('/lisaa-metsa')}>
+                + Lisää metsä
+              </button>
+              <button className="btn btn-secondary btn-compact" onClick={() => navigate('/map')}>
+                🗺️ Avaa kartta
+              </button>
+            </div>
           )}
         </header>
 
@@ -363,12 +369,11 @@ export default function ForestOverviewPage() {
           <p className="glass-panel" role="status">Ladataan omia metsäpalstoja...</p>
         ) : properties.length === 0 && !error ? (
           <div className="glass-panel forest-empty">
-            <p>
-              Sinulle ei ole vielä tallennettuja metsäpalstoja. Lisää metsäsi kartalla hakemalla
-              kiinteistötunnuksella tai valitsemalla kiinteistö kartalta.
-            </p>
-            <button className="btn btn-primary" onClick={() => navigate('/map')}>
-              🗺️ Avaa kartta ja lisää metsä
+            <h2>Lisää ensimmäinen metsäsi</h2>
+            <p>Sinulla ei ole vielä tallennettuja metsäpalstoja. Syötä metsäkiinteistösi tunnus:</p>
+            <AddForestByCode onAdded={(property) => setProperties((prev) => [...prev, property])} />
+            <button className="btn-link" onClick={() => navigate('/map')}>
+              Etkö tiedä tunnusta? Valitse kiinteistö kartalta →
             </button>
           </div>
         ) : (
