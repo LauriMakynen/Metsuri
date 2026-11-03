@@ -77,6 +77,7 @@ export default function WorkRequestList({
                   <small style={{ color: '#6b7280', display: 'block' }}>
                     {MARKING_TYPE_LABELS[r.type]}
                     {r.area_ha ? ` · ${formatArea(r.area_ha)}` : ''}
+                    {r.property_code ? ` · kiinteistö ${r.property_code}` : ''}
                   </small>
                 </div>
               </div>

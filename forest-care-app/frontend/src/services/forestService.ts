@@ -229,6 +229,9 @@ function normalizePublicRequest(r: PublicWorkRequest): PublicWorkRequest {
     target_price_eur: normalizeNumber(r.target_price_eur),
     best_bid_eur: normalizeNumber(r.best_bid_eur),
     my_bid_eur: normalizeNumber(r.my_bid_eur),
+    property_code: r.property_code ?? null,
+    property_area_ha: normalizeNumber(r.property_area_ha),
+    property_geometry: r.property_geometry ? normalizeGeometry(r.property_geometry) : null,
     photos: r.photos ?? [],
   };
 }
@@ -240,6 +243,7 @@ function normalizeOwnRequest(r: WorkRequest): WorkRequest {
     target_price_eur: normalizeNumber(r.target_price_eur),
     bid_count: r.bid_count ?? 0,
     best_bid_eur: normalizeNumber(r.best_bid_eur),
+    property_code: r.property_code ?? null,
     photos: r.photos ?? [],
   };
 }
