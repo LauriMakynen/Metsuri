@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -17,6 +17,7 @@ import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { getFollowUpRecommendation } from '../utils/followUpRecommendation';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { DEMO_MARKINGS, DEMO_PROPERTY } from '../utils/demoData';
+import { shouldShowHelpTooltip } from '../utils/helpTooltip';
 import type {
   Property,
   Marking,
@@ -33,11 +34,16 @@ import Sidebar from '../components/Sidebar';
 import ActivityTracker from '../components/ActivityTracker';
 import WorkRequestForm from '../components/WorkRequestForm';
 import ForestValuePanel from '../components/forestValue/ForestValuePanel';
+import BackButton from '../components/BackButton';
 import { useForestValue } from '../hooks/useForestValue';
-import { OPERATION_LABEL, OPERATION_WORK_TYPE, standTitle } from '../utils/forestValueFormat';
+import { OPERATION_LABEL, OPERATION_WORK_TYPE, isCareOperation, standTitle } from '../utils/forestValueFormat';
 import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
 import { bidSummaryText, suggestedPricing } from '../utils/bids';
 import type { ActivityResult } from '../components/ActivityTracker';
+import type { CareLocation, CareNeededOperations } from '../components/ForestCarePanel';
+import { parcelProximity } from '../utils/distance';
+import { parcelAreas } from '../utils/parcelAreas';
+import type { ParcelArea } from '../utils/parcelAreas';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -126,6 +132,14 @@ function toBounds(geometry: GeoJSONGeometry): L.LatLngBounds | null {
   return layer.getBounds();
 }
 
+// The open sidebar lies on top of the map: keep fitted areas clear of it, unless it covers
+// most of a narrow screen (then the area would get squeezed into a sliver)
+function fitPadding(): L.FitBoundsOptions {
+  const sidebarWidth = document.querySelector('.map-sidebar.open')?.clientWidth ?? 0;
+  const left = sidebarWidth > 0 && window.innerWidth - sidebarWidth >= 320 ? sidebarWidth + 40 : 40;
+  return { paddingTopLeft: [left, 40], paddingBottomRight: [40, 40] };
+}
+
 function getMapLayerConfigFromEnv(): MapLayerConfig | null {
   const key = import.meta.env.VITE_MML_API_KEY as string | undefined;
   if (!key) return null;
@@ -135,6 +149,8 @@ function getMapLayerConfigFromEnv(): MapLayerConfig | null {
 export default function MapPage() {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const layerSwitcherRef = useRef<HTMLDivElement>(null);
+  const activityFabRef = useRef<HTMLButtonElement>(null);
   const drawControlRef = useRef<L.Control.Draw | null>(null);
   const drawnLayersRef = useRef<L.FeatureGroup | null>(null);
   const propertiesLayerRef = useRef<L.FeatureGroup | null>(null);
@@ -147,10 +163,33 @@ export default function MapPage() {
   const measurementLayerRef = useRef<L.FeatureGroup | null>(null);
   const autoSelectedRef = useRef(false);
   const requestsLayerRef = useRef<L.FeatureGroup | null>(null);
+  const careLocationLayerRef = useRef<L.LayerGroup | null>(null);
+  const carePositionRef = useRef<L.LatLng | null>(null);
+  const careFittedRef = useRef(false);
 
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
+  // "Hoida omaa metsää" opens /map?hoida=<property id>: forest care mode on that parcel
+  const [searchParams, setSearchParams] = useSearchParams();
+  const careMode = searchParams.has('hoida');
+  // Read once: later the URL follows the selected parcel (below) without reloading the data
+  const [carePropertyId] = useState(() => Number(searchParams.get('hoida')) || null);
+  const [careLocation, setCareLocation] = useState<CareLocation>(() =>
+    'geolocation' in navigator
+      ? { status: 'locating' }
+      : { status: 'unavailable', message: 'Selaimesi ei tue sijainnin käyttöä.' }
+  );
+  // "Omat metsät" opens /map?propertyId=<id> (optionally &standId=… from the value view)
+  const requestedPropertyId = Number(searchParams.get('propertyId'));
+  const hasPropertyParameter = searchParams.has('propertyId');
+  const hasRequestedProperty =
+    hasPropertyParameter && Number.isSafeInteger(requestedPropertyId) && requestedPropertyId > 0;
+  const fromForestOverview = searchParams.get('from') === 'forests';
+  const requestedStandId = searchParams.get('standId');
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
+  const [layerMenuOpen, setLayerMenuOpen] = useState(true);
+  const [drawMenuOpen, setDrawMenuOpen] = useState(true);
+  const [showHelpTooltip, setShowHelpTooltip] = useState(() => shouldShowHelpTooltip());
   // Guests start on an example parcel so the demo has something to try right away
   const [properties, setProperties] = useState<Property[]>(() => (isGuest ? [DEMO_PROPERTY] : []));
   const [markings, setMarkings] = useState<Marking[]>(() => (isGuest ? DEMO_MARKINGS : []));
@@ -158,7 +197,7 @@ export default function MapPage() {
   const [pendingGeometry, setPendingGeometry] = useState<GeoJSONGeometry>(null);
   const [pendingGeometryType, setPendingGeometryType] = useState<GeometryType>('point');
   const [error, setError] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(() =>
     isGuest ? DEMO_PROPERTY.id : null
@@ -174,9 +213,13 @@ export default function MapPage() {
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(FALLBACK_LAYER_CONFIG);
   const [activeBaseLayer, setActiveBaseLayer] = useState<BaseLayerKey>('maastokartta');
   const [showCadastreOverlay, setShowCadastreOverlay] = useState(false);
-  const [forestValueOpen, setForestValueOpen] = useState(false);
+  const [forestValueOpen, setForestValueOpen] = useState(() => Boolean(requestedStandId));
   // Stand highlighted from the value view; tied to the parcel so it resets on reselect
-  const [highlightedStand, setHighlightedStand] = useState<{ propertyId: number; standId: string } | null>(null);
+  const [highlightedStand, setHighlightedStand] = useState<{ propertyId: number; standId: string } | null>(() =>
+    requestedStandId && hasRequestedProperty
+      ? { propertyId: requestedPropertyId, standId: requestedStandId }
+      : null
+  );
   // Prefilled work request opened from a recommended operation
   const [requestDraft, setRequestDraft] = useState<WorkRequestDraft | null>(null);
   const [tileLoading, setTileLoading] = useState(false);
@@ -197,6 +240,45 @@ export default function MapPage() {
   const [measurementPoints, setMeasurementPoints] = useState<[number, number][]>([]);
   const [measurementDistance, setMeasurementDistance] = useState<number | null>(null);
 
+  useEffect(() => {
+    const layerSwitcher = layerSwitcherRef.current;
+    if (!layerSwitcher) return;
+
+    const updateHeight = () => {
+      layerSwitcher.parentElement?.style.setProperty(
+        '--layer-switcher-height',
+        `${layerSwitcher.getBoundingClientRect().height}px`
+      );
+    };
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(layerSwitcher);
+    updateHeight();
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const mapPage = mapContainerRef.current?.closest<HTMLElement>('.map-page');
+    const activityFab = activityFabRef.current;
+    if (!mapPage || !activityFab) return;
+
+    const updatePosition = () => {
+      mapPage.style.setProperty(
+        '--activity-help-top',
+        `${activityFab.getBoundingClientRect().bottom + 12}px`,
+      );
+    };
+
+    const observer = new ResizeObserver(updatePosition);
+    observer.observe(activityFab);
+    window.addEventListener('resize', updatePosition);
+    updatePosition();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updatePosition);
+      mapPage.style.removeProperty('--activity-help-top');
+    };
+  }, [selectedPropertyId, activeTool, showForm, showCadastreOverlay, activityOpen]);
+
   const selectedProperty = useMemo(
     () => properties.find((p) => p.id === selectedPropertyId) ?? null,
     [properties, selectedPropertyId]
@@ -213,13 +295,46 @@ export default function MapPage() {
     const props = await propertiesService.getAll();
     setProperties(props);
     setPropertiesLoaded(true);
-    // "Avaa oma metsäpalsta" should land on the parcel, not on the whole of Finland
-    if (props.length > 0 && !autoSelectedRef.current) {
+    if (autoSelectedRef.current) return;
+    // Opened from "Omat metsät": land on the chosen parcel
+    if (hasPropertyParameter && !careMode) {
       autoSelectedRef.current = true;
-      setSelectedPropertyId((current) => current ?? props[0].id);
-      setSelectedPropertyGeometry((current) => current ?? props[0].geometry);
+      const requestedProperty = hasRequestedProperty
+        ? props.find((property) => property.id === requestedPropertyId)
+        : undefined;
+      if (requestedProperty) {
+        setSelectedPropertyId(requestedProperty.id);
+        setSelectedPropertyGeometry(requestedProperty.geometry);
+        setSidebarOpen(true);
+      } else {
+        setError('Valittua metsäpalstaa ei löytynyt. Tarkista omat metsäsi.');
+      }
+      return;
     }
-  }, [isGuest]);
+    if (props.length === 0) return;
+    autoSelectedRef.current = true;
+    if (careMode) {
+      // Care mode lands on the chosen parcel; with a single parcel the choice was skipped
+      const careProperty = props.find((p) => p.id === carePropertyId) ?? (props.length === 1 ? props[0] : null);
+      if (careProperty) {
+        setSelectedPropertyId(careProperty.id);
+        setSelectedPropertyGeometry(careProperty.geometry);
+      } else {
+        setError('Valittua metsää ei löytynyt. Valitse hoidettava palsta sivupalkista.');
+      }
+      return;
+    }
+    // "Avaa oma metsäpalsta" shows all own parcels without choosing one
+    const bounds = L.geoJSON({
+      type: 'FeatureCollection',
+      features: props
+        .filter((p) => p.geometry)
+        .map((p) => ({ type: 'Feature', properties: {}, geometry: p.geometry as GeoJSON.Geometry })),
+    } as GeoJSON.FeatureCollection).getBounds();
+    if (bounds.isValid() && mapRef.current) {
+      mapRef.current.fitBounds(bounds, { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
+    }
+  }, [isGuest, careMode, carePropertyId, hasPropertyParameter, hasRequestedProperty, requestedPropertyId]);
 
   const loadMarkings = useCallback(async (propertyId?: number | null) => {
     if (isGuest) return;
@@ -488,6 +603,36 @@ export default function MapPage() {
   }, [refreshData]);
 
   useEffect(() => {
+    if (!propertiesLoaded || !hasPropertyParameter) return;
+    const property = properties.find((item) => item.id === requestedPropertyId);
+    if (!property) return;
+    const bounds = toBounds(property.geometry);
+    if (bounds?.isValid() && mapRef.current) {
+      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
+    }
+  }, [hasPropertyParameter, propertiesLoaded, properties, requestedPropertyId]);
+
+  useEffect(() => {
+    if (!forestValueOpen || !highlightedStandId || !forestValueResult) return;
+    const stand = forestValueResult.stands.find((item) => item.standId === highlightedStandId);
+    const bounds = stand ? toBounds(stand.geometry) : null;
+    const map = mapRef.current;
+    if (!map || !bounds?.isValid()) return;
+
+    if (window.innerWidth < 900) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+      return;
+    }
+
+    const panelWidth = document.querySelector('.fv-panel')?.clientWidth ?? 0;
+    map.fitBounds(bounds, {
+      paddingTopLeft: [40, 40],
+      paddingBottomRight: [panelWidth + 40, 40],
+      maxZoom: 16,
+    });
+  }, [forestValueOpen, forestValueResult, highlightedStandId]);
+
+  useEffect(() => {
     loadMarkings(selectedPropertyId).catch(() => setError('Tietojen lataaminen epäonnistui'));
   }, [selectedPropertyId, loadMarkings]);
 
@@ -670,12 +815,18 @@ export default function MapPage() {
   }, [markings]);
 
   useEffect(() => {
-    if (!selectedPropertyGeometry) return;
+    if (!selectedPropertyGeometry) {
+      if (selectedHighlightLayerRef.current && mapRef.current) {
+        mapRef.current.removeLayer(selectedHighlightLayerRef.current);
+        selectedHighlightLayerRef.current = null;
+      }
+      return;
+    }
     renderSelectedHighlight(selectedPropertyGeometry, '#0f172a');
 
     const bounds = toBounds(selectedPropertyGeometry);
     if (bounds && mapRef.current) {
-      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
+      mapRef.current.fitBounds(bounds, { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
     }
   }, [selectedPropertyGeometry, renderSelectedHighlight]);
 
@@ -967,6 +1118,116 @@ export default function MapPage() {
     startDraw('request');
   };
 
+  // Care mode: keep ?hoida= on the selected parcel, so a reload or shared link opens the same forest
+  useEffect(() => {
+    if (!careMode || isGuest || selectedPropertyId === null) return;
+    if (searchParams.get('hoida') === String(selectedPropertyId)) return;
+    setSearchParams({ hoida: String(selectedPropertyId) }, { replace: true });
+  }, [careMode, isGuest, selectedPropertyId, searchParams, setSearchParams]);
+
+  // Care mode: follow the user's GPS position on the map (the activity tracker has its own while open)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!careMode || activityOpen || !map || !('geolocation' in navigator)) return;
+    const layer = L.layerGroup().addTo(map);
+    careLocationLayerRef.current = layer;
+    const watchId = navigator.geolocation.watchPosition(
+      ({ coords }) => {
+        const latLng = L.latLng(coords.latitude, coords.longitude);
+        carePositionRef.current = latLng;
+        layer.clearLayers();
+        L.circle(latLng, {
+          radius: coords.accuracy, color: '#2563eb', weight: 1, fillOpacity: 0.08, interactive: false,
+        }).addTo(layer);
+        L.circleMarker(latLng, { radius: 8, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 })
+          .bindTooltip('Olet tässä')
+          .addTo(layer);
+        const proximity = parcelProximity(selectedPropertyGeometry, { lat: coords.latitude, lng: coords.longitude });
+        setCareLocation({
+          status: 'ok',
+          onParcel: proximity?.onParcel ?? false,
+          distanceKm: proximity?.distanceKm ?? null,
+        });
+        // Show the user and the parcel together once, when they are near each other
+        const parcelBounds = selectedPropertyGeometry ? toBounds(selectedPropertyGeometry) : null;
+        if (!careFittedRef.current && parcelBounds?.isValid() && proximity && proximity.distanceKm <= 30) {
+          careFittedRef.current = true;
+          map.fitBounds(parcelBounds.extend(latLng), { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
+        }
+      },
+      (err) => {
+        setCareLocation({
+          status: 'unavailable',
+          message:
+            err.code === err.PERMISSION_DENIED
+              ? 'Sijainnin käyttö estettiin. Salli sijainti selaimen asetuksista.'
+              : 'Sijaintia ei saatu juuri nyt.',
+        });
+      },
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 }
+    );
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      map.removeLayer(layer);
+      careLocationLayerRef.current = null;
+    };
+  }, [careMode, activityOpen, selectedPropertyGeometry]);
+
+  // Care mode: number the separate areas of a multi-area property on the map ("Alue 1, 2, …")
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!careMode || !map) return;
+    const areas = parcelAreas(selectedPropertyGeometry);
+    if (areas.length < 2) return;
+    const layer = L.layerGroup(
+      areas.map((area) =>
+        L.marker(area.labelPosition, {
+          icon: L.divIcon({ className: 'care-area-label', html: String(area.number), iconSize: [26, 26] }),
+          title: `Alue ${area.number}`,
+          interactive: false,
+          keyboard: false,
+        })
+      )
+    ).addTo(map);
+    return () => {
+      map.removeLayer(layer);
+    };
+  }, [careMode, selectedPropertyGeometry]);
+
+  const showCareArea = (area: ParcelArea) => {
+    const bounds = toBounds(area.geometry);
+    if (!bounds?.isValid() || !mapRef.current) return;
+    // On a narrow screen the sidebar closes to show the area, so no room is left for it
+    const narrow = window.innerWidth < 900;
+    mapRef.current.fitBounds(bounds, { ...(narrow ? { padding: [40, 40] } : fitPadding()), maxZoom: FIT_MAX_ZOOM });
+    if (narrow) setSidebarOpen(false);
+  };
+
+  const showCarePosition = () => {
+    const position = carePositionRef.current;
+    if (!position || !mapRef.current) return;
+    mapRef.current.setView(position, Math.max(mapRef.current.getZoom(), 15));
+    if (window.innerWidth < 900) setSidebarOpen(false);
+  };
+
+  // "Toimenpiteitä tarvitaan" in care mode: the value calculation's recommended operations
+  const careNeeded: CareNeededOperations = forestValueResult
+    ? {
+        status: 'ready',
+        operations: forestValueResult.operations,
+        fields: forestValueResult.fields ?? [],
+        fieldsUnavailable: forestValueResult.warnings.some((w) => w.code === 'fields_unavailable'),
+      }
+    : forestValue.entry?.status === 'failed' ||
+        (forestValue.entry?.status === 'ready' && forestValue.entry.response?.status !== 'available')
+      ? { status: 'unavailable' }
+      : { status: 'loading' };
+
+  const showCareStand = (standId: string) => {
+    handleSelectStand(standId);
+    if (window.innerWidth < 900) setSidebarOpen(false);
+  };
+
   const openActivity = () => {
     if (!selectedPropertyId) {
       setError('Valitse ensin palsta, jolla aktiviteetti tehdään.');
@@ -1134,7 +1395,53 @@ export default function MapPage() {
     }
     const group = standsLayerRef.current;
     group.clearLayers();
-    if (!forestValueResult || (!forestValueOpen && !highlightedStandId)) return;
+    if (!forestValueResult) return;
+
+    // Care mode: stands that need work are clickable and highlight their recommendations in the sidebar
+    if (careMode && !forestValueOpen) {
+      // Fields first, so stands stay on top; they get no recommendations
+      (forestValueResult.fields ?? []).forEach((field) => {
+        if (!field.geometry) return;
+        const layer = L.geoJSON(field.geometry as GeoJSON.Geometry, {
+          style: { color: '#a16207', weight: 1.5, dashArray: '2 4', fillColor: '#facc15', fillOpacity: 0.3 },
+          bubblingMouseEvents: false,
+        });
+        layer.bindTooltip(
+          `🌾 Pelto · ${formatArea(field.areaHa)}` +
+            (field.source === 'owner' ? ` (${standTitle(field.standNumber).toLowerCase()} merkitty pelloksi)` : ' (peltolohkorekisteri)'),
+          { sticky: true }
+        );
+        group.addLayer(layer);
+      });
+      const careOps = forestValueResult.operations.filter(isCareOperation);
+      forestValueResult.stands.forEach((stand) => {
+        const op = careOps.find((o) => o.standId === stand.standId);
+        if (!stand.geometry || !op) return;
+        const selected = stand.standId === highlightedStandId;
+        const color = MARKING_COLORS[OPERATION_WORK_TYPE[op.type]];
+        const layer = L.geoJSON(stand.geometry as GeoJSON.Geometry, {
+          style: {
+            color: selected ? '#1d4ed8' : color,
+            weight: selected ? 3.5 : 2,
+            dashArray: selected ? undefined : '6 4',
+            fillColor: selected ? '#3b82f6' : color,
+            fillOpacity: selected ? 0.4 : 0.18,
+          },
+          bubblingMouseEvents: false,
+        });
+        layer.bindTooltip(`${standTitle(stand.standNumber)} · ${OPERATION_LABEL[op.type]}`, { sticky: true });
+        layer.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          setHighlightedStand({ propertyId: forestValueResult.propertyId, standId: stand.standId });
+          setSidebarOpen(true);
+        });
+        group.addLayer(layer);
+        if (selected) layer.bringToFront();
+      });
+      return;
+    }
+
+    if (!forestValueOpen && !highlightedStandId) return;
     forestValueResult.stands.forEach((stand) => {
       if (!stand.geometry) return;
       const selected = stand.standId === highlightedStandId;
@@ -1150,7 +1457,7 @@ export default function MapPage() {
       group.addLayer(layer);
       if (selected) layer.bringToFront();
     });
-  }, [forestValueResult, forestValueOpen, highlightedStandId]);
+  }, [forestValueResult, forestValueOpen, highlightedStandId, careMode]);
 
   const handleSelectStand = (standId: string) => {
     if (selectedPropertyId === null) return;
@@ -1198,6 +1505,11 @@ export default function MapPage() {
   };
 
   const handleSelectProperty = (property: Property) => {
+    if (selectedPropertyId === property.id) {
+      setSelectedPropertyId(null);
+      setSelectedPropertyGeometry(null);
+      return;
+    }
     setSelectedPropertyId(property.id);
     setSelectedPropertyGeometry(property.geometry);
     setSidebarOpen(true);
@@ -1326,10 +1638,30 @@ export default function MapPage() {
           >
             ☰
           </button>
+          {/* Opened from "Omat metsät" without in-app history: back leads there */}
+          <BackButton fallbackPath={fromForestOverview ? '/omat-metsat' : '/start'} />
           <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä">🌲 Metsuri</Link>
         </div>
         <div className="map-nav-right">
-          {isGuest ? (
+        <Link to="/ohje" className="nav-help-link" aria-label="Avaa käyttöohje" title="Käyttöohje">
+          ?
+          {showHelpTooltip && <span className="nav-help-tooltip">
+            Tarvitsetko apua?
+            <button
+              type="button"
+              className="nav-help-tooltip-close"
+              aria-label="Sulje ohjeteksti"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setShowHelpTooltip(false);
+              }}
+            >
+              ×
+            </button>
+          </span>}
+        </Link>
+        {isGuest ? (
             <>
               <span className="user-email guest-label">Vierailija</span>
               <button className="btn btn-small btn-primary" onClick={() => { logout(); navigate('/login'); }}>
@@ -1377,25 +1709,58 @@ export default function MapPage() {
           onNewWorkRequest={openNewWorkRequest}
           onWithdrawWorkRequest={handleWithdrawWorkRequest}
           onWorkRequestUpdated={handleWorkRequestUpdated}
+          care={
+            careMode
+              ? {
+                  location: careLocation,
+                  onStartActivity: openActivity,
+                  onShowLocation: showCarePosition,
+                  needed: careNeeded,
+                  onSelectStand: showCareStand,
+                  activeStandId: highlightedStandId,
+                  onClearStand: () => setHighlightedStand(null),
+                  onShowArea: showCareArea,
+                  onMarkField: isGuest ? undefined : forestValue.setFieldMark,
+                  onRequestOffers: isGuest ? undefined : handleRequestOffers,
+                }
+              : null
+          }
         />
 
         <div className="map-wrapper">
           <div ref={mapContainerRef} className="leaflet-map" />
 
-          <div className="layer-switcher" role="group" aria-label="Karttataso">
+          <div
+            ref={layerSwitcherRef}
+            className={`layer-switcher ${layerMenuOpen ? 'menu-open' : 'menu-closed'}`}
+            role="group"
+            aria-label="Karttataso"
+          >
             <button
-              className={`layer-btn ${activeBaseLayer === 'maastokartta' || activeBaseLayer === 'peruskartta' ? 'active' : ''}`}
-              onClick={() => setActiveBaseLayer('maastokartta')}
+              className="map-control-toggle"
+              onClick={() => setLayerMenuOpen((open) => !open)}
+              aria-expanded={layerMenuOpen}
+              aria-label="Karttatasot"
             >
-              Maastokartta
+              ▾
             </button>
-            <button
-              className={`layer-btn ${activeBaseLayer === 'ortokuva' ? 'active' : ''}`}
-              onClick={() => setActiveBaseLayer('ortokuva')}
-            >
-              Ortokuva
-            </button>
-            {layerConfig.overlays?.kiinteistorajat && (
+            {layerMenuOpen && (
+              <>
+                <button
+                  className={`layer-btn ${activeBaseLayer === 'maastokartta' || activeBaseLayer === 'peruskartta' ? 'active' : ''}`}
+                  onClick={() => setActiveBaseLayer('maastokartta')}
+                >
+                  Maastokartta
+                </button>
+                <button
+                  className={`layer-btn ${activeBaseLayer === 'ortokuva' ? 'active' : ''}`}
+                  onClick={() => setActiveBaseLayer('ortokuva')}
+                >
+                  Ortokuva
+                </button>
+              </>
+            )}
+            {layerMenuOpen && layerConfig.overlays?.kiinteistorajat && (
               <button
                 className={`layer-btn ${showCadastreOverlay ? 'active' : ''}`}
                 onClick={() => { setCadastreClickError(''); setShowCadastreOverlay((v) => !v); }}
@@ -1525,13 +1890,24 @@ export default function MapPage() {
           ) : (
             // Hidden while choosing a property on the cadastre layer: the panel uses the same spot
             selectedPropertyId && !activeTool && !showForm && !(showCadastreOverlay && layerConfig.overlays?.kiinteistorajat) && (
-              <button className="activity-fab" onClick={openActivity}>
-                ▶ Aloita aktiviteetti
+              <button ref={activityFabRef} className="activity-fab" onClick={openActivity}>
+                <span className="activity-fab-icon" aria-hidden="true">▶</span>
+                <span>Aloita aktiviteetti</span>
               </button>
             )
           )}
 
-          <div className="draw-toolbar">
+          <div className={`draw-toolbar ${drawMenuOpen ? 'menu-open' : 'menu-closed'}`}>
+            <button
+              className="map-control-toggle"
+              onClick={() => setDrawMenuOpen((open) => !open)}
+              aria-expanded={drawMenuOpen}
+              aria-label="Piirtotyökalut"
+            >
+              ▴
+            </button>
+            {drawMenuOpen && (
+              <>
             {activeTool && (
               <button
                 className="tool-btn cancel-btn"
@@ -1583,6 +1959,8 @@ export default function MapPage() {
             >
               📐<span>Mittaa</span>
             </button>
+              </>
+            )}
           </div>
 
           {activeTool === 'request' && !showForm && (
@@ -1635,7 +2013,7 @@ export default function MapPage() {
             />
           )}
 
-          {!forestValueOpen && highlightedStandId && (
+          {!forestValueOpen && highlightedStandId && !careMode && (
             <button type="button" className="fv-back-chip" onClick={() => setForestValueOpen(true)}>
               ← Takaisin arvoon
             </button>

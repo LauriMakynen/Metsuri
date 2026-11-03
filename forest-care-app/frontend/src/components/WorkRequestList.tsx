@@ -12,6 +12,8 @@ interface WorkRequestListProps {
   onNewRequest: () => void;
   onWithdraw: (requestId: number) => Promise<void>;
   onUpdated: (updated: WorkRequest) => void;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
 // The owner's own work requests (planned work) on the selected parcel, with anonymous offers
@@ -22,6 +24,8 @@ export default function WorkRequestList({
   onNewRequest,
   onWithdraw,
   onUpdated,
+  isOpen,
+  onToggle,
 }: WorkRequestListProps) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [requestToWithdraw, setRequestToWithdraw] = useState<WorkRequest | null>(null);
@@ -41,10 +45,11 @@ export default function WorkRequestList({
 
   return (
     <>
-      <div className="sidebar-header">
+      <button className="sidebar-section-header" onClick={onToggle} aria-expanded={isOpen}>
         <h3>📢 Työpyynnöt ({selectedPropertyId ? visible.length : 0})</h3>
-      </div>
-      {selectedPropertyId && (
+        <span className={`sidebar-chevron ${isOpen ? 'open' : ''}`} aria-hidden="true">⌄</span>
+      </button>
+      {isOpen && selectedPropertyId && (
         <div className="request-new">
           {canPublish ? (
             <button className="btn btn-primary btn-compact" onClick={onNewRequest}>
@@ -55,7 +60,7 @@ export default function WorkRequestList({
           )}
         </div>
       )}
-      <ul className="sidebar-list">
+      {isOpen && <ul className="sidebar-list">
         {!selectedPropertyId ? (
           <li className="sidebar-empty">Valitse kiinteistö nähdäksesi työpyynnöt.</li>
         ) : visible.length === 0 ? (
@@ -91,7 +96,7 @@ export default function WorkRequestList({
             </li>
           ))
         )}
-      </ul>
+      </ul>}
       {requestToWithdraw && (
         <div className="modal-overlay" onClick={() => busyId === null && setRequestToWithdraw(null)}>
           <div className="modal-card confirm-dialog work-request-confirm" onClick={(e) => e.stopPropagation()}>

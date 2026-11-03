@@ -7,6 +7,7 @@ import {
   detectImageType,
   parseTakenAt,
 } from '../services/workRequestPhotos';
+import { REGIONS, isValidRegionCode } from '../services/regions';
 
 const router = Router();
 
@@ -66,12 +67,19 @@ function isValidEur(value: unknown): value is number {
  * Open work requests as shown to work providers. Owner and bidder identities are never
  * exposed; with a logged-in viewer, is_own and my_bid_eur describe that viewer only.
  */
-async function fetchPublicRequests(viewerId: number | null, filters: { type?: string; id?: number }) {
+async function fetchPublicRequests(
+  viewerId: number | null,
+  filters: { type?: string; region?: string; id?: number }
+) {
   const values: unknown[] = [viewerId];
   let where = `wr.status = 'open'`;
   if (filters.type) {
     values.push(filters.type);
     where += ` AND wr.type = $${values.length}`;
+  }
+  if (filters.region) {
+    values.push(filters.region);
+    where += ` AND region.code = $${values.length}`;
   }
   if (filters.id) {
     values.push(filters.id);
@@ -83,9 +91,19 @@ async function fetchPublicRequests(viewerId: number | null, filters: { type?: st
             ST_Y(ST_PointOnSurface(wr.geometry)) AS lat,
             ST_X(ST_PointOnSurface(wr.geometry)) AS lng,
             COALESCE(wr.user_id = $1, false) AS is_own,
-            mine.my_bid_eur
+            mine.my_bid_eur,
+            region.code AS region_code,
+            region.name AS region_name
      FROM work_requests wr
      ${BID_SUMMARY_JOIN}
+     -- Region containing the request; the nearest one catches coastal spots outside the generalised borders
+     LEFT JOIN LATERAL (
+       SELECT r.code, r.name
+       FROM regions r
+       WHERE ST_DWithin(r.geometry, ST_PointOnSurface(wr.geometry), 0.5)
+       ORDER BY ST_Distance(r.geometry, ST_PointOnSurface(wr.geometry))
+       LIMIT 1
+     ) region ON true
      LEFT JOIN LATERAL (
        SELECT amount_eur AS my_bid_eur
        FROM work_request_bids
@@ -122,18 +140,32 @@ async function fetchOwnRequests(userId: number, id?: number) {
 // GET /api/work-requests - Public list of open work requests for work providers.
 router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   const typeQuery = typeof req.query.type === 'string' ? req.query.type : undefined;
+  const regionQuery = typeof req.query.region === 'string' ? req.query.region : undefined;
 
   if (typeQuery && !VALID_TYPES.includes(typeQuery)) {
     res.status(400).json({ error: 'Invalid type' });
     return;
   }
+  if (regionQuery && !isValidRegionCode(regionQuery)) {
+    res.status(400).json({ error: 'Invalid region' });
+    return;
+  }
 
   try {
-    res.json(await fetchPublicRequests(req.userId ?? null, { type: typeQuery }));
+    res.json(await fetchPublicRequests(req.userId ?? null, { type: typeQuery, region: regionQuery }));
   } catch (error) {
     console.error('Get work requests error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// GET /api/work-requests/regions - Regions (maakunnat) for the region filter, alphabetically
+router.get('/regions', (_req, res: Response): void => {
+  res.json(
+    REGIONS.features
+      .map(({ properties }) => ({ code: properties.code, name: properties.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fi'))
+  );
 });
 
 // GET /api/work-requests/mine - The authenticated owner's own work requests with bid summary

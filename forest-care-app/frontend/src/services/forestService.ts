@@ -12,6 +12,7 @@ import type {
   WorkRequest,
   PublicWorkRequest,
   NewWorkRequest,
+  Region,
 } from '../types';
 
 function normalizeDate(value: unknown): string | null {
@@ -151,6 +152,13 @@ export const propertiesService = {
     const response = await api.post<ForestValueResponse>(`/api/properties/${propertyId}/forest-value/manual`, input);
     return response.data;
   },
+
+  // The owner marks a stand as field ("Tämä on pelto") or undoes it; returns the recomputed value
+  setFieldMark: async (propertyId: number, standId: string, isField: boolean): Promise<ForestValueResponse> => {
+    const url = `/api/properties/${propertyId}/forest-value/fields/${encodeURIComponent(standId)}`;
+    const response = isField ? await api.put<ForestValueResponse>(url) : await api.delete<ForestValueResponse>(url);
+    return response.data;
+  },
 };
 
 export const forestValueService = {
@@ -238,11 +246,13 @@ function normalizeOwnRequest(r: WorkRequest): WorkRequest {
 
 export const workRequestsService = {
   // Public: open requests for work providers (works without login)
-  getOpen: async (type?: MarkingType): Promise<PublicWorkRequest[]> => {
-    const response = await api.get<PublicWorkRequest[]>('/api/work-requests', {
-      params: type ? { type } : undefined,
-    });
+  getOpen: async (filters: { type?: MarkingType; region?: string } = {}): Promise<PublicWorkRequest[]> => {
+    const response = await api.get<PublicWorkRequest[]>('/api/work-requests', { params: filters });
     return response.data.map(normalizePublicRequest);
+  },
+  getRegions: async (): Promise<Region[]> => {
+    const response = await api.get<Region[]>('/api/work-requests/regions');
+    return response.data;
   },
   getMine: async (): Promise<WorkRequest[]> => {
     const response = await api.get<WorkRequest[]>('/api/work-requests/mine');

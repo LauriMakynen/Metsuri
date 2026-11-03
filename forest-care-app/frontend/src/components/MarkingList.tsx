@@ -7,6 +7,8 @@ interface MarkingListProps {
   markings: Marking[];
   selectedPropertyId: number | null;
   onDelete: (id: number) => void;
+  isOpen: boolean;
+  onToggle: () => void;
 }
 
 // Done work on the selected parcel (planned work lives in WorkRequestList)
@@ -14,13 +16,16 @@ export default function MarkingList({
   markings,
   selectedPropertyId,
   onDelete,
+  isOpen,
+  onToggle,
 }: MarkingListProps) {
   return (
     <>
-      <div className="sidebar-header">
+      <button className="sidebar-section-header" onClick={onToggle} aria-expanded={isOpen}>
         <h3>📍 Tehdyt työt ({selectedPropertyId ? markings.length : 0})</h3>
-      </div>
-      <ul className="sidebar-list">
+        <span className={`sidebar-chevron ${isOpen ? 'open' : ''}`} aria-hidden="true">⌄</span>
+      </button>
+      {isOpen && <ul className="sidebar-list">
         {!selectedPropertyId ? (
           <li className="sidebar-empty">Valitse kiinteistö nähdäksesi merkinnät.</li>
         ) : markings.length === 0 ? (
@@ -66,7 +71,7 @@ export default function MarkingList({
             </li>
           ))
         )}
-      </ul>
+      </ul>}
     </>
   );
 }
