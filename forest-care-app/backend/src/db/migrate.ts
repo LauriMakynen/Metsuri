@@ -217,6 +217,22 @@ async function migrate() {
       'CREATE INDEX IF NOT EXISTS work_request_bids_request_idx ON work_request_bids(work_request_id)'
     );
 
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        link TEXT NOT NULL,
+        read_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await client.query(
+      'CREATE INDEX IF NOT EXISTS notifications_user_created_idx ON notifications(user_id, created_at DESC)'
+    );
+
     // Photos the owner attaches to a work request (resized JPEGs, stored in the database).
     // taken_at is the capture time when the device provided one.
     await client.query(`

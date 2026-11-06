@@ -10,6 +10,7 @@ import mapRoutes from './routes/map';
 import workRequestsRoutes from './routes/workRequests';
 import forestValueRoutes from './routes/forestValue';
 import workRequestPhotosRoutes from './routes/workRequestPhotos';
+import notificationsRoutes from './routes/notifications';
 import { getAllowedOrigins, isAllowedOrigin } from './config/allowedOrigins';
 
 dotenv.config();
@@ -73,6 +74,7 @@ app.use('/api/map', apiLimiter, mapRoutes);
 app.use('/api/work-requests', apiLimiter, workRequestsRoutes);
 app.use('/api/forest-value', apiLimiter, forestValueRoutes);
 app.use('/api/work-request-photos', photoLimiter, workRequestPhotosRoutes);
+app.use('/api/notifications', apiLimiter, notificationsRoutes);
 
 // Health check endpoints
 app.get('/health', (_req, res) => {

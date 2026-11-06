@@ -35,6 +35,7 @@ import ActivityTracker from '../components/ActivityTracker';
 import WorkRequestForm from '../components/WorkRequestForm';
 import ForestValuePanel from '../components/forestValue/ForestValuePanel';
 import BackButton from '../components/BackButton';
+import NotificationsBell from '../components/NotificationsBell';
 import { useForestValue } from '../hooks/useForestValue';
 import { OPERATION_LABEL, OPERATION_WORK_TYPE, isCareOperation, standTitle } from '../utils/forestValueFormat';
 import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
@@ -181,6 +182,7 @@ export default function MapPage() {
   );
   // "Omat metsät" opens /map?propertyId=<id> (optionally &standId=… from the value view)
   const requestedPropertyId = Number(searchParams.get('propertyId'));
+  const requestedWorkRequestId = Number(searchParams.get('workRequest'));
   const hasPropertyParameter = searchParams.has('propertyId');
   const hasRequestedProperty =
     hasPropertyParameter && Number.isSafeInteger(requestedPropertyId) && requestedPropertyId > 0;
@@ -644,6 +646,20 @@ export default function MapPage() {
       .then(setWorkRequests)
       .catch(() => setError('Työpyyntöjen lataaminen epäonnistui'));
   }, [isGuest]);
+
+  useEffect(() => {
+    if (isGuest || !Number.isSafeInteger(requestedWorkRequestId) || requestedWorkRequestId <= 0) return;
+    const request = workRequests.find((item) => item.id === requestedWorkRequestId);
+    if (!request) return;
+    const selection = window.setTimeout(() => {
+      setSelectedPropertyId(request.property_id);
+      setSelectedPropertyGeometry(
+        properties.find((property) => property.id === request.property_id)?.geometry ?? null
+      );
+      setSidebarOpen(true);
+    }, 0);
+    return () => window.clearTimeout(selection);
+  }, [isGuest, requestedWorkRequestId, workRequests, properties]);
 
   // Publish the area just drawn with the "Työpyyntö" tool
   const handleCreateWorkRequest = async (data: WorkRequestFormData): Promise<WorkRequest> => {
@@ -1648,6 +1664,7 @@ export default function MapPage() {
           <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä">🌲 Metsuri</Link>
         </div>
         <div className="map-nav-right">
+        {!isGuest && <NotificationsBell />}
         <Link to="/ohje" className="nav-help-link" aria-label="Avaa käyttöohje" title="Käyttöohje">
           ?
           {showHelpTooltip && <span className="nav-help-tooltip">
@@ -1676,8 +1693,13 @@ export default function MapPage() {
           ) : (
             <>
               <span className="user-email">{user?.email}</span>
-              <button className="btn btn-small" onClick={logout}>
-                Kirjaudu ulos
+              <button className="btn btn-small logout-button" onClick={logout} aria-label="Kirjaudu ulos" title="Kirjaudu ulos">
+                <span className="logout-label">Kirjaudu ulos</span>
+                <svg className="logout-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 17l5-5-5-5" />
+                  <path d="M15 12H3" />
+                  <path d="M21 19V5a2 2 0 0 0-2-2h-5" />
+                </svg>
               </button>
             </>
           )}
@@ -1714,6 +1736,11 @@ export default function MapPage() {
           onNewWorkRequest={openNewWorkRequest}
           onWithdrawWorkRequest={handleWithdrawWorkRequest}
           onWorkRequestUpdated={handleWorkRequestUpdated}
+          focusWorkRequests={
+            !isGuest &&
+            Number.isSafeInteger(requestedWorkRequestId) &&
+            requestedWorkRequestId > 0
+          }
           care={
             careMode
               ? {

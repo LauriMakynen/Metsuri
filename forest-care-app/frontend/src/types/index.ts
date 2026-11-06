@@ -5,6 +5,16 @@ export interface User {
   email: string;
 }
 
+export interface Notification {
+  id: number;
+  type: 'new_bid' | 'bid_no_longer_best' | 'bid_removed' | 'work_request_cancelled';
+  title: string;
+  body: string;
+  link: string;
+  read_at: string | null;
+  created_at: string;
+}
+
 export interface AuthState {
   token: string | null;
   user: User | null;
