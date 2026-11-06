@@ -12,7 +12,7 @@ import WorkRequestList from './WorkRequestList';
 import ForestCarePanel from './ForestCarePanel';
 import type { CareLocation, CareNeededOperations } from './ForestCarePanel';
 import type { ParcelArea } from '../utils/parcelAreas';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // Forest care mode ("Hoida omaa metsää") adds a care summary on top of the usual sections
 export interface SidebarCareMode {
@@ -46,6 +46,7 @@ interface SidebarProps {
   onNewWorkRequest: () => void;
   onWithdrawWorkRequest: (requestId: number) => Promise<void>;
   onWorkRequestUpdated: (updated: WorkRequest) => void;
+  focusWorkRequests?: boolean;
   care?: SidebarCareMode | null;
 }
 
@@ -67,6 +68,7 @@ export default function Sidebar({
   onNewWorkRequest,
   onWithdrawWorkRequest,
   onWorkRequestUpdated,
+  focusWorkRequests = false,
   care = null,
 }: SidebarProps) {
   const [openSections, setOpenSections] = useState({
@@ -75,6 +77,18 @@ export default function Sidebar({
     requests: false,
     markings: false,
   });
+
+  useEffect(() => {
+    if (!focusWorkRequests) return;
+    const focus = window.setTimeout(() => {
+      setOpenSections({
+        properties: false,
+        requests: true,
+        markings: false,
+      });
+    }, 0);
+    return () => window.clearTimeout(focus);
+  }, [focusWorkRequests]);
 
   const toggleSection = (section: 'properties' | 'requests' | 'markings') => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));

@@ -9,6 +9,7 @@ import {
 } from '../services/workRequestPhotos';
 import { REGIONS, isValidRegionCode } from '../services/regions';
 import { FOREST_WORK_TYPES, checkWorkArea, landCheckEnabled, workAreaWarning } from '../services/workAreaCheck';
+import { createNotification } from '../services/notifications';
 
 const router = Router();
 
@@ -287,7 +288,10 @@ router.post('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response)
   }
 
   try {
-    const request = await pool.query('SELECT user_id, status FROM work_requests WHERE id = $1', [id]);
+    const request = await pool.query(
+      'SELECT user_id, status, title, pricing FROM work_requests WHERE id = $1',
+      [id]
+    );
     if (request.rows.length === 0 || request.rows[0].status !== 'open') {
       res.status(404).json({ error: 'Työpyyntöä ei löytynyt tai se ei ole enää avoinna' });
       return;
@@ -297,10 +301,71 @@ router.post('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response)
       return;
     }
 
-    await pool.query(
-      'INSERT INTO work_request_bids (work_request_id, user_id, amount_eur) VALUES ($1, $2, $3)',
-      [id, req.userId, Math.round(amount * 100) / 100]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const bestOrder = request.rows[0].pricing === 'owner_receives'
+        ? 'b.amount_eur DESC'
+        : 'b.amount_eur ASC';
+      const previousBest = await client.query(
+        `SELECT b.user_id, b.amount_eur
+         FROM work_request_bids b
+         WHERE b.work_request_id = $1
+         ORDER BY ${bestOrder}, b.created_at ASC, b.id ASC
+         LIMIT 1`,
+        [id]
+      );
+      await client.query(
+        'INSERT INTO work_request_bids (work_request_id, user_id, amount_eur) VALUES ($1, $2, $3)',
+        [id, req.userId, Math.round(amount * 100) / 100]
+      );
+      const currentBest = await client.query(
+        `SELECT b.user_id, b.amount_eur
+         FROM work_request_bids b
+         WHERE b.work_request_id = $1
+         ORDER BY ${bestOrder}, b.created_at ASC, b.id ASC
+         LIMIT 1`,
+        [id]
+      );
+      const formattedAmount = amount.toLocaleString('fi-FI', { maximumFractionDigits: 2 });
+      await createNotification(client, {
+        userId: request.rows[0].user_id,
+        type: 'new_bid',
+        title: `Uusi tarjous ${formattedAmount} € työpyyntöön ${request.rows[0].title}`,
+        body: 'Työpyyntöösi on tullut uusi tarjous.',
+        link: `/map?workRequest=${id}`,
+      });
+
+      const best = currentBest.rows[0];
+      if (best.user_id !== req.userId) {
+        await createNotification(client, {
+          userId: req.userId as number,
+          type: 'bid_no_longer_best',
+          title: `Työpyyntöön ${request.rows[0].title} tuli parempi tarjous`,
+          body: 'Oma tarjouksesi ei ole enää paras.',
+          link: `/tyontarjoajat?workRequest=${id}`,
+        });
+      }
+      if (
+        previousBest.rows[0] &&
+        previousBest.rows[0].user_id !== best.user_id &&
+        previousBest.rows[0].user_id !== req.userId
+      ) {
+        await createNotification(client, {
+          userId: previousBest.rows[0].user_id,
+          type: 'bid_no_longer_best',
+          title: `Työpyyntöön ${request.rows[0].title} tuli parempi tarjous`,
+          body: 'Oma tarjouksesi ei ole enää paras.',
+          link: `/tyontarjoajat?workRequest=${id}`,
+        });
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
 
     const [updated] = await fetchPublicRequests(req.userId ?? null, { id: Number(id) });
     res.status(201).json(updated);
@@ -320,13 +385,42 @@ router.delete('/:id/bids', authMiddleware, async (req: AuthRequest, res: Respons
   }
 
   try {
-    const result = await pool.query(
-      'DELETE FROM work_request_bids WHERE work_request_id = $1 AND user_id = $2 RETURNING id',
-      [id, req.userId]
-    );
-    if (result.rows.length === 0) {
-      res.status(404).json({ error: 'Tarjousta ei löytynyt' });
-      return;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const request = await client.query(
+        'SELECT user_id, title, status FROM work_requests WHERE id = $1',
+        [id]
+      );
+      if (request.rows.length === 0 || request.rows[0].status !== 'open') {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Työpyyntöä ei löytynyt tai se ei ole enää avoinna' });
+        return;
+      }
+
+      const result = await client.query(
+        'DELETE FROM work_request_bids WHERE work_request_id = $1 AND user_id = $2 RETURNING id',
+        [id, req.userId]
+      );
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Tarjousta ei löytynyt' });
+        return;
+      }
+
+      await createNotification(client, {
+        userId: request.rows[0].user_id,
+        type: 'bid_removed',
+        title: `Tarjous poistettiin työpyynnöstä ${request.rows[0].title}`,
+        body: 'Työpyyntöösi tehty tarjous poistettiin.',
+        link: `/map?workRequest=${id}`,
+      });
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
 
     const [updated] = await fetchPublicRequests(req.userId ?? null, { id: Number(id) });
@@ -430,13 +524,38 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response): P
   }
 
   try {
-    const result = await pool.query(
-      'DELETE FROM work_requests WHERE id = $1 AND user_id = $2 RETURNING id',
-      [id, req.userId]
-    );
-    if (result.rows.length === 0) {
-      res.status(404).json({ error: 'Work request not found' });
-      return;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const request = await client.query(
+        'SELECT title FROM work_requests WHERE id = $1 AND user_id = $2',
+        [id, req.userId]
+      );
+      if (request.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Work request not found' });
+        return;
+      }
+      const bidders = await client.query(
+        'SELECT DISTINCT user_id FROM work_request_bids WHERE work_request_id = $1',
+        [id]
+      );
+      for (const bidder of bidders.rows) {
+        await createNotification(client, {
+          userId: bidder.user_id,
+          type: 'work_request_cancelled',
+          title: `Työpyyntö ${request.rows[0].title} peruttiin`,
+          body: 'Työpyyntö, johon olit tarjonnut, peruttiin.',
+          link: `/tyontarjoajat?workRequest=${id}`,
+        });
+      }
+      await client.query('DELETE FROM work_requests WHERE id = $1 AND user_id = $2', [id, req.userId]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
     res.json({ message: 'Work request withdrawn' });
   } catch (error) {
