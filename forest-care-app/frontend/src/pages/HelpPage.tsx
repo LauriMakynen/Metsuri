@@ -29,7 +29,7 @@ const HELP_SECTIONS: HelpSection[] = [
     steps: [
       'Avaa sivupalkista Omat kiinteistöt.',
       'Valitse Valitse kiinteistö ja klikkaa listasta haluamaasi palstaa.',
-      'Voit etsiä kiinteistön tunnuksella avaamalla Hae kiinteistö -osion.',
+      'Voit lisätä kiinteistön valitsemalla kartalta Kiinteistörajat ja klikkaamalla haluamaasi kiinteistöä.',
       'Kun kiinteistö on valittu, sen rajat, tiedot ja siihen liittyvät työt tulevat näkyviin.',
       'Poista valinta painamalla valittua kiinteistöä uudelleen.',
     ],

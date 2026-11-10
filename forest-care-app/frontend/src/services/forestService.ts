@@ -8,6 +8,7 @@ import type {
   CadastreFeature,
   MapLayerConfig,
   ForestValueResponse,
+  ForestValueHistoryResponse,
   ManualStandInput,
   WorkRequest,
   PublicWorkRequest,
@@ -62,6 +63,8 @@ function normalizeMarking(marking: Marking): Marking {
     operation_date: normalizeDate(marking.operation_date),
     follow_up_date_start: normalizeDate(marking.follow_up_date_start),
     follow_up_date_end: normalizeDate(marking.follow_up_date_end),
+    income_eur: normalizeNumber(marking.income_eur),
+    cost_eur: normalizeNumber(marking.cost_eur),
   };
 }
 
@@ -162,6 +165,12 @@ export const propertiesService = {
   },
 
   // Owner-entered basics when there is no forest resource data
+  // Estimated return over the last 1…30 years; numbers are plain JSON numbers, not NUMERIC strings
+  getForestValueHistory: async (propertyId: number): Promise<ForestValueHistoryResponse> => {
+    const response = await api.get<ForestValueHistoryResponse>(`/api/properties/${propertyId}/forest-value/history`);
+    return response.data;
+  },
+
   submitManualForestValue: async (propertyId: number, input: ManualStandInput): Promise<ForestValueResponse> => {
     const response = await api.post<ForestValueResponse>(`/api/properties/${propertyId}/forest-value/manual`, input);
     return response.data;
@@ -208,6 +217,8 @@ export const markingsService = {
     geometry?: GeoJSONGeometry;
     area_ha?: number | null;
     operation_date: string;
+    income_eur?: number | null;
+    cost_eur?: number | null;
   }): Promise<Marking> => {
     const response = await api.post<Marking>('/api/markings', data);
     return normalizeMarking(response.data);
@@ -225,6 +236,8 @@ export const markingsService = {
     follow_up_note: string | null;
     follow_up_date_start: string | null;
     follow_up_date_end: string | null;
+    income_eur: number | null;
+    cost_eur: number | null;
   }>): Promise<Marking> => {
     const response = await api.put<Marking>(`/api/markings/${id}`, data);
     return normalizeMarking(response.data);

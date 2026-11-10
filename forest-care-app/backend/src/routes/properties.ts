@@ -2,7 +2,13 @@ import { Router, Response } from 'express';
 import pool from '../db/pool';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { parsePropertyCode } from '../services/cadastreService';
-import { getForestValue, getManualForestValue, setFieldMark } from '../services/forestValue/forestValueService';
+import {
+  getForestValue,
+  getForestValueHistory,
+  getManualForestValue,
+  setFieldMark,
+} from '../services/forestValue/forestValueService';
+import { HISTORY_PERIODS } from '../services/forestValue/history';
 import { validateManualInput } from '../services/forestValue/manualStand';
 
 const router = Router();
@@ -117,7 +123,7 @@ router.get('/:id/markings', async (req: AuthRequest, res: Response): Promise<voi
           `SELECT id, user_id, property_id, type, geometry_type, title, description,
             ST_AsGeoJSON(geometry)::json AS geometry, area_ha,
             operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
-              created_at, updated_at
+              income_eur, cost_eur, created_at, updated_at
        FROM markings
        WHERE user_id = $1 AND property_id = $2
        ORDER BY created_at DESC`,
@@ -220,6 +226,35 @@ router.get('/:id/forest-value', async (req: AuthRequest, res: Response): Promise
     res.json(response);
   } catch (error) {
     console.error('Get forest value error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/properties/:id/forest-value/history - Estimated return over the last years
+// ?years=1,5,10 picks the periods (default 1, 5, 10, 20 and 30 years)
+router.get('/:id/forest-value/history', async (req: AuthRequest, res: Response): Promise<void> => {
+  const propertyId = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(propertyId)) {
+    res.status(400).json({ error: 'Invalid property id' });
+    return;
+  }
+  let periods = HISTORY_PERIODS;
+  if (typeof req.query.years === 'string') {
+    periods = [...new Set(req.query.years.split(',').map(Number))];
+    if (periods.length === 0 || periods.length > 10 || periods.some((y) => !Number.isInteger(y) || y < 1 || y > 30)) {
+      res.status(400).json({ error: 'years must be a comma-separated list of whole years between 1 and 30' });
+      return;
+    }
+  }
+  try {
+    const response = await getForestValueHistory(propertyId, req.userId as number, periods);
+    if (!response) {
+      res.status(404).json({ error: 'Property not found' });
+      return;
+    }
+    res.json(response);
+  } catch (error) {
+    console.error('Get forest value history error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -157,6 +157,9 @@ export interface StandValuation {
   priceCutType: PriceCutType;
   isForestLand: boolean;
   inventoryYear: number | null;
+  /** For the return history. Missing in results cached before the history existed. */
+  valueByAssortment?: Record<TimberAssortment, number>;
+  fertilityClass?: number | null;
 }
 
 export type OperationTiming = 'now' | '1-3y' | '3-5y' | '5-10y' | '10y+';
@@ -232,6 +235,113 @@ export interface ForestValueResult {
   warnings: ForestValueWarning[];
   computedAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// Return history ("tuottohistoria")
+// ---------------------------------------------------------------------------
+
+/** good = short period on known stands, rough = long period or gaps in the data */
+export type HistoryAccuracy = 'good' | 'rough' | 'unavailable';
+
+/** Estimated change of the standing timber over the last `years` years. */
+export interface HistoryPeriod {
+  years: number;
+  fromYear: number;
+  accuracy: HistoryAccuracy;
+  /** Why the period is rough or unavailable (Finnish), null when good */
+  note: string | null;
+  volumeThenM3: number;
+  volumeNowM3: number;
+  valueThenEur: number;
+  valueNowEur: number;
+  changeEur: number;
+  /** Null when there was no value at the start of the period */
+  changePct: number | null;
+  /** Compound annual growth rate, % */
+  annualPct: number | null;
+  /**
+   * changeEur split into parts that add up to it: more wood (growth), pulpwood growing
+   * into sawlogs (quality), a different price for it, and wood removed in harvests (≤ 0).
+   */
+  growthEffectEur: number;
+  qualityEffectEur: number;
+  priceEffectEur: number;
+  harvestedEur: number;
+  /** Money recorded on done works during the period */
+  incomeEur: number;
+  costEur: number;
+  /** Value change + income − costs, like a fund's return with dividends */
+  totalReturnEur: number;
+  totalReturnPct: number | null;
+  totalAnnualPct: number | null;
+  /** Consumer price change over the period, %; null when the index does not reach that far */
+  inflationPct: number | null;
+  /** Total return with inflation taken out */
+  realTotalReturnPct: number | null;
+  realTotalAnnualPct: number | null;
+  /** Harvests in the period with no income recorded: their wood is missing from the estimate */
+  unrecordedHarvests: number;
+}
+
+export interface HistoryPoint {
+  year: number;
+  volumeM3: number;
+  valueEur: number;
+  /** Range of the estimate; widens the further from today */
+  lowEur: number;
+  highEur: number;
+  /** Consumer prices that year relative to the latest statistics year (1 = today's money) */
+  priceLevel: number;
+}
+
+/** A done work on the timeline: harvests, plantings, tending */
+export interface HistoryEvent {
+  date: string;
+  type: string;
+  title: string;
+  incomeEur: number | null;
+  costEur: number | null;
+}
+
+/** How fast one stand is gaining value right now */
+export interface StandGrowth {
+  standId: string;
+  standNumber: string | null;
+  areaHa: number;
+  ageYears: number | null;
+  mainSpecies: TreeSpecies | null;
+  developmentClass: DevelopmentClass | null;
+  volumeNowM3: number;
+  valueNowEur: number;
+  /** Volume growth over the last year, % */
+  volumeGrowthPct: number;
+  /** Value growth over the last year at fixed prices (growth + sawlog share), %; null without value */
+  valueGrowthPct: number | null;
+}
+
+export interface ForestValueHistory {
+  propertyId: number;
+  forestAreaHa: number;
+  periods: HistoryPeriod[];
+  /** Estimated value per year, oldest first, ending in the current year */
+  series: HistoryPoint[];
+  /** Projection for the coming years at today's prices, nearest year first */
+  forecast: HistoryPoint[];
+  events: HistoryEvent[];
+  stands: StandGrowth[];
+  /** Values the app has actually stored (one per month), oldest first */
+  recorded: { date: string; volumeM3: number; valueEur: number }[];
+  provider: ForestDataProvider;
+  priceSource: 'luke' | 'bundled';
+  /** Price statistics years the price change is measured between */
+  priceYears: { from: number; to: number };
+  computedAt: string;
+}
+
+export type ForestValueHistoryResponse =
+  | { status: 'available'; history: ForestValueHistory }
+  | { status: 'no_data'; message: string }
+  | { status: 'error'; message: string };
 
 export type ForestValueResponse =
   | { status: 'available'; result: ForestValueResult; stale: boolean }

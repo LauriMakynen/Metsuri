@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import TopNav from '../components/TopNav';
-import { propertiesService } from '../services/forestService';
+import { propertiesService, workRequestsService } from '../services/forestService';
 import { formatArea } from '../utils/measurement';
 import { parcelAreaCount } from '../utils/parcelAreas';
 import type { Property } from '../types';
 
 const OWNER_FEATURES = [
   'Hoida metsää: viimeisimmät toimenpiteet ja GPS-aktiviteetti',
-  'Hae kiinteistö tunnuksella ja näe rajat kartalla',
+  'Valitse kiinteistö kartalta ja näe sen rajat',
   'Merkitse harvennukset, istutukset ja muut työt',
   'Mittaa etäisyydet ja pinta-alat hehtaareina',
   'Julkaise työpyyntö, kun tarvitset tekijää',
@@ -18,8 +18,8 @@ const OWNER_FEATURES = [
 const PROVIDER_FEATURES = [
   'Metsäyrittäjille, yrityksille ja yhdistyksille',
   'Avoimet työpyynnöt kartalla ja listana',
-  'Suodata työtyypin mukaan',
-  'Ei vaadi kirjautumista',
+  'Suodata työtyypin, maakunnan ja etäisyyden mukaan',
+  'Tarjoa hintaa – nimesi ei näy muille',
 ];
 
 // Start page shown after login (and for guests): choose what to do next
@@ -30,6 +30,34 @@ export default function StartPage() {
   const [careChoices, setCareChoices] = useState<Property[] | null>(null);
   const [careLoading, setCareLoading] = useState(false);
   const [careError, setCareError] = useState('');
+  const [workRequestSummary, setWorkRequestSummary] = useState<{ requestCount: number; bidCount: number } | null>(null);
+
+  useEffect(() => {
+    if (isGuest || !user) return;
+
+    let active = true;
+    workRequestsService
+      .getMine()
+      .then((requests) => {
+        const openRequests = requests.filter((request) => request.status === 'open');
+        if (!active) return;
+        if (openRequests.length === 0) {
+          setWorkRequestSummary(null);
+          return;
+        }
+        setWorkRequestSummary({
+          requestCount: openRequests.length,
+          bidCount: openRequests.reduce((total, request) => total + request.bid_count, 0),
+        });
+      })
+      .catch(() => {
+        if (active) setWorkRequestSummary(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isGuest, user]);
 
   const goToLogin = () => {
     logout();
@@ -60,6 +88,13 @@ export default function StartPage() {
     }
   };
   const greeting = isGuest ? 'Tervetuloa Metsuriin' : `Tervetuloa takaisin${user?.email ? `, ${user.email}` : ''}`;
+  const workRequestSummaryText = workRequestSummary
+    ? `${workRequestSummary.requestCount} ${
+        workRequestSummary.requestCount === 1 ? 'aktiivinen työpyyntö' : 'aktiivista työpyyntöä'
+      } · ${workRequestSummary.bidCount} ${
+        workRequestSummary.bidCount === 1 ? 'tarjous' : 'tarjousta'
+      }`
+    : null;
 
   return (
     <div className="start-page home-page">
@@ -90,6 +125,18 @@ export default function StartPage() {
             </button>
           </div>
 
+          {workRequestSummaryText && (
+            <button
+              className="hero-request-stat"
+              onClick={() => navigate('/map?section=work-requests')}
+              aria-label={`${workRequestSummaryText}. Avaa omat työpyynnöt.`}
+            >
+              <span className="hero-request-stat-dot" aria-hidden="true" />
+              <span>{workRequestSummaryText}</span>
+              <span className="hero-request-stat-arrow" aria-hidden="true">›</span>
+            </button>
+          )}
+
           {careError && <p className="hero-error" role="alert">{careError}</p>}
 
           {isGuest && (
@@ -103,7 +150,8 @@ export default function StartPage() {
 
       <main className="start-content start-cards">
         <div className="start-grid">
-          <section className="choice-card">
+          {/* Photo card: a forest owner felling a spruce; the text sits on the dark lower part */}
+          <section className="choice-card choice-card-photo choice-card-owner">
             <div className="choice-icon">🌲</div>
             <h2>Metsänomistajille</h2>
             <ul className="feature-list">
@@ -126,7 +174,8 @@ export default function StartPage() {
             </div>
           </section>
 
-          <section className="choice-card choice-card-alt">
+          {/* Photo card: a forwarder collecting timber after a felling */}
+          <section className="choice-card choice-card-alt choice-card-photo choice-card-provider">
             <div className="choice-icon">🤝</div>
             <h2>Työn tarjoajille</h2>
             <ul className="feature-list">

@@ -19,6 +19,20 @@ function isValidIsoDate(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+const MAX_EUR = 10_000_000;
+
+/**
+ * Optional euro amount of a marking (timber sale income, cost of the work).
+ * undefined = not given, null = cleared, 'invalid' = reject the request.
+ */
+function parseEur(value: unknown): number | null | undefined | 'invalid' {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  const amount = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(amount) || amount < 0 || amount > MAX_EUR) return 'invalid';
+  return Math.round(amount * 100) / 100;
+}
+
 function getLocalIsoDate(): string {
   const now = new Date();
   const offsetMs = now.getTimezoneOffset() * 60 * 1000;
@@ -58,7 +72,7 @@ router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
           `SELECT id, user_id, property_id, type, geometry_type, title, description,
             ST_AsGeoJSON(geometry)::json AS geometry, area_ha,
             operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
-              created_at, updated_at
+              income_eur, cost_eur, created_at, updated_at
        FROM markings
        ${whereClause}
        ORDER BY created_at DESC`,
@@ -97,6 +111,13 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
     return;
   }
 
+  const incomeEur = parseEur(req.body.income_eur);
+  const costEur = parseEur(req.body.cost_eur);
+  if (incomeEur === 'invalid' || costEur === 'invalid') {
+    res.status(400).json({ error: `Tulon ja kulun pitää olla 0–${MAX_EUR} €` });
+    return;
+  }
+
   const normalizedOperationDate = isValidIsoDate(operation_date)
     ? operation_date
     : getLocalIsoDate();
@@ -121,13 +142,14 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
       result = await pool.query(
         `INSERT INTO markings (
            user_id, property_id, type, geometry_type, title, description, geometry,
-           area_ha, operation_date, follow_up_date_start, follow_up_date_end, follow_up_note
+           area_ha, operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
+           income_eur, cost_eur
          )
-         VALUES ($1, $2, $3, $4, $5, $6, ST_GeomFromGeoJSON($7), $8, $9, $10, $11, $12)
+         VALUES ($1, $2, $3, $4, $5, $6, ST_GeomFromGeoJSON($7), $8, $9, $10, $11, $12, $13, $14)
          RETURNING id, user_id, property_id, type, geometry_type, title, description,
                    ST_AsGeoJSON(geometry)::json AS geometry, area_ha,
                    operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
-                   created_at, updated_at`,
+                   income_eur, cost_eur, created_at, updated_at`,
         [
           req.userId,
           property_id || null,
@@ -141,19 +163,22 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
           recommendation.followUpDateStart,
           recommendation.followUpDateEnd,
           recommendation.followUpNote,
+          incomeEur ?? null,
+          costEur ?? null,
         ]
       );
     } else {
       result = await pool.query(
         `INSERT INTO markings (
            user_id, property_id, type, geometry_type, title, description,
-           area_ha, operation_date, follow_up_date_start, follow_up_date_end, follow_up_note
+           area_ha, operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
+           income_eur, cost_eur
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING id, user_id, property_id, type, geometry_type, title, description,
                    geometry, area_ha,
                    operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
-                   created_at, updated_at`,
+                   income_eur, cost_eur, created_at, updated_at`,
         [
           req.userId,
           property_id || null,
@@ -166,6 +191,8 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
           recommendation.followUpDateStart,
           recommendation.followUpDateEnd,
           recommendation.followUpNote,
+          incomeEur ?? null,
+          costEur ?? null,
         ]
       );
     }
@@ -292,6 +319,21 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
       values.push(property_id);
     }
 
+    const incomeEur = parseEur(req.body.income_eur);
+    const costEur = parseEur(req.body.cost_eur);
+    if (incomeEur === 'invalid' || costEur === 'invalid') {
+      res.status(400).json({ error: `Tulon ja kulun pitää olla 0–${MAX_EUR} €` });
+      return;
+    }
+    if (incomeEur !== undefined) {
+      updates.push(`income_eur = $${paramCount++}`);
+      values.push(incomeEur);
+    }
+    if (costEur !== undefined) {
+      updates.push(`cost_eur = $${paramCount++}`);
+      values.push(costEur);
+    }
+
     values.push(id, req.userId);
 
     const result = await pool.query(
@@ -300,7 +342,7 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
        RETURNING id, user_id, property_id, type, geometry_type, title, description,
                  ST_AsGeoJSON(geometry)::json AS geometry, area_ha,
                  operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
-                 created_at, updated_at`,
+                 income_eur, cost_eur, created_at, updated_at`,
       values
     );
 
