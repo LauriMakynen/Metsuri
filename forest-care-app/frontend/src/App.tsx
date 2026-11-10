@@ -11,6 +11,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import HelpPage from './pages/HelpPage';
 import AddForestPage from './pages/AddForestPage';
+import ForumPage from './pages/ForumPage';
 
 function AppLayout() {
   return <Outlet />;
@@ -51,6 +52,18 @@ function App() {
                 </PrivateRoute>
               }
             />
+            {/* Guests may read the forum; writing needs an account */}
+            {['/foorumi', '/foorumi/:id'].map((path) => (
+              <Route
+                key={path}
+                path={path}
+                element={
+                  <PrivateRoute>
+                    <ForumPage />
+                  </PrivateRoute>
+                }
+              />
+            ))}
             <Route
               path="/lisaa-metsa"
               element={

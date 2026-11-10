@@ -22,6 +22,13 @@ const PROVIDER_FEATURES = [
   'Tarjoa hintaa – nimesi ei näy muille',
 ];
 
+const FORUM_FEATURES = [
+  'Kysy neuvoa metsänhoidosta ja puukaupasta',
+  'Jaa kokemuksia urakoitsijoista ja hinnoista',
+  'Metsänomistajat ja tekijät samassa keskustelussa',
+  'Kirjoita nimimerkillä – sähköpostisi ei näy',
+];
+
 // Start page shown after login (and for guests): choose what to do next
 export default function StartPage() {
   const { user, logout, isGuest } = useAuth();
@@ -139,6 +146,22 @@ export default function StartPage() {
             <div className="choice-actions">
               <button className="btn btn-primary" onClick={() => navigate('/tyontarjoajat')}>
                 Selaa työpyyntöjä
+              </button>
+            </div>
+          </section>
+
+          {/* Photo card: two woodsmen talking on a log pile */}
+          <section className="choice-card choice-card-photo choice-card-forum">
+            <div className="choice-icon">💬</div>
+            <h2>Foorumi</h2>
+            <ul className="feature-list">
+              {FORUM_FEATURES.map((feature) => (
+                <li key={feature}>{feature}</li>
+              ))}
+            </ul>
+            <div className="choice-actions">
+              <button className="btn btn-primary" onClick={() => navigate('/foorumi')}>
+                Avaa foorumi
               </button>
             </div>
           </section>
