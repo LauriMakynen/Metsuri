@@ -39,8 +39,7 @@ export default function RegisterPage() {
     <div className="auth-container">
       <AuthBackdrop />
       <div className="auth-card">
-        <div className="auth-logo">🌲</div>
-        <h1 className="auth-title">Metsuri</h1>
+        <img className="auth-logo-image" src="/media/metsuri-logo.png" alt="Metsuri" />
         <h2 className="auth-subtitle">Luo tili</h2>
 
         {error && <div className="error-message">{error}</div>}
