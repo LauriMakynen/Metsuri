@@ -13,6 +13,7 @@ import type {
   PublicWorkRequest,
   NewWorkRequest,
   Region,
+  Notification,
 } from '../types';
 
 function normalizeDate(value: unknown): string | null {
@@ -100,6 +101,19 @@ export const authService = {
   resetPassword: async (token: string, password: string): Promise<string> => {
     const response = await api.post<{ message: string }>('/api/auth/reset-password', { token, password });
     return response.data.message;
+  },
+};
+
+export const notificationsService = {
+  getAll: async (): Promise<{ notifications: Notification[]; unreadCount: number }> => {
+    const response = await api.get<{ notifications: Notification[]; unreadCount: number }>('/api/notifications');
+    return response.data;
+  },
+  markRead: async (id: number): Promise<void> => {
+    await api.post(`/api/notifications/${id}/read`);
+  },
+  markAllRead: async (): Promise<void> => {
+    await api.post('/api/notifications/read-all');
   },
 };
 

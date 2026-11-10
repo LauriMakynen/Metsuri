@@ -91,7 +91,8 @@ export default function WorkRequestCard({
     setSending(true);
     setError('');
     try {
-      onBidPlaced(await workRequestsService.deleteBid(request.id));
+      const updated = await workRequestsService.deleteBid(request.id);
+      onBidPlaced(updated);
       setDeleteConfirmationOpen(false);
       setSent(false);
     } catch (err: unknown) {
@@ -281,6 +282,7 @@ export default function WorkRequestCard({
               Haluatko varmasti poistaa tarjouksesi <strong>{formatEur(request.my_bid_eur ?? 0)}</strong> työpyynnöstä{' '}
               <strong>“{request.title}”</strong>?
             </p>
+            {error && <p className="bid-error" role="alert">{error}</p>}
             <div className="modal-actions">
               <button
                 type="button"

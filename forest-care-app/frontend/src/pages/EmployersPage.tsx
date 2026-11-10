@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import TopNav from '../components/TopNav';
@@ -64,6 +64,8 @@ export default function EmployersPage() {
   const fitPendingRef = useRef(true);
   const { isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedWorkRequestId = Number(searchParams.get('workRequest'));
 
   const [requests, setRequests] = useState<PublicWorkRequest[]>([]);
   const [typeFilter, setTypeFilter] = useState<MarkingType | null>(null);
@@ -249,6 +251,14 @@ export default function EmployersPage() {
     layer.openPopup(bounds.isValid() ? bounds.getCenter() : undefined);
     mapContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
+
+  useEffect(() => {
+    if (!Number.isSafeInteger(requestedWorkRequestId) || requestedWorkRequestId <= 0) return;
+    const request = requests.find((item) => item.id === requestedWorkRequestId);
+    if (!request) return;
+    const selection = window.setTimeout(() => setSelectedId(request.id), 0);
+    return () => window.clearTimeout(selection);
+  }, [requestedWorkRequestId, requests]);
 
   return (
     <div className="start-page forest-page">
