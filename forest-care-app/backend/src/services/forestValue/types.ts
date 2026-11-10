@@ -157,6 +157,9 @@ export interface StandValuation {
   priceCutType: PriceCutType;
   isForestLand: boolean;
   inventoryYear: number | null;
+  /** For the return history. Missing in results cached before the history existed. */
+  valueByAssortment?: Record<TimberAssortment, number>;
+  fertilityClass?: number | null;
 }
 
 export type OperationTiming = 'now' | '1-3y' | '3-5y' | '5-10y' | '10y+';
@@ -232,6 +235,59 @@ export interface ForestValueResult {
   warnings: ForestValueWarning[];
   computedAt: string;
 }
+
+// ---------------------------------------------------------------------------
+// Return history ("tuottohistoria")
+// ---------------------------------------------------------------------------
+
+/** good = short period on known stands, rough = long period or gaps in the data */
+export type HistoryAccuracy = 'good' | 'rough' | 'unavailable';
+
+/** Estimated change of the standing timber over the last `years` years. */
+export interface HistoryPeriod {
+  years: number;
+  fromYear: number;
+  accuracy: HistoryAccuracy;
+  /** Why the period is rough or unavailable (Finnish), null when good */
+  note: string | null;
+  volumeThenM3: number;
+  volumeNowM3: number;
+  valueThenEur: number;
+  valueNowEur: number;
+  changeEur: number;
+  /** Null when there was no value at the start of the period */
+  changePct: number | null;
+  /** Compound annual growth rate, % */
+  annualPct: number | null;
+  /** changeEur split in two: more wood, and a different price for it */
+  growthEffectEur: number;
+  priceEffectEur: number;
+}
+
+export interface HistoryPoint {
+  year: number;
+  volumeM3: number;
+  valueEur: number;
+}
+
+export interface ForestValueHistory {
+  propertyId: number;
+  periods: HistoryPeriod[];
+  /** Estimated value per year, oldest first, ending in the current year */
+  series: HistoryPoint[];
+  /** Values the app has actually stored (one per month), oldest first */
+  recorded: { date: string; volumeM3: number; valueEur: number }[];
+  provider: ForestDataProvider;
+  priceSource: 'luke' | 'bundled';
+  /** Price statistics years the price change is measured between */
+  priceYears: { from: number; to: number };
+  computedAt: string;
+}
+
+export type ForestValueHistoryResponse =
+  | { status: 'available'; history: ForestValueHistory }
+  | { status: 'no_data'; message: string }
+  | { status: 'error'; message: string };
 
 export type ForestValueResponse =
   | { status: 'available'; result: ForestValueResult; stale: boolean }

@@ -266,6 +266,8 @@ export function valueStand(
       priceCutType: cutType,
       isForestLand: stand.isForestLand,
       inventoryYear: stand.inventoryYear,
+      valueByAssortment: priced.byAssortment,
+      fertilityClass: stand.fertilityClass,
     },
     bySpecies: priced.bySpecies,
     byAssortment: priced.byAssortment,
