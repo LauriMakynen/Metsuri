@@ -47,6 +47,7 @@ interface SidebarProps {
   onWithdrawWorkRequest: (requestId: number) => Promise<void>;
   onWorkRequestUpdated: (updated: WorkRequest) => void;
   focusWorkRequests?: boolean;
+  showAllWorkRequests?: boolean;
   care?: SidebarCareMode | null;
 }
 
@@ -69,6 +70,7 @@ export default function Sidebar({
   onWithdrawWorkRequest,
   onWorkRequestUpdated,
   focusWorkRequests = false,
+  showAllWorkRequests = false,
   care = null,
 }: SidebarProps) {
   const [openSections, setOpenSections] = useState({
@@ -138,6 +140,7 @@ export default function Sidebar({
           onUpdated={onWorkRequestUpdated}
           isOpen={openSections.requests}
           onToggle={() => toggleSection('requests')}
+          showAllProperties={showAllWorkRequests}
         />
 
         {/* In care mode done work is listed under "Viimeisimmät toimenpiteet" instead */}
