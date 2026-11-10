@@ -14,7 +14,9 @@ import pool from '../../db/pool';
 import { clipStandsToParcel, planarAreaHa } from './clip';
 import { DEMO_PARCEL_WGS84 } from './demoParcel';
 import { fetchFieldsInBbox, fieldDataEnabled, separateFields, type RegisterField } from './fields';
+import { HISTORY_PERIODS, computeValueHistory } from './history';
 import { fallbackPrices, fetchLukePrices, priceRegionForMunicipality } from './lukePriceClient';
+import { getPriceHistory } from './priceHistory';
 import { fetchStandsInBbox, type MetsakeskusStand } from './metsakeskusClient';
 import { manualStand } from './manualStand';
 import { generateMockStands } from './mockStands';
@@ -22,6 +24,7 @@ import { recommendOperations } from './recommendations';
 import type {
   ForestDataProvider,
   ForestStand,
+  ForestValueHistoryResponse,
   ForestValueResponse,
   ForestValueResult,
   ManualStandInput,
@@ -260,6 +263,56 @@ async function writeCache(propertyId: number, geometryHash: string, result: Fore
            result = EXCLUDED.result, computed_at = EXCLUDED.computed_at`,
     [propertyId, geometryHash, result.data.provider, JSON.stringify(result)]
   );
+  await recordValueHistory(propertyId, result);
+}
+
+/** Keep the month's latest computed value for the return history. Never fails the request. */
+async function recordValueHistory(propertyId: number, result: ForestValueResult): Promise<void> {
+  // Unrounded sum of the stands, the same figure the history estimate ends in
+  const valueEur = result.stands.reduce((sum, s) => sum + (s.isForestLand ? s.valueEur : 0), 0);
+  try {
+    await pool.query(
+      `INSERT INTO forest_value_history (property_id, recorded_on, volume_m3, value_eur, provider, price_period)
+       VALUES ($1, date_trunc('month', NOW())::date, $2, $3, $4, $5)
+       ON CONFLICT (property_id, recorded_on) DO UPDATE
+         SET volume_m3 = EXCLUDED.volume_m3, value_eur = EXCLUDED.value_eur,
+             provider = EXCLUDED.provider, price_period = EXCLUDED.price_period`,
+      [propertyId, result.totalVolumeM3, valueEur, result.data.provider, result.prices.period]
+    );
+  } catch (error) {
+    console.warn('Recording forest value history failed:', error instanceof Error ? error.message : error);
+  }
+}
+
+/**
+ * Return history of a user's property: estimated change over the given periods and the values
+ * stored so far. Null if the property does not exist or belongs to someone else.
+ */
+export async function getForestValueHistory(
+  propertyId: number,
+  userId: number,
+  periods: number[] = HISTORY_PERIODS
+): Promise<ForestValueHistoryResponse | null> {
+  let response = await getForestValue(propertyId, userId);
+  // Results cached before the history existed lack the per-assortment values it needs
+  if (response?.status === 'available' && response.result.stands.some((s) => !s.valueByAssortment)) {
+    response = await getForestValue(propertyId, userId, { refresh: true });
+  }
+  if (!response) return null;
+  if (response.status !== 'available') return response;
+
+  const history = computeValueHistory(response.result, await getPriceHistory(), periods);
+  const recorded = await pool.query<{ date: string; volume_m3: string; value_eur: string }>(
+    `SELECT to_char(recorded_on, 'YYYY-MM-DD') AS date, volume_m3, value_eur
+     FROM forest_value_history WHERE property_id = $1 ORDER BY recorded_on`,
+    [propertyId]
+  );
+  history.recorded = recorded.rows.map((row) => ({
+    date: row.date,
+    volumeM3: Number(row.volume_m3),
+    valueEur: Number(row.value_eur),
+  }));
+  return { status: 'available', history };
 }
 
 function staleResponse(result: ForestValueResult): ForestValueResponse {

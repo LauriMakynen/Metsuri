@@ -288,6 +288,20 @@ async function migrate() {
       )
     `);
 
+    // Return history: the parcel's computed value, one row per month. Unlike the estimate
+    // backwards in time, this is what the app actually computed at the time.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS forest_value_history (
+        property_id INTEGER NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+        recorded_on DATE NOT NULL,
+        volume_m3 NUMERIC(12,1) NOT NULL,
+        value_eur NUMERIC(14,2) NOT NULL,
+        provider TEXT NOT NULL,
+        price_period TEXT,
+        PRIMARY KEY (property_id, recorded_on)
+      )
+    `);
+
     // Stands the owner marked as field ("Tämä on pelto"): left out of the forest value and
     // recommendations. Stand ids are the forest data source's ids (Metsäkeskus, or mock).
     await client.query(`

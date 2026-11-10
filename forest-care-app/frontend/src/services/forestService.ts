@@ -8,6 +8,7 @@ import type {
   CadastreFeature,
   MapLayerConfig,
   ForestValueResponse,
+  ForestValueHistoryResponse,
   ManualStandInput,
   WorkRequest,
   PublicWorkRequest,
@@ -162,6 +163,12 @@ export const propertiesService = {
   },
 
   // Owner-entered basics when there is no forest resource data
+  // Estimated return over the last 1…30 years; numbers are plain JSON numbers, not NUMERIC strings
+  getForestValueHistory: async (propertyId: number): Promise<ForestValueHistoryResponse> => {
+    const response = await api.get<ForestValueHistoryResponse>(`/api/properties/${propertyId}/forest-value/history`);
+    return response.data;
+  },
+
   submitManualForestValue: async (propertyId: number, input: ManualStandInput): Promise<ForestValueResponse> => {
     const response = await api.post<ForestValueResponse>(`/api/properties/${propertyId}/forest-value/manual`, input);
     return response.data;

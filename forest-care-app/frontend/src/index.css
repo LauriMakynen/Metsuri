@@ -805,6 +805,53 @@ html, body, #root {
 .forest-value-summary-content { min-width: 0; }
 .forest-value-details-button { width: auto; flex: 0 0 auto; }
 .forest-detail-muted { margin-top: 0.3rem; color: var(--text-light) !important; font-size: 0.82rem !important; }
+/* Return history ("tuottohistoria"): period switch, headline, value chart, growth vs price */
+.return-summary.up { color: #15803d; }
+.return-summary.down { color: #b91c1c; }
+.return-panel { display: flex; flex-direction: column; gap: 0.8rem; }
+.return-periods { display: inline-flex; align-self: flex-start; gap: 2px; padding: 3px; border-radius: 999px; background: #e8efe9; }
+.return-period {
+  min-width: 46px; min-height: 36px; padding: 0 0.7rem; border: none; border-radius: 999px; background: none;
+  font: inherit; font-size: 0.85rem; font-weight: 600; color: #46564b; cursor: pointer;
+}
+.return-period.active { background: var(--white); color: #0f3d24; box-shadow: 0 1px 3px rgba(8,40,22,0.18); }
+.return-headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.7rem; }
+.return-headline strong { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: #0f3d24; }
+.return-headline.up strong { color: #15803d; }
+.return-headline.down strong { color: #b91c1c; }
+.return-headline span { font-size: 0.9rem; color: #46564b; font-variant-numeric: tabular-nums; }
+.return-chart { margin: 0; }
+.return-chart figcaption { font-size: 0.82rem; color: #46564b; font-variant-numeric: tabular-nums; margin-bottom: 0.2rem; }
+.return-chart figcaption strong { color: var(--text); }
+.return-chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; cursor: crosshair; }
+.return-chart-line { fill: none; stroke: #15803d; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.return-chart-area { fill: #15803d; opacity: 0.1; }
+.return-chart-axis { stroke: #d5ddd7; stroke-width: 1; }
+.return-chart-crosshair { stroke: #9aa8a0; stroke-width: 1; stroke-dasharray: 3 3; }
+.return-chart-dot { fill: #15803d; stroke: var(--white); stroke-width: 2; }
+/* The SVG scales with its width, so the tick text is larger in viewBox units on a phone */
+.return-chart-tick { font-size: 18px; fill: #6b7280; }
+@media (min-width: 560px) { .return-chart-tick { font-size: 12px; } }
+.return-stats { display: grid; grid-template-columns: 1fr; gap: 0.5rem; }
+.return-stats div { padding: 0.6rem 0.7rem; border-radius: 10px; background: #f0fdf4; }
+.return-stats dt, .return-split-legend dt { font-size: 0.76rem; font-weight: 700; color: #466152; }
+.return-stats dd { margin-top: 0.15rem; font-size: 0.92rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.return-stats dd small { display: block; font-weight: 500; color: #46564b; }
+.return-split { display: flex; flex-direction: column; gap: 0.45rem; }
+.return-split-bar { display: flex; gap: 2px; height: 10px; }
+.return-split-bar span { border-radius: 4px; min-width: 4px; }
+.return-split-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; }
+.return-split-legend dt { display: flex; align-items: center; gap: 0.4rem; }
+.return-split-legend dd { font-size: 0.92rem; font-weight: 600; font-variant-numeric: tabular-nums; margin-left: 1rem; }
+.return-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.return-unavailable { padding: 0.8rem; border-radius: 10px; background: #f6f7f6; }
+.return-footnote { font-size: 0.8rem !important; color: var(--text-light) !important; line-height: 1.5; }
+.return-badge {
+  display: inline-block; margin-right: 0.4rem; padding: 0.05rem 0.5rem; border-radius: 999px;
+  background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+}
+@media (min-width: 560px) { .return-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 .forest-growth-grid { display: grid; grid-template-columns: 1fr; gap: 0.5rem; margin-top: 0.6rem; }
 .forest-growth-grid div { padding: 0.6rem; border-radius: 9px; background: #f0fdf4; }
 .forest-growth-grid dt { color: #466152; font-size: 0.76rem; font-weight: 700; }
