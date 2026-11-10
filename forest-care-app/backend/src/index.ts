@@ -19,6 +19,11 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Behind one proxy (Render in production, the Vite dev proxy locally): take the client's IP
+// from X-Forwarded-For, so the rate limiters count each user separately instead of
+// putting everyone behind the proxy's single address
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
+
 // Middleware
 const allowedOrigins = getAllowedOrigins(process.env.FRONTEND_URL, process.env.FRONTEND_URLS);
 app.use(cors({
