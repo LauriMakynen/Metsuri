@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import TopNav from '../components/TopNav';
-import { propertiesService } from '../services/forestService';
+import { propertiesService, workRequestsService } from '../services/forestService';
 import { formatArea } from '../utils/measurement';
 import { parcelAreaCount } from '../utils/parcelAreas';
 import type { Property } from '../types';
@@ -30,6 +30,34 @@ export default function StartPage() {
   const [careChoices, setCareChoices] = useState<Property[] | null>(null);
   const [careLoading, setCareLoading] = useState(false);
   const [careError, setCareError] = useState('');
+  const [workRequestSummary, setWorkRequestSummary] = useState<{ requestCount: number; bidCount: number } | null>(null);
+
+  useEffect(() => {
+    if (isGuest || !user) return;
+
+    let active = true;
+    workRequestsService
+      .getMine()
+      .then((requests) => {
+        const openRequests = requests.filter((request) => request.status === 'open');
+        if (!active) return;
+        if (openRequests.length === 0) {
+          setWorkRequestSummary(null);
+          return;
+        }
+        setWorkRequestSummary({
+          requestCount: openRequests.length,
+          bidCount: openRequests.reduce((total, request) => total + request.bid_count, 0),
+        });
+      })
+      .catch(() => {
+        if (active) setWorkRequestSummary(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isGuest, user]);
 
   const goToLogin = () => {
     logout();
@@ -60,6 +88,13 @@ export default function StartPage() {
     }
   };
   const greeting = isGuest ? 'Tervetuloa Metsuriin' : `Tervetuloa takaisin${user?.email ? `, ${user.email}` : ''}`;
+  const workRequestSummaryText = workRequestSummary
+    ? `${workRequestSummary.requestCount} ${
+        workRequestSummary.requestCount === 1 ? 'aktiivinen työpyyntö' : 'aktiivista työpyyntöä'
+      } · ${workRequestSummary.bidCount} ${
+        workRequestSummary.bidCount === 1 ? 'tarjous' : 'tarjousta'
+      }`
+    : null;
 
   return (
     <div className="start-page home-page">
@@ -89,6 +124,18 @@ export default function StartPage() {
               🤝 Selaa työpyyntöjä
             </button>
           </div>
+
+          {workRequestSummaryText && (
+            <button
+              className="hero-request-stat"
+              onClick={() => navigate('/map?section=work-requests')}
+              aria-label={`${workRequestSummaryText}. Avaa omat työpyynnöt.`}
+            >
+              <span className="hero-request-stat-dot" aria-hidden="true" />
+              <span>{workRequestSummaryText}</span>
+              <span className="hero-request-stat-arrow" aria-hidden="true">›</span>
+            </button>
+          )}
 
           {careError && <p className="hero-error" role="alert">{careError}</p>}
 

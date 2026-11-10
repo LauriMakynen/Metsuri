@@ -186,6 +186,7 @@ export default function MapPage() {
   const hasPropertyParameter = searchParams.has('propertyId');
   const hasRequestedProperty =
     hasPropertyParameter && Number.isSafeInteger(requestedPropertyId) && requestedPropertyId > 0;
+  const showAllWorkRequests = searchParams.get('section') === 'work-requests';
   const fromForestOverview = searchParams.get('from') === 'forests';
   const requestedStandId = searchParams.get('standId');
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
@@ -1737,10 +1738,12 @@ export default function MapPage() {
           onWithdrawWorkRequest={handleWithdrawWorkRequest}
           onWorkRequestUpdated={handleWorkRequestUpdated}
           focusWorkRequests={
-            !isGuest &&
-            Number.isSafeInteger(requestedWorkRequestId) &&
-            requestedWorkRequestId > 0
+            showAllWorkRequests ||
+            (!isGuest &&
+              Number.isSafeInteger(requestedWorkRequestId) &&
+              requestedWorkRequestId > 0)
           }
+          showAllWorkRequests={showAllWorkRequests && !isGuest}
           care={
             careMode
               ? {
