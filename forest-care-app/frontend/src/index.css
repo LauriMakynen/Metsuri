@@ -1029,64 +1029,6 @@ html, body, #root {
   }
 }
 
-.search-panel {
-  border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #f5fff7 0%, #ffffff 100%);
-}
-
-.search-panel h3 {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--forest-green);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 0;
-}
-
-.search-panel-content {
-  padding: 0.9rem 1rem;
-}
-
-.search-row {
-  display: flex;
-  gap: 0.5rem;
-  width: 100%;
-  min-width: 0;
-}
-
-.property-search-input {
-  min-height: 52px;
-  padding: 0.75rem 0.9rem;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  font-size: 1rem;
-  flex: 1;
-  min-width: 0;
-}
-
-.search-button {
-  flex: 0 0 86px;
-  width: 86px;
-  min-height: 52px;
-}
-
-.search-result-card {
-  margin-top: 0.65rem;
-  border: 1px solid #bae6fd;
-  background: #f0f9ff;
-  border-radius: 10px;
-  padding: 0.65rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.9rem;
-}
-
-.save-cadastre-btn {
-  margin-top: 0.45rem;
-  min-height: 52px;
-}
-
 .sidebar-header { padding: 0.75rem 1rem; background: var(--forest-green-bg); border-bottom: 1px solid var(--border); }
 .sidebar-header h3 { font-size: 0.9rem; font-weight: 700; color: var(--forest-green); text-transform: uppercase; letter-spacing: 0.05em; }
 .sidebar-section-header {

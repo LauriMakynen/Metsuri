@@ -9,7 +9,7 @@ import type { Property } from '../types';
 
 const OWNER_FEATURES = [
   'Hoida metsää: viimeisimmät toimenpiteet ja GPS-aktiviteetti',
-  'Hae kiinteistö tunnuksella ja näe rajat kartalla',
+  'Valitse kiinteistö kartalta ja näe sen rajat',
   'Merkitse harvennukset, istutukset ja muut työt',
   'Mittaa etäisyydet ja pinta-alat hehtaareina',
   'Julkaise työpyyntö, kun tarvitset tekijää',
