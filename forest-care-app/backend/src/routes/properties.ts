@@ -123,7 +123,7 @@ router.get('/:id/markings', async (req: AuthRequest, res: Response): Promise<voi
           `SELECT id, user_id, property_id, type, geometry_type, title, description,
             ST_AsGeoJSON(geometry)::json AS geometry, area_ha,
             operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
-              created_at, updated_at
+              income_eur, cost_eur, created_at, updated_at
        FROM markings
        WHERE user_id = $1 AND property_id = $2
        ORDER BY created_at DESC`,

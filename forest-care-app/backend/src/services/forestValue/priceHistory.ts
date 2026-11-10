@@ -6,6 +6,7 @@
  * this far back, so the series is used as an index: a past price is today's price for the
  * parcel (its own price area and cut type) scaled by how the national price has changed.
  */
+import costOfLivingConfig from '../../config/costOfLivingIndex.json';
 import bundled from '../../config/stumpagePriceHistory.json';
 import { fetchJson } from './metsakeskusClient';
 import type { TimberAssortment } from './types';
@@ -31,6 +32,46 @@ export interface PriceHistory {
   /** Latest year that has a price for every assortment */
   latestYear: number;
   series: PriceSeries;
+  /**
+   * Cost-of-living index by year (Statistics Finland, elinkustannusindeksi 1951:10=100),
+   * for inflation-adjusted returns. Missing in hand-built histories (tests).
+   */
+  costOfLiving?: Record<number, number>;
+}
+
+const COST_OF_LIVING_URL = 'https://pxdata.stat.fi/PxWeb/api/v1/fi/StatFin/khi/11xm.px';
+
+function bundledCostOfLiving(): Record<number, number> {
+  return Object.fromEntries(Object.entries(costOfLivingConfig.index).map(([year, value]) => [Number(year), value]));
+}
+
+/** Yearly index from a json-stat2 response of table khi/11xm. Exported for tests. */
+export function parseCostOfLiving(ds: {
+  dimension: Record<string, { category: { index: Record<string, number> } }>;
+  value: (number | null)[];
+}): Record<number, number> | null {
+  const yearIndex = ds.dimension.timeperiod_y?.category.index;
+  if (!yearIndex) return null;
+  const index: Record<number, number> = {};
+  for (const [year, position] of Object.entries(yearIndex)) {
+    const value = ds.value[position];
+    if (Number(year) >= FIRST_YEAR && typeof value === 'number' && value > 0) index[Number(year)] = value;
+  }
+  return Object.keys(index).length > 0 ? index : null;
+}
+
+async function fetchCostOfLiving(): Promise<Record<number, number> | null> {
+  try {
+    const ds = await fetchJson(process.env.COST_OF_LIVING_URL || COST_OF_LIVING_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: [], response: { format: 'json-stat2' } }),
+    });
+    return parseCostOfLiving(ds as Parameters<typeof parseCostOfLiving>[0]);
+  } catch (error) {
+    console.warn('Cost-of-living index fetch failed:', error instanceof Error ? error.message : error);
+    return null;
+  }
 }
 
 function latestCommonYear(series: PriceSeries): number {
@@ -46,7 +87,7 @@ export function bundledPriceHistory(): PriceHistory {
     const byYear = (bundled.series as Record<string, Record<string, number>>)[assortment] ?? {};
     for (const [year, price] of Object.entries(byYear)) series[assortment][Number(year)] = price;
   }
-  return { source: 'bundled', latestYear: latestCommonYear(series), series };
+  return { source: 'bundled', latestYear: latestCommonYear(series), series, costOfLiving: bundledCostOfLiving() };
 }
 
 interface JsonStat2 {
@@ -106,6 +147,7 @@ export async function getPriceHistory(): Promise<PriceHistory> {
     }
   }
   if (!history) return bundledPriceHistory();
+  history.costOfLiving = (await fetchCostOfLiving()) ?? bundledCostOfLiving();
   cache = { history, at: Date.now() };
   return history;
 }

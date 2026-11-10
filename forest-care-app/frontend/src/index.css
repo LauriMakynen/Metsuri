@@ -688,6 +688,53 @@ html, body, #root {
 .home-page .choice-actions .btn-primary { background: var(--forest-deep); }
 .home-page .choice-actions .btn-primary:hover:not(:disabled) { background: #0d3d25; }
 
+/* Card with a photo: the photo fills the top and fades into deep green, the text is white
+   on the dark part so it stays readable. The image is set per card (--card-photo). */
+.home-page .choice-card-photo {
+  position: relative; overflow: hidden; isolation: isolate; color: var(--white);
+  /* The photo has a fixed height, so a tall card (phone) does not push its subject under the text */
+  --card-photo-height: 15rem;
+  background: var(--forest-deep); border: none; padding-top: calc(var(--card-photo-height) - 3rem);
+}
+.home-page .choice-card-photo::before {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: var(--card-photo-height); z-index: -2;
+  background-image: var(--card-photo); background-size: var(--card-photo-size, cover);
+  background-position: var(--card-photo-position, 50% 40%);
+}
+.home-page .choice-card-photo::after {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: var(--card-photo-height); z-index: -1;
+  background: linear-gradient(180deg, rgba(6,40,26,0) 0%, rgba(6,40,26,0.15) 45%, rgba(6,40,26,0.85) 80%, var(--forest-deep) 100%);
+}
+.home-page .choice-card-owner {
+  --card-photo: image-set(url('/media/owner-card.webp') type('image/webp'), url('/media/owner-card.jpg') type('image/jpeg'));
+  /* Keep the worker and the saw cut in view */
+  --card-photo-position: 40% 62%;
+}
+.home-page .choice-card-provider {
+  --card-photo: image-set(url('/media/provider-card.webp') type('image/webp'), url('/media/provider-card.jpg') type('image/jpeg'));
+  /* An aerial photo: zoom in on the forwarder and the timber piles around it */
+  --card-photo-size: 190% auto;
+  --card-photo-position: 57% 72%;
+}
+/* A hairline of light inside the edge: the dark card stays apart from the dark hero it overlaps.
+   An outline, because the photo layers would cover an inset shadow. */
+.home-page .choice-card-photo {
+  outline: 1px solid rgba(255,255,255,0.2); outline-offset: -1px;
+  box-shadow: 0 2px 4px rgba(6,40,26,0.12), 0 24px 48px -20px rgba(6,40,26,0.55);
+}
+.home-page .choice-card-photo:hover { outline-color: rgba(255,255,255,0.32); }
+.home-page .choice-card-photo:hover {
+  box-shadow: 0 2px 4px rgba(6,40,26,0.12), 0 30px 56px -20px rgba(6,40,26,0.6);
+}
+.home-page .choice-card-photo h2 { color: var(--white); text-shadow: 0 2px 12px rgba(0,0,0,0.35); }
+/* The photo does the icon's job and the icon would cover the photo's subject */
+.home-page .choice-card-photo .choice-icon { display: none; }
+.home-page .choice-card-photo .feature-list li { color: rgba(255,255,255,0.9); }
+.home-page .choice-card-photo .feature-list li::before { background: rgba(255,255,255,0.16); color: #bbf7d0; }
+.home-page .choice-card-photo .choice-actions .btn-primary { background: var(--white); color: var(--forest-deep); }
+.home-page .choice-card-photo .choice-actions .btn-primary:hover:not(:disabled) { background: #ecfdf3; }
+.home-page .choice-card-photo .choice-demo-link { color: rgba(255,255,255,0.85); }
+
 /* Work requests (work provider side) */
 .type-filter { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
 .filter-chip {
@@ -830,13 +877,72 @@ html, body, #root {
 .return-chart figcaption strong { color: var(--text); }
 .return-chart svg { display: block; width: 100%; height: auto; touch-action: pan-y; cursor: crosshair; }
 .return-chart-line { fill: none; stroke: #15803d; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-.return-chart-area { fill: #15803d; opacity: 0.1; }
+.return-chart-line.forecast { stroke-dasharray: 2 6; }
+.return-chart-band { fill: #15803d; opacity: 0.1; }
+.return-chart-grid { stroke: #e6ebe7; stroke-width: 1; }
+.return-chart-benchmark { fill: none; stroke: #8a938d; stroke-width: 1.5; }
+.return-chart-event { fill: #1f2937; stroke: var(--white); stroke-width: 2; }
+.return-chart-range { color: var(--text-light); }
+.return-chart-event-note { display: block; color: var(--text); }
+.return-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin-top: 0.3rem; font-size: 0.78rem; color: #46564b; }
+.return-legend li { display: inline-flex; align-items: center; gap: 0.35rem; }
+.return-key { display: inline-block; width: 18px; height: 0; border-top: 2px solid #15803d; }
+.return-key.band { height: 10px; border: none; border-radius: 2px; background: rgba(21,128,61,0.18); }
+.return-key.benchmark { border-top: 1.5px solid #8a938d; }
+.return-key.forecast { border-top: 2px dotted #15803d; }
+.return-key.event { width: 9px; height: 9px; border: none; background: #1f2937; transform: rotate(45deg); }
+.return-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.return-toggle {
+  min-height: 36px; padding: 0 0.85rem; border-radius: 999px; border: 1.5px solid #cfd8d2; background: var(--white);
+  font: inherit; font-size: 0.82rem; font-weight: 600; color: #46564b; cursor: pointer;
+}
+.return-toggle.active { border-color: #15803d; background: #ecfdf3; color: #14532d; }
+.return-toggle:disabled { opacity: 0.5; cursor: default; }
+.return-split h4, .return-stands summary { font-size: 0.88rem; font-weight: 700; color: #14532d; }
+.return-rows { display: flex; flex-direction: column; }
+.return-rows div { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.3rem 0; }
+.return-rows dt { display: flex; align-items: center; gap: 0.45rem; font-size: 0.88rem; color: #33463a; }
+.return-rows dd { font-size: 0.9rem; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.return-rows-sum { border-top: 1px solid #dfe7e1; margin-top: 0.15rem; }
+.return-rows-sum dt { font-weight: 700; }
+.return-rows-sum.total dd { font-size: 1rem; font-weight: 800; }
+.return-swatch.empty { background: none; }
+.return-stands { border-top: 1px solid #e6ebe7; padding-top: 0.6rem; }
+.return-stands summary { cursor: pointer; min-height: 32px; }
+.return-stands-scroll { overflow-x: auto; margin: 0.4rem 0; }
+.return-stands table { width: 100%; border-collapse: collapse; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.return-stands th, .return-stands td { padding: 0.4rem 0.5rem 0.4rem 0; text-align: right; border-bottom: 1px solid #edf1ee; vertical-align: top; }
+.return-stands th:first-child { text-align: left; }
+.return-stands thead th { font-size: 0.74rem; font-weight: 700; color: #466152; }
+.return-stands tbody th { font-weight: 600; }
+.return-stands small { display: block; font-weight: 400; font-size: 0.76rem; color: var(--text-light); }
+.return-stands-flag { color: #92400e !important; font-weight: 600 !important; }
+
+/* Money on a done work: form fields and the inline editor on "Minun metsäni" */
+.marking-money { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; }
+.marking-money-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.75rem; font-size: 0.85rem; }
+.marking-money-edit { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem; margin-top: 0.3rem; }
+.marking-money-edit label { display: flex; flex-direction: column; gap: 0.15rem; font-size: 0.76rem; font-weight: 600; color: #466152; }
+.marking-money-edit input {
+  width: 120px; min-height: 40px; padding: 0.4rem 0.6rem; font: inherit; font-size: 0.95rem;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+}
+
+/* All parcels together at the top of "Minun metsäni" */
+.portfolio-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.6rem; margin-bottom: 1rem; padding: 1rem; }
+.portfolio-summary h2 { grid-column: 1 / -1; font-size: 1rem; color: #14532d; }
+.portfolio-summary div { padding: 0.6rem 0.7rem; border-radius: 10px; background: #f0fdf4; min-width: 0; }
+.portfolio-summary dt { font-size: 0.76rem; font-weight: 700; color: #466152; }
+.portfolio-summary dd { margin-top: 0.15rem; font-size: 1.1rem; font-weight: 800; font-variant-numeric: tabular-nums; color: #0f3d24; }
+.portfolio-summary dd small { display: block; font-size: 0.78rem; font-weight: 500; color: #46564b; }
+.portfolio-summary dd.up { color: #15803d; }
+.portfolio-summary dd.down { color: #b91c1c; }
+.portfolio-summary p { grid-column: 1 / -1; }
+@media (min-width: 720px) { .portfolio-summary { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 .return-chart-axis { stroke: #d5ddd7; stroke-width: 1; }
 .return-chart-crosshair { stroke: #9aa8a0; stroke-width: 1; stroke-dasharray: 3 3; }
 .return-chart-dot { fill: #15803d; stroke: var(--white); stroke-width: 2; }
-/* The SVG scales with its width, so the tick text is larger in viewBox units on a phone */
-.return-chart-tick { font-size: 18px; fill: #6b7280; }
-@media (min-width: 560px) { .return-chart-tick { font-size: 12px; } }
+.return-chart-tick { font-size: 12px; fill: #6b7280; }
 .return-stats { display: grid; grid-template-columns: 1fr; gap: 0.5rem; }
 .return-stats div { padding: 0.6rem 0.7rem; border-radius: 10px; background: #f0fdf4; }
 .return-stats dt, .return-split-legend dt { font-size: 0.76rem; font-weight: 700; color: #466152; }

@@ -18,8 +18,8 @@ const OWNER_FEATURES = [
 const PROVIDER_FEATURES = [
   'Metsäyrittäjille, yrityksille ja yhdistyksille',
   'Avoimet työpyynnöt kartalla ja listana',
-  'Suodata työtyypin mukaan',
-  'Ei vaadi kirjautumista',
+  'Suodata työtyypin, maakunnan ja etäisyyden mukaan',
+  'Tarjoa hintaa – nimesi ei näy muille',
 ];
 
 // Start page shown after login (and for guests): choose what to do next
@@ -150,7 +150,8 @@ export default function StartPage() {
 
       <main className="start-content start-cards">
         <div className="start-grid">
-          <section className="choice-card">
+          {/* Photo card: a forest owner felling a spruce; the text sits on the dark lower part */}
+          <section className="choice-card choice-card-photo choice-card-owner">
             <div className="choice-icon">🌲</div>
             <h2>Metsänomistajille</h2>
             <ul className="feature-list">
@@ -173,7 +174,8 @@ export default function StartPage() {
             </div>
           </section>
 
-          <section className="choice-card choice-card-alt">
+          {/* Photo card: a forwarder collecting timber after a felling */}
+          <section className="choice-card choice-card-alt choice-card-photo choice-card-provider">
             <div className="choice-icon">🤝</div>
             <h2>Työn tarjoajille</h2>
             <ul className="feature-list">
