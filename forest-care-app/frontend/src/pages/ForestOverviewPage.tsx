@@ -10,9 +10,18 @@ import { useForestValue } from '../hooks/useForestValue';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { formatArea } from '../utils/measurement';
 import { MARKING_TYPE_LABELS } from '../utils/markingTypes';
-import { OPERATION_LABEL, TIMING_LABEL, dataSourceLabel, formatEur, formatEurRange } from '../utils/forestValueFormat';
+import {
+  OPERATION_LABEL,
+  TIMING_LABEL,
+  dataSourceLabel,
+  defaultHistoryPeriod,
+  formatEur,
+  formatEurRange,
+  formatSignedPct,
+} from '../utils/forestValueFormat';
 import ForestValuePanel from '../components/forestValue/ForestValuePanel';
-import type { Marking, Property, WorkRequest } from '../types';
+import ForestReturnPanel from '../components/forestValue/ForestReturnPanel';
+import type { ForestValueHistoryResponse, Marking, Property, WorkRequest } from '../types';
 
 function getCoordinates(property: Property): string | null {
   if (!property.geometry) return null;
@@ -20,6 +29,20 @@ function getCoordinates(property: Property): string | null {
   if (!bounds.isValid()) return null;
   const center = bounds.getCenter();
   return `${center.lat.toFixed(5)}, ${center.lng.toFixed(5)}`;
+}
+
+type HistoryState = 'loading' | 'failed' | ForestValueHistoryResponse;
+
+// Card summary of the return history: "+8,4 % / 5 v"
+function historySummary(state: HistoryState): { text: string; direction: 'up' | 'down' | 'flat' } {
+  if (state === 'loading') return { text: 'Lasketaan...', direction: 'flat' };
+  if (state === 'failed' || state.status !== 'available') return { text: 'Ei saatavilla', direction: 'flat' };
+  const period = defaultHistoryPeriod(state.history);
+  if (!period || period.changePct === null) return { text: 'Ei saatavilla', direction: 'flat' };
+  return {
+    text: `${formatSignedPct(period.changePct)} / ${period.years} v`,
+    direction: period.changePct > 0 ? 'up' : period.changePct < 0 ? 'down' : 'flat',
+  };
 }
 
 function sortByOperationDate(markings: Marking[]): Marking[] {
@@ -36,7 +59,9 @@ function ForestDetails({
   requestsLoading,
   markingsError,
   requestsError,
+  history,
 }: {
+  history: HistoryState;
   property: Property;
   markings: Marking[];
   markingsLoading: boolean;
@@ -88,17 +113,16 @@ function ForestDetails({
             {valueResult.warnings.map((warning) => <li key={warning.code}>{warning.message}</li>)}
           </ul>
         )}
-        <dl className="forest-growth-grid">
-          {['1 vuosi', '5 vuotta', '10 vuotta'].map((period) => (
-            <div key={period}>
-              <dt>Arvonmuutos · {period}</dt>
-              <dd>Ei historiatietoa</dd>
-            </div>
-          ))}
-        </dl>
-        <p className="forest-detail-muted">
-          Toteutuneita tuottoja ei ole tallennettu sovellukseen.
-        </p>
+      </section>
+
+      <section className="forest-detail-section">
+        <h3>Tuottohistoria</h3>
+        {history === 'loading' && <p role="status">Lasketaan tuottohistoriaa...</p>}
+        {history === 'failed' && <p role="alert">Tuottohistorian lataaminen epäonnistui.</p>}
+        {history !== 'loading' && history !== 'failed' && history.status !== 'available' && <p>{history.message}</p>}
+        {history !== 'loading' && history !== 'failed' && history.status === 'available' && (
+          <ForestReturnPanel history={history.history} />
+        )}
       </section>
 
       <section className="forest-detail-section">
@@ -191,7 +215,23 @@ function ForestCard({
   const [markings, setMarkings] = useState<Marking[]>([]);
   const [markingsLoading, setMarkingsLoading] = useState(true);
   const [markingsError, setMarkingsError] = useState(false);
+  const [history, setHistory] = useState<HistoryState>('loading');
   const coordinates = getCoordinates(property);
+
+  useEffect(() => {
+    let cancelled = false;
+    propertiesService.getForestValueHistory(property.id)
+      .then((data) => {
+        if (!cancelled) setHistory(data);
+      })
+      .catch(() => {
+        if (!cancelled) setHistory('failed');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [property.id]);
+  const summary = historySummary(history);
 
   useEffect(() => {
     let cancelled = false;
@@ -241,8 +281,8 @@ function ForestCard({
 
       <dl className="forest-property-summary">
         <div>
-          <dt>Tuottohistoria</dt>
-          <dd>Ei saatavilla</dd>
+          <dt>Tuottohistoria (arvio)</dt>
+          <dd className={`return-summary ${summary.direction}`}>{summary.text}</dd>
         </div>
         <div>
           <dt>Viimeisin kirjattu työ</dt>
@@ -299,6 +339,7 @@ function ForestCard({
           requestsLoading={requestsLoading}
           markingsError={markingsError}
           requestsError={requestsError}
+          history={history}
         />
       )}
     </article>

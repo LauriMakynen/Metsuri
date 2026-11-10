@@ -299,6 +299,44 @@ export type ForestValueResponse =
   | { status: 'no_data'; message: string }
   | { status: 'error'; message: string };
 
+// Return history ("tuottohistoria"): estimated change of the timber's value over past years
+export type HistoryAccuracy = 'good' | 'rough' | 'unavailable';
+
+export interface HistoryPeriod {
+  years: number;
+  fromYear: number;
+  accuracy: HistoryAccuracy;
+  note: string | null;
+  volumeThenM3: number;
+  volumeNowM3: number;
+  valueThenEur: number;
+  valueNowEur: number;
+  changeEur: number;
+  changePct: number | null;
+  annualPct: number | null;
+  // changeEur split in two: more wood, and a different price for it
+  growthEffectEur: number;
+  priceEffectEur: number;
+}
+
+export interface ForestValueHistory {
+  propertyId: number;
+  periods: HistoryPeriod[];
+  // Estimated value per year, oldest first, ending in the current year
+  series: { year: number; volumeM3: number; valueEur: number }[];
+  // Values the app has actually stored, one per month
+  recorded: { date: string; volumeM3: number; valueEur: number }[];
+  provider: 'metsakeskus' | 'mock' | 'manual';
+  priceSource: 'luke' | 'bundled';
+  priceYears: { from: number; to: number };
+  computedAt: string;
+}
+
+export type ForestValueHistoryResponse =
+  | { status: 'available'; history: ForestValueHistory }
+  | { status: 'no_data'; message: string }
+  | { status: 'error'; message: string };
+
 // Owner-entered basics when no forest resource data is found
 export interface ManualStandInput {
   species: TreeSpecies;
