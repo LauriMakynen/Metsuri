@@ -1071,6 +1071,8 @@ export default function MapPage() {
     description: string;
     operation_date: string;
     area_ha?: number | null;
+    income_eur?: number | null;
+    cost_eur?: number | null;
   }) => {
     if (!selectedPropertyId) {
       setError('Valitse ensin kiinteistö, johon merkintä liitetään.');
@@ -1101,6 +1103,8 @@ export default function MapPage() {
           follow_up_date_start: followUp.followUpDateStart,
           follow_up_date_end: followUp.followUpDateEnd,
           follow_up_note: followUp.followUpNote,
+          income_eur: data.income_eur ?? null,
+          cost_eur: data.cost_eur ?? null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1114,6 +1118,8 @@ export default function MapPage() {
           geometry: pendingGeometry,
           area_ha: areaHa,
           operation_date: data.operation_date,
+          income_eur: data.income_eur ?? null,
+          cost_eur: data.cost_eur ?? null,
         });
       }
       setMarkings((prev) => [marking, ...prev]);

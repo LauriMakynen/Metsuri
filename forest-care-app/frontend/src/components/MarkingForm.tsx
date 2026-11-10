@@ -16,8 +16,20 @@ interface MarkingFormProps {
     description: string;
     operation_date: string;
     area_ha?: number | null;
+    income_eur?: number | null;
+    cost_eur?: number | null;
   }) => Promise<void>;
   onCancel: () => void;
+}
+
+// Harvests bring timber sale income; every work can have a cost
+const HARVEST_TYPES: MarkingType[] = ['harvennus', 'avohakkuu'];
+
+/** "1 500,50" → 1500.5; empty → null; anything else → undefined (invalid) */
+function parseEur(text: string): number | null | undefined {
+  if (!text.trim()) return null;
+  const value = Number(text.replace(/\s/g, '').replace(',', '.'));
+  return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 // Finnish labels for marking types
@@ -46,13 +58,22 @@ export default function MarkingForm({
   const [description, setDescription] = useState('');
   const [type, setType] = useState<MarkingType>('muu_tyo');
   const [operationDate, setOperationDate] = useState(getLocalIsoDate);
+  const [income, setIncome] = useState('');
+  const [cost, setCost] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const isHarvest = HARVEST_TYPES.includes(type);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       setError('Nimi on pakollinen');
+      return;
+    }
+    const incomeEur = isHarvest ? parseEur(income) : null;
+    const costEur = parseEur(cost);
+    if (incomeEur === undefined || costEur === undefined) {
+      setError('Anna tulo ja kulu euroina, esim. 1500');
       return;
     }
     setLoading(true);
@@ -65,6 +86,8 @@ export default function MarkingForm({
         title: title.trim(),
         description: description.trim(),
         operation_date: normalizedOperationDate,
+        income_eur: incomeEur,
+        cost_eur: costEur,
       });
     } catch {
       setError('Tallennus epäonnistui');
@@ -132,6 +155,37 @@ export default function MarkingForm({
               required
             />
           </div>
+
+          {/* Optional money: makes the return history a total return (income − costs) */}
+          <div className="marking-money">
+            {isHarvest && (
+              <div className="form-group">
+                <label htmlFor="income">Puukauppatulo (€)</label>
+                <input
+                  id="income"
+                  type="text"
+                  inputMode="decimal"
+                  value={income}
+                  onChange={(e) => setIncome(e.target.value)}
+                  placeholder="esim. 6500"
+                />
+              </div>
+            )}
+            <div className="form-group">
+              <label htmlFor="cost">Työn kulu (€)</label>
+              <input
+                id="cost"
+                type="text"
+                inputMode="decimal"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder="esim. 800"
+              />
+            </div>
+          </div>
+          <small className="request-form-hint">
+            Vapaaehtoinen. Tulot ja kulut lasketaan mukaan metsän tuottohistoriaan.
+          </small>
 
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={onCancel}>

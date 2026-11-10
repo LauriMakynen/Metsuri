@@ -59,6 +59,9 @@ export interface Marking {
   follow_up_date_start?: string | null;
   follow_up_date_end?: string | null;
   follow_up_note?: string | null;
+  // Money that moved with the work: timber sale income and the cost of the work (both optional)
+  income_eur?: number | null;
+  cost_eur?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -314,16 +317,65 @@ export interface HistoryPeriod {
   changeEur: number;
   changePct: number | null;
   annualPct: number | null;
-  // changeEur split in two: more wood, and a different price for it
+  // changeEur in parts that add up: more wood, pulpwood grown into sawlog, price, harvested wood (≤ 0)
   growthEffectEur: number;
+  qualityEffectEur: number;
   priceEffectEur: number;
+  harvestedEur: number;
+  // Money recorded on done works during the period
+  incomeEur: number;
+  costEur: number;
+  // Value change + income − costs
+  totalReturnEur: number;
+  totalReturnPct: number | null;
+  totalAnnualPct: number | null;
+  inflationPct: number | null;
+  realTotalReturnPct: number | null;
+  realTotalAnnualPct: number | null;
+  unrecordedHarvests: number;
+}
+
+export interface HistoryPoint {
+  year: number;
+  volumeM3: number;
+  valueEur: number;
+  lowEur: number;
+  highEur: number;
+  // Consumer prices that year relative to now (1 = today's money)
+  priceLevel: number;
+}
+
+export interface HistoryEvent {
+  date: string;
+  type: MarkingType;
+  title: string;
+  incomeEur: number | null;
+  costEur: number | null;
+}
+
+export interface StandGrowth {
+  standId: string;
+  standNumber: string | null;
+  areaHa: number;
+  ageYears: number | null;
+  mainSpecies: TreeSpecies | null;
+  developmentClass: DevelopmentClass | null;
+  volumeNowM3: number;
+  valueNowEur: number;
+  volumeGrowthPct: number;
+  valueGrowthPct: number | null;
 }
 
 export interface ForestValueHistory {
   propertyId: number;
+  forestAreaHa: number;
   periods: HistoryPeriod[];
   // Estimated value per year, oldest first, ending in the current year
-  series: { year: number; volumeM3: number; valueEur: number }[];
+  series: HistoryPoint[];
+  // Projection for the coming years at today's prices
+  forecast: HistoryPoint[];
+  events: HistoryEvent[];
+  stands: StandGrowth[];
   // Values the app has actually stored, one per month
   recorded: { date: string; volumeM3: number; valueEur: number }[];
   provider: 'metsakeskus' | 'mock' | 'manual';
