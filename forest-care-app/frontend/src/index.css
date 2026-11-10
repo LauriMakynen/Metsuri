@@ -857,9 +857,7 @@ html, body, #root {
 .return-chart-axis { stroke: #d5ddd7; stroke-width: 1; }
 .return-chart-crosshair { stroke: #9aa8a0; stroke-width: 1; stroke-dasharray: 3 3; }
 .return-chart-dot { fill: #15803d; stroke: var(--white); stroke-width: 2; }
-/* The SVG scales with its width, so the tick text is larger in viewBox units on a phone */
-.return-chart-tick { font-size: 18px; fill: #6b7280; }
-@media (min-width: 560px) { .return-chart-tick { font-size: 12px; } }
+.return-chart-tick { font-size: 12px; fill: #6b7280; }
 .return-stats { display: grid; grid-template-columns: 1fr; gap: 0.5rem; }
 .return-stats div { padding: 0.6rem 0.7rem; border-radius: 10px; background: #f0fdf4; }
 .return-stats dt, .return-split-legend dt { font-size: 0.76rem; font-weight: 700; color: #466152; }

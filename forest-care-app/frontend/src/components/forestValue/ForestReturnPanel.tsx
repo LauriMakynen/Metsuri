@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { PointerEvent } from 'react';
 import {
   DEVELOPMENT_CLASS_LABEL,
@@ -19,11 +19,23 @@ const GROWTH_COLOR = '#15803d';
 const PRICE_COLOR = '#2563eb';
 const QUALITY_COLOR = '#d97706';
 
-const CHART_W = 560;
-const CHART_H = 210;
+// The chart is drawn in about real pixels, so text stays readable: a taller, narrower
+// drawing on a phone instead of a scaled-down wide one
 const PAD = { top: 12, right: 12, bottom: 26, left: 46 };
-const INNER_W = CHART_W - PAD.left - PAD.right;
-const INNER_H = CHART_H - PAD.top - PAD.bottom;
+const WIDE = { width: 560, height: 210 };
+const NARROW = { width: 340, height: 230 };
+const NARROW_QUERY = '(max-width: 559px)';
+
+function useNarrowChart(): boolean {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW_QUERY).matches);
+  useEffect(() => {
+    const query = window.matchMedia(NARROW_QUERY);
+    const update = () => setNarrow(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  return narrow;
+}
 
 type ChartPoint = HistoryPoint & { kind: 'past' | 'now' | 'forecast' };
 
@@ -58,8 +70,11 @@ interface ValueChartProps {
 // a projection for the coming years. One euro axis; hover or touch reads a year.
 function ValueChart({ points, events, real }: ValueChartProps) {
   const [hover, setHover] = useState<number | null>(null);
+  const { width: CHART_W, height: CHART_H } = useNarrowChart() ? NARROW : WIDE;
 
   const model = useMemo(() => {
+    const INNER_W = CHART_W - PAD.left - PAD.right;
+    const INNER_H = CHART_H - PAD.top - PAD.bottom;
     const deflate = (p: ChartPoint, value: number) => (real ? value / p.priceLevel : value);
     const rows = points.map((p) => ({
       ...p,
@@ -101,7 +116,7 @@ function ValueChart({ points, events, real }: ValueChartProps) {
       base: PAD.top + INNER_H,
       nowIndex: rows.findIndex((p) => p.kind === 'now'),
     };
-  }, [points, real]);
+  }, [points, real, CHART_W, CHART_H]);
 
   if (points.length < 2) return null;
   const { rows } = model;
@@ -336,7 +351,12 @@ export default function ForestReturnPanel({ history }: { history: ForestValueHis
   const annualPct = showReal ? period.realTotalAnnualPct : period.totalAnnualPct;
   // Over decades the total percentage mostly shows how small the start was: lead with the yearly rate
   const leadWithAnnual = period.years >= 20 && annualPct !== null;
-  const direction = !usable || period.totalReturnEur === 0 ? 'flat' : period.totalReturnEur > 0 ? 'up' : 'down';
+  // In today's money the starting value is worth more, so the gain in euros is smaller too
+  const returnEur =
+    showReal && period.inflationPct !== null
+      ? Math.round(period.totalReturnEur - (period.valueThenEur * period.inflationPct) / 100)
+      : period.totalReturnEur;
+  const direction = !usable || returnEur === 0 ? 'flat' : returnEur > 0 ? 'up' : 'down';
   const periodEvents = history.events.filter((e) => fractionalYear(e.date) >= period.fromYear);
   const perHaYear = history.forestAreaHa > 0 ? period.years * history.forestAreaHa : 0;
 
@@ -376,11 +396,11 @@ export default function ForestReturnPanel({ history }: { history: ForestValueHis
                 ? `${formatSignedPct(annualPct as number)} / v`
                 : totalPct !== null
                   ? formatSignedPct(totalPct)
-                  : signed(period.totalReturnEur, formatEur)}
+                  : signed(returnEur, formatEur)}
             </strong>
             <span>
               {showReal ? 'Reaalinen kokonaistuotto' : 'Kokonaistuotto'} {period.fromYear}–{period.fromYear + period.years}
-              {' · '}{signed(period.totalReturnEur, formatEur)}
+              {' · '}{signed(returnEur, formatEur)}{showReal ? ' nykyrahassa' : ''}
               {leadWithAnnual && totalPct !== null ? ` · yhteensä ${formatSignedPct(totalPct)}` : ''}
               {!leadWithAnnual && annualPct !== null && period.years > 1 ? ` · ${formatSignedPct(annualPct)} / v` : ''}
               {period.inflationPct !== null ? ` · inflaatio ${formatSignedPct(period.inflationPct)}` : ''}
