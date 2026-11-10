@@ -1547,7 +1547,10 @@ export default function MapPage() {
           </button>
           {/* Opened from "Omat metsät" without in-app history: back leads there */}
           <BackButton fallbackPath={fromForestOverview ? '/omat-metsat' : '/start'} />
-          <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä">🌲 Metsuri</Link>
+          <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä" aria-label="Metsuri – aloitusnäkymä">
+            <img className="nav-logo-wordmark" src="/media/white_wordmark.png" alt="Metsuri" />
+            <img className="nav-logo-symbol" src="/media/white_symbol.png" alt="" aria-hidden="true" />
+          </Link>
         </div>
         <div className="map-nav-right">
         {!isGuest && <NotificationsBell />}
