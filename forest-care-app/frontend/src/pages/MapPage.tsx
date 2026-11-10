@@ -53,12 +53,10 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Properties are not drawn by hand: they come from MML (code search or a click on the cadastre layer)
+// Properties are not drawn by hand: they come from MML via the cadastre layer
 type DrawTool = 'point' | 'line' | 'area' | 'note' | 'measure' | 'request' | null;
 type BaseLayerKey = 'maastokartta' | 'peruskartta' | 'ortokuva';
 
-// Same rule as the backend: 1–3, 1–3, 1–4 and 1–4 digits (e.g. 91-2-9901-100), or the 14-digit form
-const PROPERTY_CODE_REGEX = /^(\d{1,3}-\d{1,3}-\d{1,4}-\d{1,4}|\d{14})$/;
 // MML tiles exist up to zoom 18; beyond that Leaflet upscales them instead of showing grey
 const MAX_TILE_ZOOM = 18;
 // Zooming to a (small) parcel stops here so its surroundings stay visible
@@ -157,7 +155,6 @@ export default function MapPage() {
   const propertiesLayerRef = useRef<L.FeatureGroup | null>(null);
   const markingsLayerRef = useRef<L.FeatureGroup | null>(null);
   const selectedHighlightLayerRef = useRef<L.Layer | null>(null);
-  const cadastreLayerRef = useRef<L.Layer | null>(null);
   const overlayLayerRef = useRef<L.TileLayer | null>(null);
   const baseLayersRef = useRef<Record<BaseLayerKey, L.TileLayer> | null>(null);
   const clickedCadastreLayerRef = useRef<L.Layer | null>(null);
@@ -209,9 +206,7 @@ export default function MapPage() {
     isGuest ? DEMO_PROPERTY.geometry : null
   );
 
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchResult, setSearchResult] = useState<CadastreFeature | null>(null);
-  const [savingSearchResult, setSavingSearchResult] = useState(false);
+  const [savingClickedCadastre, setSavingClickedCadastre] = useState(false);
 
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(FALLBACK_LAYER_CONFIG);
   const [activeBaseLayer, setActiveBaseLayer] = useState<BaseLayerKey>('maastokartta');
@@ -1364,7 +1359,7 @@ export default function MapPage() {
 
   const handleSaveClickedCadastre = async () => {
     if (!clickedCadastre) return;
-    setSavingSearchResult(true);
+    setSavingClickedCadastre(true);
     setError('');
     const saveName = clickedCadastreCustomName.trim() || clickedCadastre.properties.propertyCode;
     try {
@@ -1399,7 +1394,7 @@ export default function MapPage() {
           : 'Kiinteistön tallennus epäonnistui'
       );
     } finally {
-      setSavingSearchResult(false);
+      setSavingClickedCadastre(false);
     }
   };
 
@@ -1537,116 +1532,6 @@ export default function MapPage() {
     setSidebarOpen(true);
   };
 
-  const handleSaveCadastreToProperties = async () => {
-    if (!searchResult) return;
-
-    setSavingSearchResult(true);
-    setError('');
-    try {
-      let created: Property;
-      if (isGuest) {
-        created = {
-          id: -Date.now(),
-          name: searchResult.properties.name,
-          property_code: searchResult.properties.propertyCode,
-          area_ha: searchResult.properties.areaHa,
-          geometry: searchResult.geometry,
-          created_at: new Date().toISOString(),
-        };
-      } else {
-        created = await propertiesService.importFromCadastre({
-          name: searchResult.properties.name,
-          property_code: searchResult.properties.propertyCode,
-          geometry: searchResult.geometry,
-          area_ha: searchResult.properties.areaHa,
-        });
-      }
-
-      setProperties((prev) => [created, ...prev]);
-      setSelectedPropertyId(created.id);
-      setSelectedPropertyGeometry(created.geometry);
-      setSearchResult(null);
-
-      if (cadastreLayerRef.current && mapRef.current) {
-        mapRef.current.removeLayer(cadastreLayerRef.current);
-        cadastreLayerRef.current = null;
-      }
-    } catch (err: unknown) {
-      const status =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { status?: number } }).response?.status
-          : undefined;
-
-      if (status === 409) {
-        setError('Kiinteistö on jo tallennettu omiin kiinteistöihin');
-      } else {
-        setError('Kiinteistön tallennus epäonnistui');
-      }
-    } finally {
-      setSavingSearchResult(false);
-    }
-  };
-
-  const handleOnSearch = async (propertyCode: string): Promise<CadastreFeature | null> => {
-    const code = propertyCode.trim().replace(/\s*-\s*/g, '-').replace(/\s+/g, '-');
-    if (!PROPERTY_CODE_REGEX.test(code)) {
-      setError('Kiinteistötunnus on väärässä muodossa. Anna se esim. muodossa 91-401-5-24.');
-      return null;
-    }
-
-    setSearchLoading(true);
-    setError('');
-    try {
-      const feature = await cadastreService.searchByPropertyCode(code);
-      setSearchResult(feature);
-
-      if (cadastreLayerRef.current && mapRef.current) {
-        mapRef.current.removeLayer(cadastreLayerRef.current);
-      }
-
-      const layer = L.geoJSON(feature.geometry as GeoJSON.Geometry, {
-        style: {
-          color: '#0369a1',
-          weight: 3,
-          fillColor: '#38bdf8',
-          fillOpacity: 0.2,
-        },
-      });
-      layer.bindPopup(`<strong>${feature.properties.name}</strong><br/>${feature.properties.propertyCode}`);
-      layer.addTo(mapRef.current!);
-      cadastreLayerRef.current = layer;
-
-      const bounds = layer.getBounds();
-      if (bounds.isValid()) {
-        mapRef.current?.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
-      }
-
-      renderSelectedHighlight(feature.geometry, '#0369a1');
-      return feature;
-    } catch (err: unknown) {
-      const status =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { status?: number; data?: { error?: string } } }).response?.status
-          : undefined;
-      const backendMessage =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
-          : undefined;
-
-      if (status === 404) {
-        setError('Kiinteistöä ei löytynyt');
-      } else if (backendMessage) {
-        setError(backendMessage);
-      } else {
-        setError('Kiinteistön haku epäonnistui');
-      }
-      setSearchResult(null);
-      return null;
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
   return (
     <div className={`map-page ${activityOpen ? 'activity-mode' : ''}`}>
       <nav className="map-nav">
@@ -1726,9 +1611,6 @@ export default function MapPage() {
             setForestValueOpen(true);
             setSidebarOpen(false);
           }}
-          isSearching={searchLoading}
-          onSearch={handleOnSearch}
-          onSelectResult={handleSaveCadastreToProperties}
           onSelectProperty={handleSelectProperty}
           onDeleteProperty={handleDeleteProperty}
           onDeleteMarking={handleDeleteMarking}
@@ -1858,9 +1740,9 @@ export default function MapPage() {
                     <button
                       className="btn btn-primary btn-small"
                       onClick={handleSaveClickedCadastre}
-                      disabled={savingSearchResult}
+                      disabled={savingClickedCadastre}
                     >
-                      {savingSearchResult ? 'Tallennetaan...' : '+ Omiin kiinteistöihin'}
+                      {savingClickedCadastre ? 'Tallennetaan...' : '+ Omiin kiinteistöihin'}
                     </button>
                     <button
                       className="btn-icon"
@@ -1894,22 +1776,16 @@ export default function MapPage() {
               </button>
               <strong>🌲 Sinulla ei ole vielä lisättyä palstaa</strong>
               <p>Lisää oma metsäpalstasi, niin voit tehdä merkintöjä ja aloittaa aktiviteetin. Karttaa voit selata jo nyt.</p>
-              <div className="empty-parcel-actions">
-                <button
-                  className="btn btn-primary btn-compact"
-                  onClick={() => { setEmptyNoticeDismissed(true); setSidebarOpen(true); }}
-                >
-                  🔍 Hae kiinteistötunnuksella
-                </button>
-                {layerConfig.overlays?.kiinteistorajat && (
+              {layerConfig.overlays?.kiinteistorajat && (
+                <div className="empty-parcel-actions">
                   <button
                     className="btn btn-secondary btn-compact"
                     onClick={() => { setEmptyNoticeDismissed(true); setShowCadastreOverlay(true); }}
                   >
                     🗺️ Valitse kartalta
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 

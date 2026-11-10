@@ -1,11 +1,9 @@
 import type {
   Property,
   Marking,
-  CadastreFeature,
   WorkRequest,
   RecommendedOperation,
 } from '../types';
-import PropertySearch from './PropertySearch';
 import PropertyList from './PropertyList';
 import MarkingList from './MarkingList';
 import WorkRequestList from './WorkRequestList';
@@ -35,9 +33,6 @@ interface SidebarProps {
   selectedPropertyId: number | null;
   selectedProperty: Property | null;
   onOpenForestValue: () => void;
-  isSearching: boolean;
-  onSearch: (propertyCode: string) => Promise<CadastreFeature | null>;
-  onSelectResult: (result: CadastreFeature) => void;
   onSelectProperty: (property: Property) => void;
   onDeleteProperty: (id: number) => void;
   onDeleteMarking: (id: number) => void;
@@ -58,9 +53,6 @@ export default function Sidebar({
   selectedPropertyId,
   selectedProperty,
   onOpenForestValue,
-  isSearching,
-  onSearch,
-  onSelectResult,
   onSelectProperty,
   onDeleteProperty,
   onDeleteMarking,
@@ -98,8 +90,6 @@ export default function Sidebar({
 
   return (
     <aside id="map-sidebar" className={`map-sidebar ${isOpen ? 'open' : ''}`}>
-      <PropertySearch onSearch={onSearch} onSelectResult={onSelectResult} isSearching={isSearching} />
-
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {care && (
           <ForestCarePanel
