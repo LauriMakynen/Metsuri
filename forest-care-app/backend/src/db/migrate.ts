@@ -288,6 +288,11 @@ async function migrate() {
       )
     `);
 
+    // Money that moved with a done work: timber sale income and the cost of the work.
+    // Both optional; they turn the value change into a total return.
+    await client.query('ALTER TABLE markings ADD COLUMN IF NOT EXISTS income_eur NUMERIC(12,2)');
+    await client.query('ALTER TABLE markings ADD COLUMN IF NOT EXISTS cost_eur NUMERIC(12,2)');
+
     // Return history: the parcel's computed value, one row per month. Unlike the estimate
     // backwards in time, this is what the app actually computed at the time.
     await client.query(`

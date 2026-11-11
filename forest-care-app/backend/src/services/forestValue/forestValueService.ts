@@ -301,7 +301,22 @@ export async function getForestValueHistory(
   if (!response) return null;
   if (response.status !== 'available') return response;
 
-  const history = computeValueHistory(response.result, await getPriceHistory(), periods);
+  // Done works on the parcel: harvests add sold wood back, income and costs make the total return
+  const works = await pool.query<{ date: string; type: string; title: string; income_eur: string | null; cost_eur: string | null }>(
+    `SELECT to_char(operation_date, 'YYYY-MM-DD') AS date, type, title, income_eur, cost_eur
+     FROM markings
+     WHERE property_id = $1 AND user_id = $2 AND operation_date IS NOT NULL AND geometry_type <> 'note'`,
+    [propertyId, userId]
+  );
+  const events = works.rows.map((row) => ({
+    date: row.date,
+    type: row.type,
+    title: row.title,
+    incomeEur: row.income_eur === null ? null : Number(row.income_eur),
+    costEur: row.cost_eur === null ? null : Number(row.cost_eur),
+  }));
+
+  const history = computeValueHistory(response.result, await getPriceHistory(), periods, new Date(), events);
   const recorded = await pool.query<{ date: string; volume_m3: string; value_eur: string }>(
     `SELECT to_char(recorded_on, 'YYYY-MM-DD') AS date, volume_m3, value_eur
      FROM forest_value_history WHERE property_id = $1 ORDER BY recorded_on`,

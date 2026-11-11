@@ -1067,6 +1067,8 @@ export default function MapPage() {
     description: string;
     operation_date: string;
     area_ha?: number | null;
+    income_eur?: number | null;
+    cost_eur?: number | null;
   }) => {
     if (!selectedPropertyId) {
       setError('Valitse ensin kiinteistö, johon merkintä liitetään.');
@@ -1097,6 +1099,8 @@ export default function MapPage() {
           follow_up_date_start: followUp.followUpDateStart,
           follow_up_date_end: followUp.followUpDateEnd,
           follow_up_note: followUp.followUpNote,
+          income_eur: data.income_eur ?? null,
+          cost_eur: data.cost_eur ?? null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -1110,6 +1114,8 @@ export default function MapPage() {
           geometry: pendingGeometry,
           area_ha: areaHa,
           operation_date: data.operation_date,
+          income_eur: data.income_eur ?? null,
+          cost_eur: data.cost_eur ?? null,
         });
       }
       setMarkings((prev) => [marking, ...prev]);
@@ -1547,7 +1553,10 @@ export default function MapPage() {
           </button>
           {/* Opened from "Omat metsät" without in-app history: back leads there */}
           <BackButton fallbackPath={fromForestOverview ? '/omat-metsat' : '/start'} />
-          <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä">🌲 Metsuri</Link>
+          <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä" aria-label="Metsuri – aloitusnäkymä">
+            <img className="nav-logo-wordmark" src="/media/white_wordmark.png" alt="Metsuri" />
+            <img className="nav-logo-symbol" src="/media/white_symbol.png" alt="" aria-hidden="true" />
+          </Link>
         </div>
         <div className="map-nav-right">
         {!isGuest && <NotificationsBell />}
