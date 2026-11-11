@@ -19,6 +19,9 @@ export interface ForumPost {
   body: string;
   created_at: string;
   is_own: boolean;
+  is_hidden: boolean;
+  is_deleted: boolean;
+  has_reported: boolean;
 }
 
 export interface ForumThread {
@@ -26,6 +29,36 @@ export interface ForumThread {
   title: string;
   created_at: string;
   posts: ForumPost[];
+}
+
+export type ForumReportReason =
+  | 'abusive_language'
+  | 'harassment'
+  | 'spam'
+  | 'personal_information'
+  | 'other';
+
+export interface ForumMe {
+  display_name: string | null;
+  role: 'user' | 'admin';
+  forum_banned: boolean;
+}
+
+export interface ForumModerationReport {
+  post_id: number;
+  thread_id: number;
+  thread_title: string;
+  author_user_id: number | null;
+  author_name: string;
+  body: string;
+  created_at: string;
+  author_banned: boolean;
+  report_count: number;
+  reports: Array<{
+    reason: ForumReportReason;
+    note: string | null;
+    created_at: string;
+  }>;
 }
 
 export const forumService = {
@@ -37,9 +70,23 @@ export const forumService = {
     (await api.post<ForumPost>(`/api/forum/threads/${threadId}/posts`, data)).data,
   deletePost: async (postId: number): Promise<{ thread_deleted: boolean }> =>
     (await api.delete<{ thread_deleted: boolean }>(`/api/forum/posts/${postId}`)).data,
-  // Nickname used last time, to prefill the form
-  getMyName: async (): Promise<string | null> =>
-    (await api.get<{ display_name: string | null }>('/api/forum/me')).data.display_name,
+  reportPost: async (postId: number, data: { reason: ForumReportReason; note: string }): Promise<void> => {
+    await api.post(`/api/forum/posts/${postId}/reports`, data);
+  },
+  getMe: async (): Promise<ForumMe> => (await api.get<ForumMe>('/api/forum/me')).data,
+  getModerationReports: async (): Promise<ForumModerationReport[]> =>
+    (await api.get<ForumModerationReport[]>('/api/forum/admin/reports')).data,
+  resolveReports: async (postId: number): Promise<void> => {
+    await api.post(`/api/forum/admin/reports/${postId}/resolve`);
+  },
+  removePostAsAdmin: async (postId: number): Promise<void> => {
+    await api.delete(`/api/forum/admin/posts/${postId}`);
+  },
+  removeThreadAsAdmin: async (threadId: number): Promise<void> => {
+    await api.delete(`/api/forum/admin/threads/${threadId}`);
+  },
+  setForumBan: async (userId: number, banned: boolean): Promise<boolean> =>
+    (await api.put<{ banned: boolean }>(`/api/forum/admin/users/${userId}/forum-ban`, { banned })).data.banned,
 };
 
 export function forumError(err: unknown, fallback: string): string {

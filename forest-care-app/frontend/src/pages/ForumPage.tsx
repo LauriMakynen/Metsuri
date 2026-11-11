@@ -3,9 +3,10 @@ import type { FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import TopNav from '../components/TopNav';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
+import ForumModerationPanel from '../components/ForumModerationPanel';
 import { useAuth } from '../hooks/useAuth';
 import { forumError, forumService } from '../services/forumService';
-import type { ForumThread, ForumThreadSummary } from '../services/forumService';
+import type { ForumMe, ForumReportReason, ForumThread, ForumThreadSummary } from '../services/forumService';
 
 const TITLE_MAX = 150;
 const BODY_MAX = 5000;
@@ -24,13 +25,8 @@ function formatWhen(iso: string): string {
 }
 
 // Nickname shared by the new-thread and reply forms; prefilled from the last post
-function useNickname(enabled: boolean): [string, (name: string) => void] {
-  const [name, setName] = useState('');
-  useEffect(() => {
-    if (!enabled) return;
-    forumService.getMyName().then((saved) => saved && setName((current) => current || saved)).catch(() => {});
-  }, [enabled]);
-  return [name, setName];
+function useNickname(initialName: string | null): [string, (name: string) => void] {
+  return useState(initialName ?? '');
 }
 
 function LoginToWrite() {
@@ -53,14 +49,22 @@ function LoginToWrite() {
   );
 }
 
-function ThreadList({ canWrite }: { canWrite: boolean }) {
+function ThreadList({
+  canWrite,
+  canReport,
+  initialName,
+}: {
+  canWrite: boolean;
+  canReport: boolean;
+  initialName: string | null;
+}) {
   const navigate = useNavigate();
   const [threads, setThreads] = useState<ForumThreadSummary[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
-  const [name, setName] = useNickname(canWrite);
+  const [name, setName] = useNickname(initialName);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
@@ -91,7 +95,7 @@ function ThreadList({ canWrite }: { canWrite: boolean }) {
           </button>
         )}
       </div>
-      {!canWrite && <LoginToWrite />}
+      {!canWrite && !canReport && <LoginToWrite />}
 
       {formOpen && (
         <form className="forum-form" onSubmit={submit}>
@@ -166,15 +170,32 @@ function ThreadList({ canWrite }: { canWrite: boolean }) {
   );
 }
 
-function ThreadView({ threadId, canWrite }: { threadId: number; canWrite: boolean }) {
+function ThreadView({
+  threadId,
+  canWrite,
+  canReport,
+  initialName,
+}: {
+  threadId: number;
+  canWrite: boolean;
+  canReport: boolean;
+  initialName: string | null;
+}) {
   const navigate = useNavigate();
   const [thread, setThread] = useState<ForumThread | null>(null);
   const [loadError, setLoadError] = useState('');
   const [body, setBody] = useState('');
-  const [name, setName] = useNickname(canWrite);
+  const [name, setName] = useNickname(initialName);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [reportingId, setReportingId] = useState<number | null>(null);
+  const [reportReason, setReportReason] = useState<ForumReportReason>('abusive_language');
+  const [reportNote, setReportNote] = useState('');
+  const [reporting, setReporting] = useState(false);
+  const [reportError, setReportError] = useState('');
+  const [reportSuccess, setReportSuccess] = useState('');
+  const [reportedPostIds, setReportedPostIds] = useState<Set<number>>(() => new Set());
 
   const load = useCallback(() => {
     forumService
@@ -213,6 +234,24 @@ function ThreadView({ threadId, canWrite }: { threadId: number; canWrite: boolea
     }
   };
 
+  const submitReport = async (event: FormEvent, postId: number) => {
+    event.preventDefault();
+    setReporting(true);
+    setReportError('');
+    setReportSuccess('');
+    try {
+      await forumService.reportPost(postId, { reason: reportReason, note: reportNote });
+      setReportedPostIds((current) => new Set(current).add(postId));
+      setReportingId(null);
+      setReportNote('');
+      setReportSuccess('Kiitos, ilmoitus vastaanotettu');
+    } catch (reportSubmitError) {
+      setReportError(forumError(reportSubmitError, 'Ilmoituksen lähettäminen epäonnistui.'));
+    } finally {
+      setReporting(false);
+    }
+  };
+
   if (loadError) {
     return (
       <>
@@ -234,7 +273,7 @@ function ThreadView({ threadId, canWrite }: { threadId: number; canWrite: boolea
               <strong>{post.author_name}</strong>
               {post.is_own && <span className="forum-own">sinä</span>}
               <span className="forum-meta">{formatWhen(post.created_at)}</span>
-              {post.is_own && (
+              {post.is_own && !post.is_hidden && !post.is_deleted && (
                 <button
                   type="button"
                   className="btn-link forum-delete"
@@ -244,11 +283,74 @@ function ThreadView({ threadId, canWrite }: { threadId: number; canWrite: boolea
                   {deletingId === post.id ? 'Poistetaan...' : 'Poista'}
                 </button>
               )}
+              {post.is_own && post.is_hidden && <span className="forum-hidden-label">Piilotettu ilmoitusten vuoksi</span>}
+              {!post.is_own && !post.is_deleted && canReport && (post.has_reported || reportedPostIds.has(post.id)) && (
+                <span className="forum-reported-label">Ilmoitettu</span>
+              )}
+              {!post.is_own && !post.is_deleted && canReport && !post.has_reported && !reportedPostIds.has(post.id) && (
+                <button
+                  type="button"
+                  className="btn-link forum-report-link"
+                  onClick={() => {
+                    setReportingId((current) => current === post.id ? null : post.id);
+                    setReportError('');
+                    setReportSuccess('');
+                  }}
+                >
+                  Ilmoita
+                </button>
+              )}
+              {!post.is_own && !post.is_deleted && !canReport && (
+                <Link to="/login" className="btn-link forum-report-link">Ilmoita</Link>
+              )}
             </div>
             <p className="forum-body">{post.body}</p>
+            {reportingId === post.id && canReport && (
+              <form className="forum-report-form" onSubmit={(event) => submitReport(event, post.id)}>
+                <div className="form-group">
+                  <label htmlFor={`forum-report-reason-${post.id}`}>Ilmoituksen syy</label>
+                  <select
+                    id={`forum-report-reason-${post.id}`}
+                    value={reportReason}
+                    onChange={(event) => setReportReason(event.target.value as ForumReportReason)}
+                  >
+                    <option value="abusive_language">Asiaton kielenkäyttö</option>
+                    <option value="harassment">Häirintä</option>
+                    <option value="spam">Mainos/roskaposti</option>
+                    <option value="personal_information">Henkilötiedot</option>
+                    <option value="other">Muu</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label htmlFor={`forum-report-note-${post.id}`}>Lisätieto (valinnainen)</label>
+                  <textarea
+                    id={`forum-report-note-${post.id}`}
+                    value={reportNote}
+                    onChange={(event) => setReportNote(event.target.value)}
+                    maxLength={1000}
+                    rows={3}
+                  />
+                </div>
+                {reportError && <div className="error-message" role="alert">{reportError}</div>}
+                <div className="forum-form-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-compact"
+                    onClick={() => setReportingId(null)}
+                    disabled={reporting}
+                  >
+                    Peruuta
+                  </button>
+                  <button type="submit" className="btn btn-primary btn-compact" disabled={reporting}>
+                    {reporting ? 'Lähetetään...' : 'Lähetä ilmoitus'}
+                  </button>
+                </div>
+              </form>
+            )}
           </li>
         ))}
       </ol>
+      {reportSuccess && <p className="forum-report-success" role="status">{reportSuccess}</p>}
 
       {canWrite ? (
         <form className="forum-form" onSubmit={reply}>
@@ -281,7 +383,7 @@ function ThreadView({ threadId, canWrite }: { threadId: number; canWrite: boolea
           {error && <div className="error-message" role="alert">{error}</div>}
         </form>
       ) : (
-        <LoginToWrite />
+        !canReport && <LoginToWrite />
       )}
     </>
   );
@@ -291,8 +393,32 @@ function ThreadView({ threadId, canWrite }: { threadId: number; canWrite: boolea
 export default function ForumPage() {
   const { id } = useParams();
   const { isAuthenticated, isGuest } = useAuth();
-  const canWrite = isAuthenticated && !isGuest;
+  const [account, setAccount] = useState<ForumMe | null>(null);
+  const [accountError, setAccountError] = useState('');
+  const [rulesOpen, setRulesOpen] = useState(false);
+  useEffect(() => {
+    if (!isAuthenticated || isGuest) return;
+    let active = true;
+    forumService.getMe()
+      .then((me) => {
+        if (!active) return;
+        setAccount(me);
+        setAccountError('');
+      })
+      .catch((error: unknown) => {
+        if (active) setAccountError(forumError(error, 'Käyttäjätietojen hakeminen epäonnistui.'));
+      });
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, isGuest]);
+
+  const currentAccount = isAuthenticated && !isGuest ? account : null;
+  const canWrite = isAuthenticated && !isGuest && currentAccount?.forum_banned !== true;
+  const canReport = isAuthenticated && !isGuest;
+  const isModerationPage = id === 'moderointi';
   const threadId = id && /^\d+$/.test(id) ? Number(id) : null;
+  const accountPending = isAuthenticated && !isGuest && currentAccount === null && !accountError;
 
   return (
     <div className="start-page forest-page">
@@ -303,9 +429,52 @@ export default function ForumPage() {
           <p className="forest-eyebrow">💬 Foorumi</p>
           <h1>Keskustele metsästä</h1>
           <p>Kysy neuvoa, jaa kokemuksia ja vaihda vinkkejä muiden metsänomistajien ja tekijöiden kanssa.</p>
+          <div className="forum-header-actions">
+            <button
+              type="button"
+              className="btn btn-secondary btn-compact"
+              aria-expanded={rulesOpen}
+              aria-controls="forum-rules"
+              onClick={() => setRulesOpen((open) => !open)}
+            >
+              {rulesOpen ? 'Sulje säännöt ja käyttöehdot' : 'Säännöt ja käyttöehdot'}
+            </button>
+            {currentAccount?.role === 'admin' && (
+              <Link to={isModerationPage ? '/foorumi' : '/foorumi/moderointi'} className="btn btn-secondary btn-compact">
+                {isModerationPage ? 'Takaisin foorumille' : 'Ylläpito'}
+              </Link>
+            )}
+          </div>
+          {rulesOpen && (
+            <div className="forum-rules" id="forum-rules">
+              <h2>Foorumin käyttöehdot ja säännöt</h2>
+              <ul>
+                <li>Keskustele asiallisesti ja kunnioita muita käyttäjiä.</li>
+                <li>Älä häiritse, uhkaile tai julkaise mainoksia tai roskapostia.</li>
+                <li>Älä julkaise omia tai muiden henkilötietoja.</li>
+                <li>Ilmoita asiattomasta sisällöstä ylläpidolle.</li>
+                <li>Ylläpito voi poistaa sääntöjen vastaista sisältöä ja estää foorumille kirjoittamisen.</li>
+              </ul>
+            </div>
+          )}
         </header>
         <section className="glass-panel forum-panel">
-          {threadId !== null ? <ThreadView threadId={threadId} canWrite={canWrite} /> : <ThreadList canWrite={canWrite} />}
+          {accountError && <div className="error-message" role="alert">{accountError}</div>}
+          {currentAccount?.forum_banned && <p className="forum-ban-notice">Kirjoitusoikeutesi foorumille on estetty.</p>}
+          {accountPending ? (
+            <p role="status">Ladataan käyttäjätietoja...</p>
+          ) : isModerationPage ? (
+            currentAccount?.role === 'admin' ? <ForumModerationPanel /> : <div className="error-message" role="alert">Tämä näkymä on vain ylläpidolle.</div>
+          ) : threadId !== null ? (
+            <ThreadView
+              threadId={threadId}
+              canWrite={canWrite}
+              canReport={canReport}
+              initialName={currentAccount?.display_name ?? null}
+            />
+          ) : (
+            <ThreadList canWrite={canWrite} canReport={canReport} initialName={currentAccount?.display_name ?? null} />
+          )}
         </section>
       </main>
     </div>

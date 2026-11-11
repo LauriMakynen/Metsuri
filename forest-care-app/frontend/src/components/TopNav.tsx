@@ -25,7 +25,7 @@ export default function TopNav() {
   return (
     <nav className="map-nav">
       <div className="map-nav-left">
-        {pathname !== '/start' && <BackButton />}
+        {pathname !== '/start' && <BackButton alwaysNavigateToFallback={pathname.startsWith('/foorumi')} />}
         <Link to="/start" className="map-nav-title nav-home-link" aria-label="Metsuri – aloitusnäkymä">
           <img className="nav-logo-wordmark" src="/media/white_wordmark.png" alt="Metsuri" />
           <img className="nav-logo-symbol" src="/media/white_symbol.png" alt="" aria-hidden="true" />

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cleanName, cleanText } from '../forum';
+import { cleanName, cleanText, isForumReportReason, shouldHideReportedPost } from '../forum';
+import { isForumAdmin } from '../../middleware/forum';
 
 // The validators do not touch the database; stub the pool so importing needs no DATABASE_URL
 vi.mock('../../db/pool', () => ({ default: { query: vi.fn(), connect: vi.fn() } }));
@@ -31,5 +32,28 @@ describe('cleanName', () => {
     expect(cleanName('M')).toBeNull();
     expect(cleanName('x'.repeat(41))).toBeNull();
     expect(cleanName(null)).toBeNull();
+  });
+});
+
+describe('forum report moderation rules', () => {
+  it('hides a post at the threshold of three distinct open reports', () => {
+    expect(shouldHideReportedPost(2)).toBe(false);
+    expect(shouldHideReportedPost(3)).toBe(true);
+    expect(shouldHideReportedPost(4)).toBe(true);
+  });
+
+  it('accepts only supported report reasons', () => {
+    expect(isForumReportReason('abusive_language')).toBe(true);
+    expect(isForumReportReason('personal_information')).toBe(true);
+    expect(isForumReportReason('invalid')).toBe(false);
+    expect(isForumReportReason(null)).toBe(false);
+  });
+});
+
+describe('forum role checks', () => {
+  it('allows only the admin role to moderate', () => {
+    expect(isForumAdmin('admin')).toBe(true);
+    expect(isForumAdmin('user')).toBe(false);
+    expect(isForumAdmin(undefined)).toBe(false);
   });
 });
