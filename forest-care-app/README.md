@@ -429,7 +429,21 @@ uudelleen). Kansion `database/` SQL-tiedostot ovat vanhoja eivätkä ole käytö
 | `work_requests` | Työpyynnöt (alue, tyyppi, puukauppa/palvelutyö, tavoitehinta) |
 | `work_request_bids` | Tarjoukset työpyyntöihin |
 | `password_reset_tokens` | Salasanan palautuslinkit |
+| `forum_reports` | Foorumiviestien ilmoitukset ja käsittelytiedot |
 | `forest_stand_data`, `forest_valuation` | Tulevaa metsävaratieto- ja arviointi-integraatiota varten |
+
+### Foorumin ylläpito
+
+Foorumin tietokantamigraatio antaa käyttäjille oletuksena roolin `user`. Ylläpitäjä asetetaan suoraan
+tietokantaan, ei käyttöliittymästä:
+
+```sql
+UPDATE users SET role = 'admin' WHERE email = 'yllapitaja@example.fi';
+```
+
+Ilmoitukset näkyvät ylläpitäjälle osoitteessa `/foorumi/moderointi`. Kirjoituskielto pysyy voimassa,
+kunnes ylläpitäjä poistaa sen. Kolmen eri käyttäjän avoimet ilmoitukset piilottavat viestin
+automaattisesti arvioinnin ajaksi.
 
 ---
 

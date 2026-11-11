@@ -12,6 +12,7 @@ import forestValueRoutes from './routes/forestValue';
 import workRequestPhotosRoutes from './routes/workRequestPhotos';
 import notificationsRoutes from './routes/notifications';
 import forumRoutes from './routes/forum';
+import forumModerationRoutes from './routes/forumModeration';
 import { getAllowedOrigins, isAllowedOrigin } from './config/allowedOrigins';
 
 dotenv.config();
@@ -81,6 +82,7 @@ app.use('/api/work-requests', apiLimiter, workRequestsRoutes);
 app.use('/api/forest-value', apiLimiter, forestValueRoutes);
 app.use('/api/work-request-photos', photoLimiter, workRequestPhotosRoutes);
 app.use('/api/notifications', apiLimiter, notificationsRoutes);
+app.use('/api/forum/admin', apiLimiter, forumModerationRoutes);
 app.use('/api/forum', apiLimiter, forumRoutes);
 
 // Health check endpoints

@@ -295,6 +295,20 @@ async function migrate() {
 
     // Forum ("Foorumi"): threads and their posts. Authors are shown by a nickname only, never
     // by email; the nickname is remembered on the user for the next post.
+    await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'");
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS forum_banned BOOLEAN NOT NULL DEFAULT false');
+    await client.query(`
+      DO $migration$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'users_role_check' AND conrelid = 'users'::regclass
+        ) THEN
+          ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('user', 'admin'));
+        END IF;
+      END;
+      $migration$
+    `);
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(40)');
     await client.query(`
       CREATE TABLE IF NOT EXISTS forum_threads (
@@ -312,11 +326,29 @@ async function migrate() {
         user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         author_name VARCHAR(40) NOT NULL,
         body TEXT NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        hidden_at TIMESTAMP WITH TIME ZONE,
+        moderator_deleted_at TIMESTAMP WITH TIME ZONE
+      )
+    `);
+    await client.query('ALTER TABLE forum_posts ADD COLUMN IF NOT EXISTS hidden_at TIMESTAMP WITH TIME ZONE');
+    await client.query('ALTER TABLE forum_posts ADD COLUMN IF NOT EXISTS moderator_deleted_at TIMESTAMP WITH TIME ZONE');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS forum_reports (
+        id SERIAL PRIMARY KEY,
+        post_id INTEGER NOT NULL REFERENCES forum_posts(id) ON DELETE CASCADE,
+        reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reason VARCHAR(40) NOT NULL CHECK (reason IN ('abusive_language', 'harassment', 'spam', 'personal_information', 'other')),
+        note VARCHAR(1000),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        UNIQUE (post_id, reporter_id)
       )
     `);
     await client.query('CREATE INDEX IF NOT EXISTS forum_posts_thread_idx ON forum_posts(thread_id, created_at)');
     await client.query('CREATE INDEX IF NOT EXISTS forum_threads_last_post_idx ON forum_threads(last_post_at DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS forum_reports_open_post_idx ON forum_reports(post_id) WHERE resolved_at IS NULL');
 
     // Return history: the parcel's computed value, one row per month. Unlike the estimate
     // backwards in time, this is what the app actually computed at the time.
