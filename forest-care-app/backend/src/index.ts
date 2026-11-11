@@ -11,12 +11,18 @@ import workRequestsRoutes from './routes/workRequests';
 import forestValueRoutes from './routes/forestValue';
 import workRequestPhotosRoutes from './routes/workRequestPhotos';
 import notificationsRoutes from './routes/notifications';
+import forumRoutes from './routes/forum';
 import { getAllowedOrigins, isAllowedOrigin } from './config/allowedOrigins';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Behind one proxy (Render in production, the Vite dev proxy locally): take the client's IP
+// from X-Forwarded-For, so the rate limiters count each user separately instead of
+// putting everyone behind the proxy's single address
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 
 // Middleware
 const allowedOrigins = getAllowedOrigins(process.env.FRONTEND_URL, process.env.FRONTEND_URLS);
@@ -75,6 +81,7 @@ app.use('/api/work-requests', apiLimiter, workRequestsRoutes);
 app.use('/api/forest-value', apiLimiter, forestValueRoutes);
 app.use('/api/work-request-photos', photoLimiter, workRequestPhotosRoutes);
 app.use('/api/notifications', apiLimiter, notificationsRoutes);
+app.use('/api/forum', apiLimiter, forumRoutes);
 
 // Health check endpoints
 app.get('/health', (_req, res) => {

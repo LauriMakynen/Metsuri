@@ -293,6 +293,31 @@ async function migrate() {
     await client.query('ALTER TABLE markings ADD COLUMN IF NOT EXISTS income_eur NUMERIC(12,2)');
     await client.query('ALTER TABLE markings ADD COLUMN IF NOT EXISTS cost_eur NUMERIC(12,2)');
 
+    // Forum ("Foorumi"): threads and their posts. Authors are shown by a nickname only, never
+    // by email; the nickname is remembered on the user for the next post.
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(40)');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS forum_threads (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        title VARCHAR(150) NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        last_post_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS forum_posts (
+        id SERIAL PRIMARY KEY,
+        thread_id INTEGER NOT NULL REFERENCES forum_threads(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        author_name VARCHAR(40) NOT NULL,
+        body TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS forum_posts_thread_idx ON forum_posts(thread_id, created_at)');
+    await client.query('CREATE INDEX IF NOT EXISTS forum_threads_last_post_idx ON forum_threads(last_post_at DESC)');
+
     // Return history: the parcel's computed value, one row per month. Unlike the estimate
     // backwards in time, this is what the app actually computed at the time.
     await client.query(`
