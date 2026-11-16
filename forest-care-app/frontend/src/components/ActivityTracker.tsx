@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
+import { createPortal } from 'react-dom';
 import L from 'leaflet';
 import type { MultiPolygon, Polygon } from 'geojson';
 import {
@@ -73,6 +74,8 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
   const [gpsError, setGpsError] = useState('');
   const [saving, setSaving] = useState(false);
   const [simulated, setSimulated] = useState(false);
+  // Discarding throws the walked area away for good, so it is confirmed first
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   const phaseRef = useRef<Phase>('setup');
   const watchIdRef = useRef<number | null>(null);
@@ -314,6 +317,8 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
   }
 
   const nothingPainted = areaHa === 0;
+  // With nothing walked there is nothing to lose: close right away
+  const discard = () => (nothingPainted ? onClose() : setConfirmDiscard(true));
 
   return (
     <div className="activity-panel">
@@ -362,7 +367,7 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
         <>
           {nothingPainted && <p className="activity-note">Aluetta ei ehtinyt kertyä, joten tallennettavaa ei ole.</p>}
           <div className="activity-actions">
-            <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Hylkää</button>
+            <button className="btn btn-secondary" onClick={discard} disabled={saving}>Hylkää</button>
             <button className="btn btn-primary" onClick={save} disabled={saving || nothingPainted}>
               {saving ? 'Tallennetaan...' : 'Tallenna merkinnäksi'}
             </button>
@@ -378,6 +383,42 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
           <button className="btn btn-danger" onClick={finish}>■ Lopeta</button>
         </div>
       )}
+
+      {confirmDiscard &&
+        createPortal(
+          <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setConfirmDiscard(false)}>
+            <div
+              className="modal-card confirm-dialog"
+              role="alertdialog"
+              aria-modal="true"
+              aria-labelledby="activity-discard-title"
+              aria-describedby="activity-discard-text"
+            >
+              <div className="modal-header">
+                <h2 id="activity-discard-title">Hylätäänkö aktiviteetti?</h2>
+                <button type="button" className="modal-close" onClick={() => setConfirmDiscard(false)} aria-label="Sulje">
+                  ✕
+                </button>
+              </div>
+              <p id="activity-discard-text" className="confirm-dialog-text">
+                <strong>{MARKING_TYPE_LABELS[activityType]}</strong> · {formatArea(areaHa)} · {formatDistance(distanceM)}
+                {' · '}{formatDuration(elapsedS)}
+                <br />
+                Kävelemääsi aluetta ei tallenneta, eikä sitä voi palauttaa.
+              </p>
+              <div className="modal-actions">
+                {/* The safe choice first and focused, so a hasty tap or Enter keeps the activity */}
+                <button type="button" className="btn btn-secondary" onClick={() => setConfirmDiscard(false)} autoFocus>
+                  Peruuta
+                </button>
+                <button type="button" className="btn btn-danger" onClick={onClose}>
+                  Hylkää aktiviteetti
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
