@@ -26,7 +26,10 @@ export default function TopNav() {
     <nav className="map-nav">
       <div className="map-nav-left">
         {pathname !== '/start' && <BackButton />}
-        <Link to="/start" className="map-nav-title nav-home-link">🌲 Metsuri</Link>
+        <Link to="/start" className="map-nav-title nav-home-link" aria-label="Metsuri – aloitusnäkymä">
+          <img className="nav-logo-wordmark" src="/media/white_wordmark.png" alt="Metsuri" />
+          <img className="nav-logo-symbol" src="/media/white_symbol.png" alt="" aria-hidden="true" />
+        </Link>
       </div>
       <div className="map-nav-right">
         {!isGuest && <NotificationsBell />}

@@ -26,9 +26,18 @@ function locationErrorText(error: GeolocationPositionError): string {
   return 'Sijaintia ei saatu selvitettyä. Yritä hetken kuluttua uudelleen.';
 }
 
-function nearbyNoticeText(count: number, radiusKm: number, nearestKm: number | null): string {
-  if (count === 0) return `Ei avoimia työpyyntöjä ${radiusKm} km säteellä sijainnistasi.`;
-  const requests = count === 1 ? '1 avoin työpyyntö' : `${count} avointa työpyyntöä`;
+function nearbyNoticeText(
+  count: number,
+  radiusKm: number,
+  nearestKm: number | null,
+  ownOnly: boolean
+): string {
+  if (count === 0) {
+    return `Ei ${ownOnly ? 'omia avoimia työpyyntöjä' : 'avoimia työpyyntöjä'} ${radiusKm} km säteellä sijainnistasi.`;
+  }
+  const requests = ownOnly
+    ? count === 1 ? '1 oma avoin työpyyntö' : `${count} omaa avointa työpyyntöä`
+    : count === 1 ? '1 avoin työpyyntö' : `${count} avointa työpyyntöä`;
   const nearest = nearestKm !== null ? ` Lähin on ${formatDistance(nearestKm)} päässä.` : '';
   return `${requests} ${radiusKm} km säteellä sijainnistasi.${nearest}`;
 }
@@ -69,6 +78,7 @@ export default function EmployersPage() {
 
   const [requests, setRequests] = useState<PublicWorkRequest[]>([]);
   const [typeFilter, setTypeFilter] = useState<MarkingType | null>(null);
+  const [ownOnly, setOwnOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -132,15 +142,17 @@ export default function EmployersPage() {
 
   // With a location, only requests within the radius are shown, nearest first
   const visibleRequests = useMemo(() => {
-    const withDistance = requests.map((request) => ({
+    const withDistance = requests
+      .filter((request) => !ownOnly || request.is_own)
+      .map((request) => ({
       request,
       distance: position ? distanceKm(position, request) : null,
-    }));
+      }));
     if (!position) return withDistance;
     return withDistance
       .filter(({ distance }) => (distance as number) <= radiusKm)
       .sort((a, b) => (a.distance as number) - (b.distance as number));
-  }, [requests, position, radiusKm]);
+  }, [requests, ownOnly, position, radiusKm]);
 
   // Draw requests on the map
   useEffect(() => {
@@ -294,21 +306,33 @@ export default function EmployersPage() {
               </button>
             ))}
           </div>
-          <label className="region-filter">
-            <span className="panel-title">Maakunta</span>
-            <select
-              value={regionFilter ?? ''}
-              onChange={(e) => setRegionFilter(e.target.value || null)}
-              aria-label="Suodata maakunnan mukaan"
-            >
-              <option value="">Koko Suomi</option>
-              {regions.map((region) => (
-                <option key={region.code} value={region.code}>
-                  {region.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div className="filter-extra-controls">
+            <label className="region-filter">
+              <span className="panel-title">Maakunta</span>
+              <select
+                value={regionFilter ?? ''}
+                onChange={(e) => setRegionFilter(e.target.value || null)}
+                aria-label="Suodata maakunnan mukaan"
+              >
+                <option value="">Koko Suomi</option>
+                {regions.map((region) => (
+                  <option key={region.code} value={region.code}>
+                    {region.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {isAuthenticated && (
+              <label className="own-requests-filter">
+                <input
+                  type="checkbox"
+                  checked={ownOnly}
+                  onChange={(event) => setOwnOnly(event.target.checked)}
+                />
+                <span>Näytä vain omat työpyynnöt</span>
+              </label>
+            )}
+          </div>
         </section>
 
         {error && <div className="error-message">{error}</div>}
@@ -344,7 +368,7 @@ export default function EmployersPage() {
             {locationError && <p className="nearby-notice error">{locationError}</p>}
             {position && !loading && (
               <p className="nearby-notice" role="status">
-                📍 {nearbyNoticeText(visibleRequests.length, radiusKm, visibleRequests[0]?.distance ?? null)}
+                📍 {nearbyNoticeText(visibleRequests.length, radiusKm, visibleRequests[0]?.distance ?? null, ownOnly)}
               </p>
             )}
             <div ref={mapContainerRef} className="requests-map" />
@@ -352,12 +376,14 @@ export default function EmployersPage() {
 
           <section className="glass-panel requests-list">
             <h2 className="panel-title">
-              📢 {loading ? 'Ladataan työpyyntöjä...' : `Avoimet työpyynnöt (${visibleRequests.length})`}
+              📢 {loading
+                ? 'Ladataan työpyyntöjä...'
+                : `${ownOnly ? 'Omat avoimet työpyynnöt' : 'Avoimet työpyynnöt'} (${visibleRequests.length})`}
             </h2>
 
             {!loading && visibleRequests.length === 0 && !error && (
               <p className="requests-empty">
-                Ei avoimia työpyyntöjä
+                {ownOnly ? 'Ei omia avoimia työpyyntöjä' : 'Ei avoimia työpyyntöjä'}
                 {typeFilter ? ` tyypille ${MARKING_TYPE_LABELS[typeFilter].toLowerCase()}` : ''}
                 {regionFilter ? ` maakunnassa ${regions.find((r) => r.code === regionFilter)?.name ?? ''}` : ''}
                 {position ? ` ${radiusKm} km säteellä` : ''}.
