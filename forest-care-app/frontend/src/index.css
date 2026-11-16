@@ -827,6 +827,9 @@ html, body, #root {
   border: 1.5px solid var(--border); border-radius: 10px; background: var(--white); color: var(--text);
   padding: 0.45rem 0.7rem; font-size: 0.95rem; font-family: inherit; min-height: 40px;
 }
+/* Price and work-area ranges next to the region: narrower, the choices are short */
+.region-filter.range-filter { flex: 0 1 180px; }
+.range-filter-note { font-size: 0.8rem; color: var(--text-light); margin-bottom: 0.4rem; }
 .own-requests-filter {
   display: inline-flex; align-items: center; gap: 0.6rem; min-height: 40px;
   margin-top: 0.9rem; transform: translateY(4px);
