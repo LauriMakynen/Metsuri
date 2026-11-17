@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { notificationsService } from '../services/forestService';
 import type { Notification } from '../types';
 
@@ -16,21 +16,35 @@ function relativeTime(value: string): string {
 
 export default function NotificationsBell() {
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [error, setError] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isChatViewOpen = pathname === '/chat' || pathname.startsWith('/chat/');
 
-  const loadNotifications = async () => {
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, []);
+
+  const loadNotifications = useCallback(async () => {
     try {
       const data = await notificationsService.getAll();
-      setNotifications(data.notifications);
-      setUnreadCount(data.unreadCount);
+      const visibleNotifications = isChatViewOpen
+        ? data.notifications.filter((notification) => notification.type !== 'chat_message')
+        : data.notifications;
+      setNotifications(visibleNotifications);
+      setUnreadCount(visibleNotifications.filter((notification) => !notification.read_at).length);
       setError('');
     } catch {
       setError('Ilmoitusten lataaminen epäonnistui.');
     }
-  };
+  }, [isChatViewOpen]);
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void loadNotifications(), 0);
@@ -39,7 +53,7 @@ export default function NotificationsBell() {
       window.clearTimeout(initialLoad);
       window.clearInterval(interval);
     };
-  }, []);
+  }, [loadNotifications]);
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.read_at) {
@@ -72,7 +86,7 @@ export default function NotificationsBell() {
   };
 
   return (
-    <div className="notifications">
+    <div ref={containerRef} className="notifications">
       <button
         type="button"
         className="notifications-bell"

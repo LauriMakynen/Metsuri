@@ -12,6 +12,7 @@ import ResetPasswordPage from './pages/ResetPasswordPage';
 import HelpPage from './pages/HelpPage';
 import AddForestPage from './pages/AddForestPage';
 import ForumPage from './pages/ForumPage';
+import ChatPage from './pages/ChatPage';
 
 function AppLayout() {
   return <Outlet />;
@@ -79,6 +80,10 @@ function App() {
                   <MapPage />
                 </PrivateRoute>
               }
+            />
+            <Route
+              path="/chat/:id?"
+              element={<PrivateRoute authenticatedOnly><ChatPage /></PrivateRoute>}
             />
             <Route path="/" element={<Navigate to="/start" replace />} />
             <Route path="*" element={<Navigate to="/start" replace />} />
