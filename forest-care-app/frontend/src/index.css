@@ -288,8 +288,8 @@ html, body, #root {
   0%, 65% { opacity: 1; visibility: visible; }
   100% { opacity: 0; visibility: hidden; }
 }
-.help-page .nav-help-link { display: none; }
-.help-page .nav-guide-link { display: none; }
+.help-page:not(.guide-page) .nav-help-link { display: none; }
+.guide-page .nav-guide-link { display: none; }
 .sidebar-toggle {
   background: none; border: none; color: var(--white); font-size: 1.4rem; cursor: pointer;
   padding: 0.25rem; min-width: 40px; min-height: 40px; display: flex; align-items: center; justify-content: center;

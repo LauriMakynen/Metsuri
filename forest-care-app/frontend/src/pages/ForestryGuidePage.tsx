@@ -97,7 +97,7 @@ export default function ForestryGuidePage() {
   const navigate = useNavigate();
 
   return (
-    <div className="help-page">
+    <div className="help-page guide-page">
       <TopNav />
       <main className="help-content">
         <button
