@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -52,6 +53,91 @@ function historySummary(state: HistoryState): { text: string; direction: 'up' | 
     text: `${formatSignedPct(period.totalReturnPct)} / ${period.years} v`,
     direction: period.totalReturnPct > 0 ? 'up' : period.totalReturnPct < 0 ? 'down' : 'flat',
   };
+}
+
+const MAX_PROPERTY_NAME = 255;
+
+// Forest name with a pencil to rename it in place; Enter saves, Escape cancels
+function PropertyName({ property, onRenamed }: { property: Property; onRenamed: (updated: Property) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(property.name);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const startEditing = () => {
+    setName(property.name);
+    setError('');
+    setEditing(true);
+  };
+
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    const trimmed = name.replace(/\s+/g, ' ').trim();
+    if (!trimmed) {
+      setError('Anna metsälle nimi.');
+      return;
+    }
+    if (trimmed === property.name) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      onRenamed(await propertiesService.update(property.id, { name: trimmed }));
+      setEditing(false);
+    } catch (err) {
+      setError(
+        (err as { response?: { data?: { error?: string } } }).response?.data?.error ||
+          'Nimen tallennus epäonnistui. Yritä uudelleen.'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!editing) {
+    return (
+      <div className="forest-name">
+        <h2>{property.name}</h2>
+        <button
+          type="button"
+          className="forest-name-edit"
+          onClick={startEditing}
+          aria-label={`Muokkaa metsän ${property.name} nimeä`}
+          title="Muokkaa nimeä"
+        >
+          ✏️
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form className="forest-name-form" onSubmit={save}>
+      <input
+        value={name}
+        onChange={(e) => {
+          setName(e.target.value);
+          setError('');
+        }}
+        onKeyDown={(e) => e.key === 'Escape' && setEditing(false)}
+        maxLength={MAX_PROPERTY_NAME}
+        aria-label="Metsän nimi"
+        disabled={saving}
+        autoFocus
+      />
+      <div className="forest-name-actions">
+        <button type="submit" className="btn btn-primary btn-compact" disabled={saving}>
+          {saving ? 'Tallennetaan...' : 'Tallenna'}
+        </button>
+        <button type="button" className="btn-link" onClick={() => setEditing(false)} disabled={saving}>
+          Peruuta
+        </button>
+      </div>
+      {error && <span className="photo-error-text" role="alert">{error}</span>}
+    </form>
+  );
 }
 
 const PORTFOLIO_PERIODS = [1, 5, 10];
@@ -339,6 +425,7 @@ function ForestCard({
   requestsError,
   history,
   onHistoryChanged,
+  onRenamed,
 }: {
   property: Property;
   requests: WorkRequest[];
@@ -347,6 +434,7 @@ function ForestCard({
   history: HistoryState;
   // A done work's income or cost changed: the return history needs recomputing
   onHistoryChanged: () => void;
+  onRenamed: (updated: Property) => void;
 }) {
   const navigate = useNavigate();
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -387,8 +475,8 @@ function ForestCard({
   return (
     <article className="forest-property-card">
       <div className="forest-property-heading">
-        <div>
-          <h2>{property.name}</h2>
+        <div className="forest-property-title">
+          <PropertyName property={property} onRenamed={onRenamed} />
           {property.property_code && <p className="forest-property-code">{property.property_code}</p>}
         </div>
         <span className="forest-property-area">
@@ -573,6 +661,9 @@ export default function ForestOverviewPage() {
                   requestsError={requestsError}
                   history={histories[property.id] ?? 'loading'}
                   onHistoryChanged={() => loadHistory(property.id)}
+                  onRenamed={(updated) =>
+                    setProperties((prev) => prev.map((p) => (p.id === updated.id ? { ...p, name: updated.name } : p)))
+                  }
                 />
               ))}
             </section>

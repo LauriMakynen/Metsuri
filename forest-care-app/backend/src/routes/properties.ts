@@ -13,6 +13,9 @@ import { validateManualInput } from '../services/forestValue/manualStand';
 
 const router = Router();
 
+/** properties.name is VARCHAR(255) */
+const MAX_PROPERTY_NAME = 255;
+
 // All property routes require authentication
 router.use(authMiddleware);
 
@@ -140,8 +143,14 @@ router.get('/:id/markings', async (req: AuthRequest, res: Response): Promise<voi
 // PUT /api/properties/:id - Update a property (user must own it)
 router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { name, geometry } = req.body;
+  const { geometry } = req.body;
+  // The owner renames a forest from "Minun metsäni": one line, not empty, fits the column
+  const name = typeof req.body.name === 'string' ? req.body.name.replace(/\s+/g, ' ').trim() : req.body.name;
 
+  if (name !== undefined && (typeof name !== 'string' || name.length < 1 || name.length > MAX_PROPERTY_NAME)) {
+    res.status(400).json({ error: `Anna metsälle nimi (1–${MAX_PROPERTY_NAME} merkkiä)` });
+    return;
+  }
   if (!name && !geometry) {
     res.status(400).json({ error: 'At least name or geometry is required' });
     return;

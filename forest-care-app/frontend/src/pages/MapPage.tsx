@@ -161,6 +161,8 @@ export default function MapPage() {
   const clickedCadastreLayerRef = useRef<L.Layer | null>(null);
   const measurementLayerRef = useRef<L.FeatureGroup | null>(null);
   const autoSelectedRef = useRef(false);
+  // The parcel from ?propertyId= is fitted once; later selections in the sidebar take over
+  const requestedFitDoneRef = useRef(false);
   const requestsLayerRef = useRef<L.FeatureGroup | null>(null);
   const careLocationLayerRef = useRef<L.LayerGroup | null>(null);
   const carePositionRef = useRef<L.LatLng | null>(null);
@@ -601,12 +603,15 @@ export default function MapPage() {
     refreshData();
   }, [refreshData]);
 
+  // Runs again whenever the property list reloads (e.g. after selecting another parcel), so it
+  // must fit only once: otherwise the map jumps back to the parcel in the URL (issue #89)
   useEffect(() => {
-    if (!propertiesLoaded || !hasPropertyParameter) return;
+    if (requestedFitDoneRef.current || !propertiesLoaded || !hasPropertyParameter) return;
     const property = properties.find((item) => item.id === requestedPropertyId);
     if (!property) return;
     const bounds = toBounds(property.geometry);
     if (bounds?.isValid() && mapRef.current) {
+      requestedFitDoneRef.current = true;
       mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
     }
   }, [hasPropertyParameter, propertiesLoaded, properties, requestedPropertyId]);

@@ -944,6 +944,9 @@ html, body, #root {
   border: 1.5px solid var(--border); border-radius: 10px; background: var(--white); color: var(--text);
   padding: 0.45rem 0.7rem; font-size: 0.95rem; font-family: inherit; min-height: 40px;
 }
+/* Price and work-area ranges next to the region: narrower, the choices are short */
+.region-filter.range-filter { flex: 0 1 180px; }
+.range-filter-note { font-size: 0.8rem; color: var(--text-light); margin-bottom: 0.4rem; }
 .own-requests-filter {
   display: inline-flex; align-items: center; gap: 0.6rem; min-height: 40px;
   margin-top: 0.9rem; transform: translateY(4px);
@@ -1023,6 +1026,20 @@ html, body, #root {
 }
 .forest-property-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
 .forest-property-heading h2 { color: #0f3d24; font-size: 1.25rem; overflow-wrap: anywhere; }
+.forest-property-title { min-width: 0; flex: 1; }
+.forest-name { display: flex; align-items: center; gap: 0.25rem; }
+.forest-name-edit {
+  flex: none; width: 36px; height: 36px; border: none; border-radius: 50%; background: none;
+  font-size: 0.95rem; cursor: pointer; opacity: 0.65; transition: opacity 0.15s, background 0.15s;
+}
+.forest-name-edit:hover, .forest-name-edit:focus-visible { opacity: 1; background: #ecfdf3; }
+.forest-name-form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; }
+.forest-name-form input {
+  flex: 1 1 200px; min-width: 0; min-height: 40px; padding: 0.4rem 0.6rem; font: inherit;
+  font-size: 1.05rem; font-weight: 600; color: #0f3d24; border: 1.5px solid var(--forest-green); border-radius: var(--radius-sm);
+}
+.forest-name-actions { display: flex; align-items: center; gap: 0.6rem; }
+.forest-name-form .photo-error-text { flex-basis: 100%; }
 .forest-property-code, .forest-property-coordinates { color: var(--text-light); font-size: 0.85rem; margin-top: 0.25rem; }
 .forest-property-area { flex: 0 0 auto; color: #14532d; font-weight: 800; white-space: nowrap; }
 .forest-property-summary { display: grid; grid-template-columns: 1fr; gap: 0.65rem; margin: 1rem 0; }
@@ -1797,6 +1814,14 @@ html, body, #root {
 .activity-alert-danger { background: #dc2626; color: var(--white); }
 .activity-alert-warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
 .activity-note { font-size: 0.85rem; color: var(--text-light); }
+.activity-back-btn {
+  display: inline-flex; align-items: center; gap: 0.4rem; align-self: flex-start; min-height: 44px;
+  padding: 0.4rem 0.9rem 0.4rem 0.7rem; border: 1.5px solid var(--border); border-radius: 999px;
+  background: var(--white); color: var(--forest-green); font: inherit; font-weight: 700; cursor: pointer;
+}
+.activity-back-btn span { font-size: 1.15rem; line-height: 1; }
+.activity-back-btn:hover:not(:disabled) { border-color: var(--forest-green); background: var(--forest-green-bg); }
+.activity-back-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .activity-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
 .activity-actions .btn { min-height: 56px; font-size: 1.05rem; width: 100%; }
 
