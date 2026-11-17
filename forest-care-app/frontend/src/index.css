@@ -1814,6 +1814,14 @@ html, body, #root {
 .activity-alert-danger { background: #dc2626; color: var(--white); }
 .activity-alert-warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
 .activity-note { font-size: 0.85rem; color: var(--text-light); }
+.activity-back-btn {
+  display: inline-flex; align-items: center; gap: 0.4rem; align-self: flex-start; min-height: 44px;
+  padding: 0.4rem 0.9rem 0.4rem 0.7rem; border: 1.5px solid var(--border); border-radius: 999px;
+  background: var(--white); color: var(--forest-green); font: inherit; font-weight: 700; cursor: pointer;
+}
+.activity-back-btn span { font-size: 1.15rem; line-height: 1; }
+.activity-back-btn:hover:not(:disabled) { border-color: var(--forest-green); background: var(--forest-green-bg); }
+.activity-back-btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .activity-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
 .activity-actions .btn { min-height: 56px; font-size: 1.05rem; width: 100%; }
 

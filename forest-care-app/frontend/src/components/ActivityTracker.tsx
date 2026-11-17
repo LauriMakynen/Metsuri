@@ -80,6 +80,9 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
   const phaseRef = useRef<Phase>('setup');
   const watchIdRef = useRef<number | null>(null);
   const simIntervalRef = useRef<number | null>(null);
+  // Simulated walk (demo) and how far it got, so it can continue after "Lopeta" is undone
+  const simPathRef = useRef<TrackPoint[] | null>(null);
+  const simIndexRef = useRef(0);
   const wakeLockRef = useRef<WakeLockSentinelLike | null>(null);
   // Track is split into segments: leaving the parcel or pausing starts a new one
   const segmentsRef = useRef<TrackPoint[][]>([[]]);
@@ -210,18 +213,36 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
     }
   };
 
-  const start = async () => {
-    if (!('geolocation' in navigator)) {
-      setGpsError('Laitteesi selain ei tue sijaintia.');
+  // Real GPS, or the simulated walk continuing from where it was
+  const startWatching = async () => {
+    const path = simPathRef.current;
+    if (path) {
+      simIntervalRef.current = window.setInterval(() => {
+        if (simIndexRef.current >= path.length) {
+          if (simIntervalRef.current !== null) window.clearInterval(simIntervalRef.current);
+          simIntervalRef.current = null;
+          return;
+        }
+        const [longitude, latitude] = path[simIndexRef.current++];
+        handlePosition({ coords: { latitude, longitude, accuracy: 4 }, timestamp: Date.now() } as GeolocationPosition);
+      }, 90);
       return;
     }
-    setPhaseBoth('tracking');
     watchIdRef.current = navigator.geolocation.watchPosition(handlePosition, handleGpsError, {
       enableHighAccuracy: true,
       maximumAge: 0,
       timeout: 20000,
     });
     wakeLockRef.current = await requestWakeLock();
+  };
+
+  const start = async () => {
+    if (!('geolocation' in navigator)) {
+      setGpsError('Laitteesi selain ei tue sijaintia.');
+      return;
+    }
+    setPhaseBoth('tracking');
+    await startWatching();
   };
 
   // Demo: replay a simulated walk on the parcel instead of real GPS
@@ -231,18 +252,11 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
       setGpsError('Esimerkkikävelyä ei voi näyttää tälle palstalle.');
       return;
     }
+    simPathRef.current = path;
+    simIndexRef.current = 0;
     setSimulated(true);
     setPhaseBoth('tracking');
-    let i = 0;
-    simIntervalRef.current = window.setInterval(() => {
-      if (i >= path.length) {
-        if (simIntervalRef.current !== null) window.clearInterval(simIntervalRef.current);
-        simIntervalRef.current = null;
-        return;
-      }
-      const [longitude, latitude] = path[i++];
-      handlePosition({ coords: { latitude, longitude, accuracy: 4 }, timestamp: Date.now() } as GeolocationPosition);
-    }, 90);
+    void startWatching();
   };
 
   const pause = () => {
@@ -253,8 +267,17 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
   const resume = () => setPhaseBoth('tracking');
 
   const finish = () => {
+    startNewSegment();
     stopWatching();
     setPhaseBoth('finished');
+  };
+
+  // "Lopeta" pressed by mistake: back to a paused activity with everything walked so far kept,
+  // as long as it has not been saved or discarded (issue #102)
+  const backToActivity = () => {
+    setGpsError('');
+    setPhaseBoth('paused');
+    void startWatching();
   };
 
   const save = async () => {
@@ -366,6 +389,15 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
       {phase === 'finished' ? (
         <>
           {nothingPainted && <p className="activity-note">Aluetta ei ehtinyt kertyä, joten tallennettavaa ei ole.</p>}
+          <button
+            type="button"
+            className="activity-back-btn"
+            onClick={backToActivity}
+            disabled={saving}
+            title="Lopetitko vahingossa? Palaa jatkamaan samaa aktiviteettia."
+          >
+            <span aria-hidden="true">←</span> Palaa aktiviteettiin
+          </button>
           <div className="activity-actions">
             <button className="btn btn-secondary" onClick={discard} disabled={saving}>Hylkää</button>
             <button className="btn btn-primary" onClick={save} disabled={saving || nothingPainted}>
