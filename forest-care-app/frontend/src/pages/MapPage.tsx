@@ -36,6 +36,7 @@ import WorkRequestForm from '../components/WorkRequestForm';
 import ForestValuePanel from '../components/forestValue/ForestValuePanel';
 import BackButton from '../components/BackButton';
 import NotificationsBell from '../components/NotificationsBell';
+import ChatsIcon from '../components/ChatsIcon';
 import { useForestValue } from '../hooks/useForestValue';
 import { OPERATION_LABEL, OPERATION_WORK_TYPE, isCareOperation, standTitle } from '../utils/forestValueFormat';
 import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
@@ -1560,6 +1561,7 @@ export default function MapPage() {
         </div>
         <div className="map-nav-right">
         {!isGuest && <NotificationsBell />}
+        {!isGuest && <ChatsIcon />}
         <Link to="/ohje" className="nav-help-link" aria-label="Avaa käyttöohje" title="Käyttöohje">
           ?
           {showHelpTooltip && <span className="nav-help-tooltip">

@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import BackButton from './BackButton';
 import { shouldShowHelpTooltip } from '../utils/helpTooltip';
 import NotificationsBell from './NotificationsBell';
+import ChatsIcon from './ChatsIcon';
 
 // Top navigation bar shared by the start and employer pages
 export default function TopNav() {
@@ -23,7 +24,7 @@ export default function TopNav() {
   };
 
   return (
-    <nav className="map-nav">
+    <nav className={`map-nav ${pathname.startsWith('/chat') ? 'chat-route' : ''}`}>
       <div className="map-nav-left">
         {pathname !== '/start' && <BackButton alwaysNavigateToFallback={pathname.startsWith('/foorumi')} />}
         <Link to="/start" className="map-nav-title nav-home-link" aria-label="Metsuri – aloitusnäkymä">
@@ -33,6 +34,7 @@ export default function TopNav() {
       </div>
       <div className="map-nav-right">
         {!isGuest && <NotificationsBell />}
+        {!isGuest && !pathname.startsWith('/chat') && <ChatsIcon />}
         <Link to="/ohje" className="nav-help-link" aria-label="Avaa käyttöohje" title="Käyttöohje">
           ?
           {showHelpTooltip && <span className="nav-help-tooltip">
