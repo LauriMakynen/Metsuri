@@ -4,7 +4,8 @@ export type NotificationType =
   | 'new_bid'
   | 'bid_no_longer_best'
   | 'bid_removed'
-  | 'work_request_cancelled';
+  | 'work_request_cancelled'
+  | 'chat_message';
 
 export interface NewNotification {
   userId: number;
@@ -14,8 +15,10 @@ export interface NewNotification {
   link: string;
 }
 
+type NotificationQueryClient = Pick<PoolClient, 'query'>;
+
 export async function createNotification(
-  client: PoolClient,
+  client: NotificationQueryClient,
   notification: NewNotification
 ): Promise<void> {
   await client.query(

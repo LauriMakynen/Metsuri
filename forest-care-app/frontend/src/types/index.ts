@@ -7,11 +7,39 @@ export interface User {
 
 export interface Notification {
   id: number;
-  type: 'new_bid' | 'bid_no_longer_best' | 'bid_removed' | 'work_request_cancelled';
+  type: 'new_bid' | 'bid_no_longer_best' | 'bid_removed' | 'work_request_cancelled' | 'chat_message';
   title: string;
   body: string;
   link: string;
   read_at: string | null;
+  created_at: string;
+}
+
+export interface ChatSummary {
+  id: number;
+  work_request_id: number;
+  title: string;
+  other_user_id: number;
+  other_email: string;
+  last_message: string | null;
+  last_message_at: string | null;
+  unread_count: number;
+  created_at: string;
+  owner_id: number;
+  provider_id: number;
+  bid_id?: number | null;
+  bid_amount_eur?: number | string | null;
+  bid_status?: 'pending' | 'accepted' | 'withdrawn' | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  sender_id: number;
+  body: string | null;
+  image_base64: string | null;
+  image_type: string | null;
+  counter_offer_eur: number | string | null;
+  counter_offer_status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | null;
   created_at: string;
 }
 
