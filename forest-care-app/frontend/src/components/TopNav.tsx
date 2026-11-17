@@ -53,6 +53,14 @@ export default function TopNav() {
             </button>
           </span>}
         </Link>
+        <Link
+          to="/metsanhoito"
+          className="nav-guide-link"
+          aria-label="Tietoa metsänhoidosta"
+          title="Tietoa metsänhoidosta"
+        >
+          📖
+        </Link>
         {isGuest ? (
           <>
             <span className="user-email guest-label">Vierailija</span>

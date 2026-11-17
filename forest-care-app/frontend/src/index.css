@@ -244,8 +244,21 @@ html, body, #root {
   font-size: 1.35rem; font-weight: 800; line-height: 1;
   text-decoration: none; box-shadow: 0 4px 12px rgba(5,46,22,0.35);
 }
+.nav-guide-link {
+  position: fixed; right: 4.5rem; bottom: 1rem; z-index: 1200;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px;
+  color: var(--white); background: var(--forest-green);
+  border: 2px solid var(--white); border-radius: 50%;
+  font-size: 1.25rem; line-height: 1;
+  text-decoration: none; box-shadow: 0 4px 12px rgba(5,46,22,0.35);
+}
 .nav-help-link:hover { background: var(--forest-green-light); }
+.nav-guide-link:hover { background: var(--forest-green-light); }
 .nav-help-link:focus-visible {
+  outline: 3px solid #bfdbfe; outline-offset: 2px;
+}
+.nav-guide-link:focus-visible {
   outline: 3px solid #bfdbfe; outline-offset: 2px;
 }
 .nav-help-tooltip {
@@ -276,6 +289,7 @@ html, body, #root {
   100% { opacity: 0; visibility: hidden; }
 }
 .help-page .nav-help-link { display: none; }
+.help-page .nav-guide-link { display: none; }
 .sidebar-toggle {
   background: none; border: none; color: var(--white); font-size: 1.4rem; cursor: pointer;
   padding: 0.25rem; min-width: 40px; min-height: 40px; display: flex; align-items: center; justify-content: center;
@@ -310,7 +324,7 @@ html, body, #root {
 .chat-sidebar-toggle { position: absolute; top: 0.75rem; left: 300px; z-index: 3; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 42px; padding: 0.45rem; border: 1px solid var(--border); border-left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; color: var(--forest-green); background: var(--white); cursor: pointer; box-shadow: 2px 2px 5px rgba(0,0,0,0.12); }
 .chat-sidebar-toggle svg { width: 19px; height: 19px; }
 .chat-list-closed .chat-sidebar-toggle { left: 0; }
-.chat-route .nav-help-link { bottom: 4.5rem; }
+.chat-route .nav-help-link, .chat-route .nav-guide-link { bottom: 4.5rem; }
 @media (min-width: 601px) {
   .chat-list { position: absolute; top: 0; bottom: 0; left: 0; z-index: 2; }
   .chat-conversation { width: 100%; max-width: none; margin: 0; }
@@ -503,6 +517,7 @@ html, body, #root {
   .map-nav { padding-left: 0.65rem; padding-right: 0.65rem; }
   .map-nav-right { gap: 0.45rem; }
   .nav-help-link { right: 0.75rem; bottom: 0.75rem; }
+  .nav-guide-link { right: 4.5rem; bottom: 0.75rem; }
   .help-content { width: min(100% - 1rem, 860px); padding-top: 1rem; }
   .help-header { padding: 1.35rem 1rem; border-radius: 14px; }
   .help-section-toggle { padding: 0.9rem; }
