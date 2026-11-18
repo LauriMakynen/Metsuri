@@ -176,7 +176,10 @@ html, body, #root {
 }
 
 /* Map Page */
-.map-page { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+/* Pinned to the visible viewport: with height: 100vh the page was taller than a mobile screen
+   (100vh ignores the browser's toolbars), so the document could scroll, e.g. when the keyboard
+   opened or the map took focus, and the top bar slid out of view with no way back (issue #111) */
+.map-page { display: flex; flex-direction: column; position: fixed; inset: 0; overflow: hidden; }
 
 .map-nav {
   display: flex; align-items: center; justify-content: space-between;
