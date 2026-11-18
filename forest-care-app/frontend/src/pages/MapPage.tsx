@@ -62,6 +62,9 @@ type BaseLayerKey = 'maastokartta' | 'peruskartta' | 'ortokuva';
 const MAX_TILE_ZOOM = 18;
 // Zooming to a (small) parcel stops here so its surroundings stay visible
 const FIT_MAX_ZOOM = 17;
+// Leaflet panes: own properties below the default overlay pane (400), markings above it
+const PROPERTIES_PANE = 'propertiesPane';
+const MARKINGS_PANE = 'markingsPane';
 const MAP_VIEW_STORAGE_KEY = 'metsuri-map-view';
 
 const FALLBACK_LAYER_CONFIG: MapLayerConfig = {
@@ -381,6 +384,11 @@ export default function MapPage() {
       zoom,
       zoomControl: true,
     });
+    // Fixed stacking instead of draw order: properties are redrawn whenever the list reloads
+    // (e.g. after selecting one), and in the shared overlay pane they then covered the markings,
+    // which could no longer be clicked (issue #20)
+    map.createPane(PROPERTIES_PANE).style.zIndex = '380';
+    map.createPane(MARKINGS_PANE).style.zIndex = '450';
     const saveMapView = () => {
       const currentCenter = map.getCenter();
       try {
@@ -760,6 +768,7 @@ export default function MapPage() {
       if (!prop.geometry) return;
       const isSelected = prop.id === selectedPropertyId;
       const layer = L.geoJSON(prop.geometry as GeoJSON.Geometry, {
+        pane: PROPERTIES_PANE,
         style: {
           color: isSelected ? '#0f172a' : '#166534',
           weight: isSelected ? 4 : 2,
@@ -814,6 +823,7 @@ export default function MapPage() {
       if (marking.geometry.type === 'Point') {
         const coords = marking.geometry.coordinates as [number, number];
         const marker = L.circleMarker([coords[1], coords[0]], {
+          pane: MARKINGS_PANE,
           radius: 8,
           fillColor: color,
           color: '#fff',
@@ -824,6 +834,7 @@ export default function MapPage() {
         markingsLayerRef.current!.addLayer(marker);
       } else {
         const layer = L.geoJSON(marking.geometry as GeoJSON.Geometry, {
+          pane: MARKINGS_PANE,
           style: { color, weight: 3, fillOpacity: 0.3 },
         });
         layer.bindPopup(popupContent);
