@@ -1280,7 +1280,7 @@ export default function MapPage() {
     const today = new Date();
     const operationDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const minutes = Math.max(1, Math.round(result.durationS / 60));
-    const title = `${MARKING_TYPE_LABELS[result.type]} ${today.toLocaleDateString('fi-FI')}`;
+    const title = result.title ?? `${MARKING_TYPE_LABELS[result.type]} ${today.toLocaleDateString('fi-FI')}`;
     const description = `GPS-aktiviteetti: ${minutes} min, ${formatDistance(result.distanceM)} kävelty.`;
     const geometry = result.geometry as GeoJSONGeometry;
     const areaHa = Math.round(result.areaHa * 100) / 100;
