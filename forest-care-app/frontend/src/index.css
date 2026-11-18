@@ -1805,7 +1805,8 @@ html, body, #root {
   max-height: calc(100% - 1rem); overflow-y: auto;
 }
 .activity-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-size: 1.05rem; }
-.activity-head strong { display: flex; align-items: center; gap: 0.4rem; }
+.activity-head strong { display: flex; align-items: center; gap: 0.4rem; min-width: 0; flex-wrap: wrap; }
+.activity-name { overflow-wrap: anywhere; }
 .activity-live-dot {
   width: 10px; height: 10px; border-radius: 50%; background: #dc2626;
   animation: activity-pulse 1.2s ease-in-out infinite;
@@ -1818,7 +1819,9 @@ html, body, #root {
   font-size: 1.2rem; font-weight: 800; font-family: inherit; cursor: pointer;
 }
 .activity-start-btn:hover { background: var(--forest-green-light); }
+.activity-start-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .activity-real-gps { align-self: center; font-weight: 500; color: var(--text-light); }
+.activity-real-gps:disabled { opacity: 0.5; cursor: not-allowed; }
 .activity-gps { font-size: 0.78rem; font-weight: 600; color: var(--forest-green); background: var(--forest-green-bg); padding: 0.2rem 0.5rem; border-radius: 999px; }
 .activity-gps.weak { color: #92400e; background: #fef3c7; }
 .activity-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; text-align: center; }

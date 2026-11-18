@@ -341,6 +341,7 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
               required
               aria-required="true"
             />
+            {!canStart && <p className="activity-note">Anna työn nimi aloittaaksesi.</p>}
           </div>
         )}
         {gpsError && <p className="activity-alert activity-alert-danger">{gpsError}</p>}
@@ -370,7 +371,9 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
           {phase === 'tracking' && <span className="activity-live-dot" />}
           {phase === 'finished' ? 'Aktiviteetti päättyi' : phase === 'paused' ? 'Tauolla' : 'Käynnissä'}
           {' · '}
-          <span style={{ color }}>{MARKING_TYPE_LABELS[activityType]}</span>
+          <span className="activity-name" style={{ color }}>
+            {activityType === 'muu_tyo' ? activityTitle.trim() : MARKING_TYPE_LABELS[activityType]}
+          </span>
         </strong>
         {simulated && phase !== 'finished' && <span className="activity-gps">Esimerkki</span>}
         {!simulated && accuracyM !== null && phase !== 'finished' && (
