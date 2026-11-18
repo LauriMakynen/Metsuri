@@ -22,6 +22,7 @@ import type { GeoJSONGeometry, MarkingType } from '../types';
 
 export interface ActivityResult {
   type: MarkingType;
+  title?: string;
   geometry: Polygon | MultiPolygon;
   areaHa: number;
   distanceM: number;
@@ -63,6 +64,7 @@ async function requestWakeLock(): Promise<WakeLockSentinelLike | null> {
 export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, onSave, onClose }: ActivityTrackerProps) {
   const [phase, setPhase] = useState<Phase>('setup');
   const [activityType, setActivityType] = useState<MarkingType>('harvennus');
+  const [activityTitle, setActivityTitle] = useState('');
   const [elapsedS, setElapsedS] = useState(0);
   const [distanceM, setDistanceM] = useState(0);
   const [areaHa, setAreaHa] = useState(0);
@@ -95,6 +97,7 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
   const accuracyCircleRef = useRef<L.Circle | null>(null);
 
   const color = MARKING_COLORS[activityType];
+  const canStart = activityType !== 'muu_tyo' || activityTitle.trim().length > 0;
 
   const setPhaseBoth = (next: Phase) => {
     phaseRef.current = next;
@@ -237,6 +240,7 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
   };
 
   const start = async () => {
+    if (!canStart) return;
     if (!('geolocation' in navigator)) {
       setGpsError('Laitteesi selain ei tue sijaintia.');
       return;
@@ -247,6 +251,7 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
 
   // Demo: replay a simulated walk on the parcel instead of real GPS
   const startSimulation = () => {
+    if (!canStart) return;
     const path = demoWalk(parcel);
     if (path.length === 0) {
       setGpsError('Esimerkkikävelyä ei voi näyttää tälle palstalle.');
@@ -286,6 +291,7 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
     try {
       await onSave({
         type: activityType,
+        title: activityType === 'muu_tyo' ? activityTitle.trim() : undefined,
         geometry: paintedRef.current,
         areaHa: paintedAreaHa(paintedRef.current),
         distanceM: trackLengthM(segmentsRef.current),
@@ -323,17 +329,31 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
             </button>
           ))}
         </div>
+        {activityType === 'muu_tyo' && (
+          <div className="form-group">
+            <label htmlFor="activity-title">Työn nimi</label>
+            <input
+              id="activity-title"
+              type="text"
+              value={activityTitle}
+              onChange={(event) => setActivityTitle(event.target.value)}
+              maxLength={255}
+              required
+              aria-required="true"
+            />
+          </div>
+        )}
         {gpsError && <p className="activity-alert activity-alert-danger">{gpsError}</p>}
         {isGuest ? (
           <>
-            <button className="activity-start-btn" onClick={startSimulation}>🎬 Katso esimerkkikävely</button>
-            <button className="btn-link activity-real-gps" onClick={start}>
+            <button className="activity-start-btn" onClick={startSimulation} disabled={!canStart}>🎬 Katso esimerkkikävely</button>
+            <button className="btn-link activity-real-gps" onClick={start} disabled={!canStart}>
               tai aloita oikealla GPS:llä (vaatii, että olet palstalla)
             </button>
             <p className="activity-note">Demossa mitään ei tallenneta pysyvästi.</p>
           </>
         ) : (
-          <button className="activity-start-btn" onClick={start}>▶ Aloita</button>
+          <button className="activity-start-btn" onClick={start} disabled={!canStart}>▶ Aloita</button>
         )}
       </div>
     );
