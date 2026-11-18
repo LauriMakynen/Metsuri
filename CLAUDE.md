@@ -15,12 +15,21 @@ Koodi on kansiossa `forest-care-app/` (React + Vite + Leaflet / Express + TypeSc
   ennen käynnistystä; älä käynnistä toista instanssia. Backend (ts-node-dev) ja Vite latautuvat muutoksista itse.
 - Uudet sarakkeet/taulut vaativat `npm run migrate` (backendissä) myös käynnissä olevalle sovellukselle.
 
-## Ympäristö (Windows + WSL)
+## Ympäristö: Windows + WSL (pöytäkone)
 - WSL:n ei-interaktiivinen shell käyttää järjestelmän Node 18:aa → aja npm/npx aina
   `wsl -e bash -ic "…"` (lataa nvm:n Node 24:n).
 - PowerShell sotkee lainausmerkit: kirjoita monimutkaiset komennot skriptiksi
   `\\wsl.localhost\Ubuntu\tmp\…sh` ja aja `wsl -e bash -ic "bash /tmp/…sh"`, poista lopuksi.
 - **`git push`/`fetch` jää Clauden shellissä SSH-salasanaan jumiin** → pyydä käyttäjää ajamaan ne.
+
+## Ympäristö: macOS (kannettava)
+- npm/npx ajetaan suoraan (Node 24); `git fetch`/`push` toimii Clauden shellissä
+  (`GIT_SSH_COMMAND="ssh -o BatchMode=yes"`, ettei jää odottamaan salasanaa).
+- Projekti on iCloud-synkatulla Työpöydällä: synkka luo `node_modules`iin ja `.git`iin " 2"-kaksoiskopioita
+  (esim. `refs/remotes/origin/HEAD 2`), jotka kaatavat tsc:n tai `git fetch`in. Ne voi poistaa, kun
+  alkuperäinen on rinnalla. Myös `.git` voi päivittyä pöytäkoneelta iCloudin kautta.
+- Osa tiedostoista on CRLF-rivinvaihdoilla (esim. `MapPage.tsx`, `PropertyList.tsx`, `DEPLOYMENT.md`) –
+  säilytä ne, älä muunna LF:ksi.
 
 ## Git-työtapa (kolme kehittäjää: Lauri, Eemil, Reetta)
 - Haarat: henkilökohtainen haara (`Lauri`, `Eemil`, `Reetta`) → `dev` → `pre-main` → `main`.
@@ -36,8 +45,8 @@ Koodi on kansiossa `forest-care-app/` (React + Vite + Leaflet / Express + TypeSc
   `dev`in päivittämisen jälkeen ja aja `npm run migrate`.
 
 ## Tietokanta
-- Ainoa ajettava migraatio on `backend/src/db/migrate.ts` (idempotentti: `IF NOT EXISTS`, backfill).
-  `database/init.sql` ja `database/migrations/*.sql` ovat vanhoja, eivät ajossa.
+- Ainoa migraatio on `backend/src/db/migrate.ts` (idempotentti: `IF NOT EXISTS`, backfill). Se luo myös
+  PostGIS-laajennuksen, joten tyhjä tietokanta syntyy pelkällä migraatiolla (vanha `database/`-kansio on poistettu).
 - Testidata: `backend/src/db/seed.ts`. Tunnukset `admin@`, `omistaja2@`, `omistaja3@`, `yrittaja@`,
   `yrittaja2@metsuri.test`; salasana `SEED_PASSWORD` tiedostossa `backend/.env` – **älä tulosta sitä**.
 - **Älä aja `reset-db`:tä tai poista dataa itse** – käyttäjä ajaa sen.
