@@ -305,6 +305,7 @@ function normalizePublicRequest(r: PublicWorkRequest): PublicWorkRequest {
     target_price_eur: normalizeNumber(r.target_price_eur),
     best_bid_eur: normalizeNumber(r.best_bid_eur),
     my_bid_eur: normalizeNumber(r.my_bid_eur),
+    my_bid_chat_id: r.my_bid_chat_id ?? null,
     property_code: r.property_code ?? null,
     property_area_ha: normalizeNumber(r.property_area_ha),
     property_geometry: r.property_geometry ? normalizeGeometry(r.property_geometry) : null,

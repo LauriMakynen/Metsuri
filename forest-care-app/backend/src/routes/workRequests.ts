@@ -97,6 +97,7 @@ async function fetchPublicRequests(
             ST_X(ST_PointOnSurface(wr.geometry)) AS lng,
             COALESCE(wr.user_id = $1, false) AS is_own,
             mine.my_bid_eur,
+            mine.my_bid_chat_id,
             region.code AS region_code,
             region.name AS region_name,
             CASE WHEN $1::int IS NOT NULL THEN prop.property_code END AS property_code,
@@ -116,10 +117,11 @@ async function fetchPublicRequests(
        LIMIT 1
      ) region ON true
      LEFT JOIN LATERAL (
-       SELECT amount_eur AS my_bid_eur
-       FROM work_request_bids
-       WHERE work_request_id = wr.id AND user_id = $1 AND status = 'pending'
-       ORDER BY created_at DESC
+       SELECT b.amount_eur AS my_bid_eur, c.id AS my_bid_chat_id
+       FROM work_request_bids b
+       LEFT JOIN work_request_chats c ON c.bid_id = b.id
+       WHERE b.work_request_id = wr.id AND b.user_id = $1 AND b.status = 'pending'
+       ORDER BY b.created_at DESC
        LIMIT 1
      ) mine ON true
      WHERE ${where}
