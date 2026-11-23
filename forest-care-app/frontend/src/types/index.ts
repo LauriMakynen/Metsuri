@@ -153,6 +153,7 @@ export interface PublicWorkRequest extends WorkRequestBase {
   // Only meaningful for a logged-in viewer
   is_own: boolean;
   my_bid_eur: number | null;
+  my_bid_chat_id: number | null;
   // The property the work is on; only for logged-in viewers (null otherwise)
   property_code: string | null;
   property_area_ha: number | null;

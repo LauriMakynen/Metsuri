@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { workRequestsService } from '../services/forestService';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { formatArea } from '../utils/measurement';
@@ -30,11 +31,11 @@ export default function WorkRequestCard({
   onBidPlaced,
   onLoginToBid,
 }: WorkRequestCardProps) {
+  const navigate = useNavigate();
   const [formOpen, setFormOpen] = useState(false);
   const [amount, setAmount] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
   const [confirmationAmount, setConfirmationAmount] = useState<number | null>(null);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
 
@@ -78,7 +79,6 @@ export default function WorkRequestCard({
       setFormOpen(false);
       setAmount('');
       setConfirmationAmount(null);
-      setSent(true);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
       setError(message || 'Tarjouksen lähetys epäonnistui');
@@ -94,7 +94,6 @@ export default function WorkRequestCard({
       const updated = await workRequestsService.deleteBid(request.id);
       onBidPlaced(updated);
       setDeleteConfirmationOpen(false);
-      setSent(false);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
       setError(message || 'Tarjouksen poisto epäonnistui');
@@ -179,9 +178,18 @@ export default function WorkRequestCard({
         {request.my_bid_eur !== null && (
           <div className={`bid-mine ${myBidIsBest ? 'best' : ''}`}>
             <span>
-              {sent ? '✓ Tarjouksesi on jätetty' : 'Oma tarjouksesi'}: <strong>{formatEur(request.my_bid_eur)}</strong>
+              Oma tarjouksesi: <strong>{formatEur(request.my_bid_eur)}</strong>
               {myBidIsBest && <span className="bid-mine-badge">🏆 Paras tarjous</span>}
             </span>
+            {request.my_bid_chat_id !== null && (
+              <button
+                type="button"
+                className="btn-link bid-chat-button"
+                onClick={() => navigate(`/chat/${request.my_bid_chat_id}`)}
+              >
+                Chat
+              </button>
+            )}
             <button
               type="button"
               className="btn-link bid-delete-link"
@@ -223,7 +231,7 @@ export default function WorkRequestCard({
             </button>
           </form>
         ) : (
-          <button className="btn btn-primary bid-open-btn" onClick={() => { setFormOpen(true); setSent(false); }}>
+          <button className="btn btn-primary bid-open-btn" onClick={() => { setFormOpen(true); }}>
             💶 {request.my_bid_eur !== null ? 'Päivitä tarjous' : hasBids ? 'Tee tarjous' : 'Tee ensimmäinen tarjous'}
           </button>
         )}

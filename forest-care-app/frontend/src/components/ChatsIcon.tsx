@@ -34,7 +34,10 @@ export default function ChatsIcon() {
         aria-label="Avaa chatit"
         onClick={() => navigate('/chat')}
       >
-        <span aria-hidden="true">💬</span>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H8l-4 3v-6.1A7.5 7.5 0 1 1 20 11.5Z" />
+          <path d="M8 11h.01M12 11h.01M16 11h.01" />
+        </svg>
         {!isChatViewOpen && chats.some((chat) => chat.unread_count > 0) && <span className="chats-badge">!</span>}
       </button>
     </div>
