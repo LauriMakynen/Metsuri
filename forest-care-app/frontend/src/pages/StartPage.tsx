@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TreePine, X } from 'lucide-react';
+import RootsBackdrop from '../components/RootsBackdrop';
 import { useAuth } from '../hooks/useAuth';
 import TopNav from '../components/TopNav';
 import { propertiesService, workRequestsService } from '../services/forestService';
@@ -31,6 +32,12 @@ const FORUM_FEATURES = [
 ];
 
 // Start page shown after login (and for guests): choose what to do next
+/** "lauri.makynen@example.com" → "Lauri": the first word before the @ for a friendlier greeting */
+function firstName(email: string | undefined): string | null {
+  const word = email?.split('@')[0].split(/[._\-+0-9]/).find(Boolean);
+  return word ? word.charAt(0).toUpperCase() + word.slice(1) : null;
+}
+
 export default function StartPage() {
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
@@ -95,7 +102,7 @@ export default function StartPage() {
       setCareLoading(false);
     }
   };
-  const greeting = isGuest ? 'Tervetuloa Metsuriin' : `Tervetuloa takaisin${user?.email ? `, ${user.email}` : ''}`;
+  const greeting = isGuest ? 'Tervetuloa Metsuriin' : `Tervetuloa${firstName(user?.email) ? `, ${firstName(user?.email)}` : ''}`;
   const workRequestSummaryText = workRequestSummary
     ? `${workRequestSummary.requestCount} ${
         workRequestSummary.requestCount === 1 ? 'aktiivinen työpyyntö' : 'aktiivista työpyyntöä'
@@ -156,6 +163,9 @@ export default function StartPage() {
         </div>
       </section>
 
+      {/* Below the forest photo: soil with tree roots, darkening to black */}
+      <div className="underground">
+      <RootsBackdrop />
       <main className="start-content start-cards">
         <div className="start-grid">
           {/* Photo card: a forest owner felling a spruce; the text sits on the dark lower part */}
@@ -212,6 +222,7 @@ export default function StartPage() {
           </section>
         </div>
       </main>
+      </div>
 
       {careChoices && (
         <div className="modal-overlay" onClick={() => setCareChoices(null)}>

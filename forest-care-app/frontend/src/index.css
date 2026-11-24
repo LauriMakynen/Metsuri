@@ -808,6 +808,21 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 
 /* Cards under the hero */
 .home-page .start-cards { margin-top: -2rem; max-width: 1120px; padding-left: 1.25rem; padding-right: 1.25rem; }
+
+/* Underground under the cards: the forest floor (hero green) turns into brown soil and then
+   to black; RootsBackdrop draws roots and soil texture on top of this gradient */
+.home-page .underground {
+  position: relative; isolation: isolate; flex: 1;
+  padding-bottom: clamp(14rem, 42vh, 26rem);
+  /* Measured from the bottom, so the brown band sits just below the cards on every screen;
+     the top blends in from the hero's green */
+  background:
+    linear-gradient(180deg, var(--forest-deep) 0, rgba(6,40,26,0) 14rem),
+    linear-gradient(0deg, #040302 0, #160f08 5rem, #2e1f11 12rem, #3e2a15 22rem, #3a2814 36rem, #2c2110 100%);
+}
+.home-page .underground .start-cards { position: relative; z-index: 1; }
+.roots-backdrop { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+.roots-backdrop svg { display: block; }
 .home-page .start-grid { gap: 1.25rem; }
 .home-page .choice-card {
   border-radius: 22px; padding: 1.75rem; border: 1px solid rgba(15,61,36,0.08);
