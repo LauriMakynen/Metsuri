@@ -21,7 +21,17 @@ export interface ChatSummary {
   title: string;
   other_user_id: number;
   other_email: string;
+  /** The other party's forum nickname, if they have one */
+  other_name?: string | null;
+  pricing?: Pricing;
+  request_type?: MarkingType;
+  request_area_ha?: number | string | null;
+  request_target_price_eur?: number | string | null;
+  request_status?: 'open' | 'closed';
+  request_photo_id?: number | null;
   last_message: string | null;
+  last_counter_offer_eur?: number | string | null;
+  last_has_image?: boolean | null;
   last_message_at: string | null;
   unread_count: number;
   created_at: string;

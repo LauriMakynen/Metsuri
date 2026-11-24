@@ -10,10 +10,17 @@ const imageParser = express.json({ limit: '6mb' });
 const PRESENCE_TIMEOUT_SECONDS = 30;
 const MAX_EUR = 10_000_000;
 
+// The work request shown as the conversation's "item" (like a product card): type, size,
+// the owner's price and its first photo. `wr` is the joined work_requests row.
+const REQUEST_CARD_COLUMNS = `wr.type AS request_type, wr.area_ha AS request_area_ha,
+            wr.target_price_eur AS request_target_price_eur, wr.status AS request_status,
+            (SELECT p.id FROM work_request_photos p WHERE p.work_request_id = wr.id ORDER BY p.id LIMIT 1) AS request_photo_id`;
+
 async function getChat(chatId: string, userId: number) {
   const result = await pool.query(
     `SELECT c.id, c.work_request_id, c.owner_id, c.provider_id, wr.title, wr.pricing,
-            u.email AS other_email,
+            u.email AS other_email, u.display_name AS other_name,
+            ${REQUEST_CARD_COLUMNS},
             bid.id AS bid_id, bid.amount_eur AS bid_amount_eur, bid.status AS bid_status,
             CASE WHEN c.owner_id = $2 THEN c.provider_id ELSE c.owner_id END AS other_user_id
      FROM work_request_chats c
@@ -26,6 +33,7 @@ async function getChat(chatId: string, userId: number) {
   return result.rows[0] as {
     id: number; work_request_id: number; owner_id: number; provider_id: number;
     title: string; pricing: 'owner_receives' | 'owner_pays'; other_user_id: number; other_email: string;
+    other_name: string | null;
     bid_id: number | null; bid_amount_eur: string | null; bid_status: 'pending' | 'accepted' | 'withdrawn' | null;
   } | undefined;
 }
@@ -81,16 +89,19 @@ router.delete('/:id/presence', async (req: AuthRequest, res: Response): Promise<
 router.get('/', async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const result = await pool.query(
-      `SELECT c.id, c.work_request_id, c.owner_id, c.provider_id, wr.title, c.created_at,
+      `SELECT c.id, c.work_request_id, c.owner_id, c.provider_id, wr.title, wr.pricing, c.created_at,
               CASE WHEN c.owner_id = $1 THEN c.provider_id ELSE c.owner_id END AS other_user_id,
-              u.email AS other_email,
+              u.email AS other_email, u.display_name AS other_name,
+              ${REQUEST_CARD_COLUMNS},
               m.body AS last_message, m.created_at AS last_message_at,
+              m.counter_offer_eur AS last_counter_offer_eur, m.has_image AS last_has_image,
               COALESCE(unread.unread_count, 0)::int AS unread_count
        FROM work_request_chats c
        JOIN work_requests wr ON wr.id = c.work_request_id
        JOIN users u ON u.id = CASE WHEN c.owner_id = $1 THEN c.provider_id ELSE c.owner_id END
        LEFT JOIN LATERAL (
-         SELECT body, created_at FROM chat_messages WHERE chat_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1
+         SELECT body, created_at, counter_offer_eur, image_data IS NOT NULL AS has_image
+         FROM chat_messages WHERE chat_id = c.id ORDER BY created_at DESC, id DESC LIMIT 1
        ) m ON true
        LEFT JOIN LATERAL (
          SELECT COUNT(*) AS unread_count
