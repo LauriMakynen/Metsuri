@@ -10,6 +10,7 @@ import WorkRequestList from './WorkRequestList';
 import ForestCarePanel from './ForestCarePanel';
 import type { CareLocation, CareNeededOperations } from './ForestCarePanel';
 import type { ParcelArea } from '../utils/parcelAreas';
+import { isNote } from '../utils/markingTypes';
 import { useEffect, useState } from 'react';
 
 // Forest care mode ("Hoida omaa metsää") adds a care summary on top of the usual sections
@@ -70,6 +71,7 @@ export default function Sidebar({
     properties: !care,
     requests: false,
     markings: false,
+    notes: false,
   });
 
   useEffect(() => {
@@ -79,14 +81,19 @@ export default function Sidebar({
         properties: false,
         requests: true,
         markings: false,
+        notes: false,
       });
     }, 0);
     return () => window.clearTimeout(focus);
   }, [focusWorkRequests]);
 
-  const toggleSection = (section: 'properties' | 'requests' | 'markings') => {
+  const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));
   };
+
+  // Notes made with the "Muistio" tool are listed apart from done work
+  const doneWork = markings.filter((m) => !isNote(m));
+  const notes = markings.filter(isNote);
 
   return (
     <aside id="map-sidebar" className={`map-sidebar ${isOpen ? 'open' : ''}`}>
@@ -94,7 +101,7 @@ export default function Sidebar({
         {care && (
           <ForestCarePanel
             property={selectedProperty}
-            markings={selectedPropertyId ? markings : []}
+            markings={selectedPropertyId ? doneWork : []}
             location={care.location}
             onStartActivity={care.onStartActivity}
             onShowLocation={care.onShowLocation}
@@ -136,13 +143,22 @@ export default function Sidebar({
         {/* In care mode done work is listed under "Viimeisimmät toimenpiteet" instead */}
         {!care && (
           <MarkingList
-            markings={markings}
+            markings={doneWork}
             selectedPropertyId={selectedPropertyId}
             onDelete={onDeleteMarking}
             isOpen={openSections.markings}
             onToggle={() => toggleSection('markings')}
           />
         )}
+
+        <MarkingList
+          variant="notes"
+          markings={notes}
+          selectedPropertyId={selectedPropertyId}
+          onDelete={onDeleteMarking}
+          isOpen={openSections.notes}
+          onToggle={() => toggleSection('notes')}
+        />
       </div>
     </aside>
   );

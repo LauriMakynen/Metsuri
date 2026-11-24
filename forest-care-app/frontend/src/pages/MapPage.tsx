@@ -15,7 +15,7 @@ import {
 import { calculateAreaHa, formatArea, calculateDistance, formatDistance } from '../utils/measurement';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { getFollowUpRecommendation } from '../utils/followUpRecommendation';
-import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
+import { isNote, MARKING_COLORS, MARKING_TYPE_LABELS, NOTE_COLOR, NOTE_LABEL } from '../utils/markingTypes';
 import { DEMO_MARKINGS, DEMO_PROPERTY } from '../utils/demoData';
 import { shouldShowHelpTooltip } from '../utils/helpTooltip';
 import type {
@@ -792,8 +792,9 @@ export default function MapPage() {
     markings.forEach((marking) => {
       if (!marking.geometry) return;
 
-      const color = MARKING_COLORS[marking.type] || '#666';
-      const label = MARKING_TYPE_LABELS[marking.type] || marking.type;
+      const note = isNote(marking);
+      const color = note ? NOTE_COLOR : MARKING_COLORS[marking.type] || '#666';
+      const label = note ? `📝 ${NOTE_LABEL}` : MARKING_TYPE_LABELS[marking.type] || marking.type;
       let popupContent = `
         <strong>${marking.title}</strong><br/>
         <span style="color:${color}">● ${label}</span>
@@ -806,7 +807,7 @@ export default function MapPage() {
       }
 
       if (marking.operation_date) {
-        popupContent += `<br/><span>Toimenpide tehty: ${formatDate(marking.operation_date)}</span>`;
+        popupContent += `<br/><span>${note ? '' : 'Toimenpide tehty: '}${formatDate(marking.operation_date)}</span>`;
       }
 
       if (marking.follow_up_note) {
@@ -1098,7 +1099,11 @@ export default function MapPage() {
       areaHa = calculateAreaHa(pendingGeometry);
     }
 
-    const followUp = getFollowUpRecommendation(data.type, data.operation_date);
+    // Notes are reminders, not done work: no follow-up check
+    const followUp =
+      pendingGeometryType === 'note'
+        ? { followUpDateStart: null, followUpDateEnd: null, followUpNote: null }
+        : getFollowUpRecommendation(data.type, data.operation_date);
 
     try {
       let marking: Marking;

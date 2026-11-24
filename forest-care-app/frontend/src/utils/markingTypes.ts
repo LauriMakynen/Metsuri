@@ -1,4 +1,4 @@
-import type { MarkingType } from '../types';
+import type { Marking, MarkingType } from '../types';
 
 // Shared colors and labels for forest management marking types
 export const MARKING_COLORS: Record<MarkingType, string> = {
@@ -18,3 +18,11 @@ export const MARKING_TYPE_LABELS: Record<MarkingType, string> = {
 };
 
 export const MARKING_TYPES = Object.keys(MARKING_TYPE_LABELS) as MarkingType[];
+
+// Notes ("Muistio" tool) are the owner's own reminders, not done work: own sidebar section and map color
+export const NOTE_COLOR = '#ec4899';
+export const NOTE_LABEL = 'Muistiinpano';
+
+export function isNote(marking: Pick<Marking, 'geometry_type'>): boolean {
+  return marking.geometry_type === 'note';
+}

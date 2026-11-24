@@ -10,7 +10,7 @@ import { markingsService, propertiesService, workRequestsService } from '../serv
 import { useForestValue } from '../hooks/useForestValue';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { formatArea } from '../utils/measurement';
-import { MARKING_TYPE_LABELS } from '../utils/markingTypes';
+import { isNote, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import {
   OPERATION_LABEL,
   TIMING_LABEL,
@@ -263,7 +263,8 @@ function MarkingMoney({ marking, onUpdated }: { marking: Marking; onUpdated: (up
 
 function sortByOperationDate(markings: Marking[]): Marking[] {
   return [...markings]
-    .filter((marking) => marking.operation_date)
+    // Notes ("Muistio") are reminders, not done work
+    .filter((marking) => marking.operation_date && !isNote(marking))
     .sort((a, b) => (b.operation_date ?? '').localeCompare(a.operation_date ?? ''));
 }
 
@@ -466,6 +467,7 @@ function ForestCard({
   const today = new Date().toISOString().slice(0, 10);
   const nextFollowUp = markings
     .filter((marking) => {
+      if (isNote(marking)) return false;
       const lastFollowUpDay = marking.follow_up_date_end ?? marking.follow_up_date_start;
       return lastFollowUpDay && lastFollowUpDay >= today;
     })
