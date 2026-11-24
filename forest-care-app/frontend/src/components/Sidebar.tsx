@@ -2,30 +2,12 @@ import type {
   Property,
   Marking,
   WorkRequest,
-  RecommendedOperation,
 } from '../types';
 import PropertyList from './PropertyList';
 import MarkingList from './MarkingList';
 import WorkRequestList from './WorkRequestList';
-import ForestCarePanel from './ForestCarePanel';
-import type { CareLocation, CareNeededOperations } from './ForestCarePanel';
-import type { ParcelArea } from '../utils/parcelAreas';
 import { isNote } from '../utils/markingTypes';
 import { useEffect, useState } from 'react';
-
-// Forest care mode ("Hoida omaa metsää") adds a care summary on top of the usual sections
-export interface SidebarCareMode {
-  location: CareLocation;
-  onStartActivity: () => void;
-  onShowLocation: () => void;
-  needed: CareNeededOperations;
-  onSelectStand: (standId: string) => void;
-  activeStandId: string | null;
-  onClearStand: () => void;
-  onShowArea: (area: ParcelArea) => void;
-  onMarkField?: (standId: string, isField: boolean) => Promise<void>;
-  onRequestOffers?: (operation: RecommendedOperation) => void;
-}
 
 interface SidebarProps {
   isOpen: boolean;
@@ -44,9 +26,9 @@ interface SidebarProps {
   onWorkRequestUpdated: (updated: WorkRequest) => void;
   focusWorkRequests?: boolean;
   showAllWorkRequests?: boolean;
-  care?: SidebarCareMode | null;
 }
 
+// Map sidebar: parcels, work requests, done work and notes. Forest care mode has no sidebar.
 export default function Sidebar({
   isOpen,
   properties,
@@ -64,7 +46,6 @@ export default function Sidebar({
   onWorkRequestUpdated,
   focusWorkRequests = false,
   showAllWorkRequests = false,
-  care = null,
 }: SidebarProps) {
   const [openSections, setOpenSections] = useState({
     properties: true,
@@ -97,62 +78,36 @@ export default function Sidebar({
   return (
     <aside id="map-sidebar" className={`map-sidebar ${isOpen ? 'open' : ''}`}>
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {care && (
-          <ForestCarePanel
-            property={selectedProperty}
-            markings={selectedPropertyId ? doneWork : []}
-            location={care.location}
-            onStartActivity={care.onStartActivity}
-            onShowLocation={care.onShowLocation}
-            onDeleteMarking={onDeleteMarking}
-            needed={care.needed}
-            onSelectStand={care.onSelectStand}
-            activeStandId={care.activeStandId}
-            onClearStand={care.onClearStand}
-            onShowArea={care.onShowArea}
-            onMarkField={care.onMarkField}
-            onRequestOffers={care.onRequestOffers}
-          />
-        )}
+        <PropertyList
+          properties={properties}
+          selectedId={selectedPropertyId}
+          selectedProperty={selectedProperty}
+          onSelect={onSelectProperty}
+          onDelete={onDeleteProperty}
+          onOpenForestValue={onOpenForestValue}
+          isOpen={openSections.properties}
+          onToggle={() => toggleSection('properties')}
+        />
 
-        {/* Care mode is for working in the forest: the value view and work requests stay out of the way */}
-        {!care && (
-          <>
-            <PropertyList
-              properties={properties}
-              selectedId={selectedPropertyId}
-              selectedProperty={selectedProperty}
-              onSelect={onSelectProperty}
-              onDelete={onDeleteProperty}
-              onOpenForestValue={onOpenForestValue}
-              isOpen={openSections.properties}
-              onToggle={() => toggleSection('properties')}
-            />
+        <WorkRequestList
+          requests={workRequests}
+          selectedPropertyId={selectedPropertyId}
+          canPublish={canPublishRequests}
+          onNewRequest={onNewWorkRequest}
+          onWithdraw={onWithdrawWorkRequest}
+          onUpdated={onWorkRequestUpdated}
+          isOpen={openSections.requests}
+          onToggle={() => toggleSection('requests')}
+          showAllProperties={showAllWorkRequests}
+        />
 
-            <WorkRequestList
-              requests={workRequests}
-              selectedPropertyId={selectedPropertyId}
-              canPublish={canPublishRequests}
-              onNewRequest={onNewWorkRequest}
-              onWithdraw={onWithdrawWorkRequest}
-              onUpdated={onWorkRequestUpdated}
-              isOpen={openSections.requests}
-              onToggle={() => toggleSection('requests')}
-              showAllProperties={showAllWorkRequests}
-            />
-          </>
-        )}
-
-        {/* In care mode done work is listed under "Viimeisimmät toimenpiteet" instead */}
-        {!care && (
-          <MarkingList
-            markings={doneWork}
-            selectedPropertyId={selectedPropertyId}
-            onDelete={onDeleteMarking}
-            isOpen={openSections.markings}
-            onToggle={() => toggleSection('markings')}
-          />
-        )}
+        <MarkingList
+          markings={doneWork}
+          selectedPropertyId={selectedPropertyId}
+          onDelete={onDeleteMarking}
+          isOpen={openSections.markings}
+          onToggle={() => toggleSection('markings')}
+        />
 
         <MarkingList
           variant="notes"
