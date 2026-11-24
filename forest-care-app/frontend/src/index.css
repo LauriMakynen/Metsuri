@@ -476,6 +476,13 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   color: var(--forest-green); font-size: 0.9rem; font-weight: 700; margin-bottom: 0.45rem;
 }
 .help-header h1 { font-size: clamp(1.7rem, 4vw, 2.4rem); margin-bottom: 0.55rem; }
+/* 3D illustrations (Illustration.tsx): beside the help page title, above empty-state texts */
+.help-header-illustration { float: right; margin: -0.5rem -0.25rem 0.5rem 1rem; }
+.empty-illustration { display: block; margin: 0 auto 0.6rem; }
+.sidebar-empty-illustrated { text-align: center; padding-top: 0.75rem; padding-bottom: 0.75rem; }
+@media (max-width: 600px) {
+  .help-header-illustration { width: 64px; height: 64px; margin: -0.25rem 0 0.25rem 0.75rem; }
+}
 .help-header > p { color: var(--text-light); line-height: 1.5; }
 .help-search {
   display: flex; flex-direction: column; gap: 0.4rem; margin-top: 1.25rem;

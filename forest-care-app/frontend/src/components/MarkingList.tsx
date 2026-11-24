@@ -1,4 +1,5 @@
 import { Trash } from 'lucide-react';
+import Illustration from './Illustration';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { formatArea } from '../utils/measurement';
 import { MARKING_COLORS, MARKING_TYPE_LABELS, NOTE_COLOR, NOTE_LABEL } from '../utils/markingTypes';
@@ -40,7 +41,10 @@ export default function MarkingList({
         {!selectedPropertyId ? (
           <li className="sidebar-empty">{texts.select}</li>
         ) : markings.length === 0 ? (
-          <li className="sidebar-empty">{texts.empty}</li>
+          <li className="sidebar-empty sidebar-empty-illustrated">
+            <Illustration name={notes ? 'memo' : 'tree'} size={56} className="empty-illustration" />
+            {texts.empty}
+          </li>
         ) : (
           markings.map((m) => (
             <li key={m.id} className="sidebar-item">

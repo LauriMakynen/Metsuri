@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopNav from '../components/TopNav';
+import Illustration from '../components/Illustration';
 
 type GuideItem = {
   title: string;
@@ -114,6 +115,7 @@ export default function ForestryGuidePage() {
           ← Takaisin
         </button>
         <header className="help-header">
+          <Illustration name="tree" size={96} className="help-header-illustration" />
           <p className="help-eyebrow">Metsänomistajan tietopaketti</p>
           <h1>Tietoa metsänhoidosta</h1>
           <p>
