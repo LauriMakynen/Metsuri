@@ -7,7 +7,6 @@ import 'leaflet/dist/leaflet.css';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
 import AddForestByCode from '../components/AddForestByCode';
 import TopNav from '../components/TopNav';
-import Illustration from '../components/Illustration';
 import { markingsService, propertiesService, workRequestsService } from '../services/forestService';
 import { useForestValue } from '../hooks/useForestValue';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
@@ -645,7 +644,6 @@ export default function ForestOverviewPage() {
           <p className="glass-panel" role="status">Ladataan omia metsäpalstoja...</p>
         ) : properties.length === 0 && !error ? (
           <div className="glass-panel forest-empty">
-            <Illustration name="tree" size={88} className="empty-illustration" />
             <h2>Lisää ensimmäinen metsäsi</h2>
             <p>Sinulla ei ole vielä tallennettuja metsäpalstoja. Syötä metsäkiinteistösi tunnus:</p>
             <AddForestByCode onAdded={(property) => setProperties((prev) => [...prev, property])} />

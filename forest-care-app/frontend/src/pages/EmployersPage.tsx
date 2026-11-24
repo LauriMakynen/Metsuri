@@ -4,7 +4,6 @@ import { LocateFixed, X } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import TopNav from '../components/TopNav';
-import Illustration from '../components/Illustration';
 import WorkRequestCard from '../components/WorkRequestCard';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
 import { useAuth } from '../hooks/useAuth';
@@ -418,7 +417,6 @@ export default function EmployersPage() {
 
             {!loading && visibleRequests.length === 0 && !error && (
               <p className="requests-empty">
-                <Illustration name="wood" size={72} className="empty-illustration" />
                 {ownOnly ? 'Ei omia avoimia työpyyntöjä' : 'Ei avoimia työpyyntöjä'}
                 {typeFilter ? ` tyypille ${MARKING_TYPE_LABELS[typeFilter].toLowerCase()}` : ''}
                 {regionFilter ? ` maakunnassa ${regions.find((r) => r.code === regionFilter)?.name ?? ''}` : ''}

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopNav from '../components/TopNav';
-import Illustration from '../components/Illustration';
 
 type HelpSection = {
   id: string;
@@ -169,7 +168,6 @@ export default function HelpPage() {
           ← Takaisin
         </button>
         <header className="help-header">
-          <Illustration name="book" size={96} className="help-header-illustration" />
           <p className="help-eyebrow">Metsurin käyttöohje</p>
           <h1>Kuinka voimme auttaa?</h1>
           <p>

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
-import Illustration from './Illustration';
 import { formatArea } from '../utils/measurement';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { TARGET_PRICE_LABEL, bidSummaryText, formatEur } from '../utils/bids';
@@ -96,8 +95,7 @@ export default function WorkRequestList({
         {!selectedPropertyId && !showAllProperties ? (
           <li className="sidebar-empty">Valitse kiinteistö nähdäksesi työpyynnöt.</li>
         ) : visible.length === 0 ? (
-          <li className="sidebar-empty sidebar-empty-illustrated">
-            {propertyRequests.length === 0 && <Illustration name="pin" size={56} className="empty-illustration" />}
+          <li className="sidebar-empty">
             {propertyRequests.length > 0
               ? 'Ei aktiivisia työpyyntöjä. Valitse Kaikki nähdäksesi myös muut pyynnöt.'
               : 'Ei työpyyntöjä. Pyydä tekijää tulevalle työlle ja saa hintatarjouksia.'}
