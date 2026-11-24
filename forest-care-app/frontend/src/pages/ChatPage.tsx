@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import TopNav from '../components/TopNav';
+import Avatar from '../components/Avatar';
 import { chatsService, workRequestsService } from '../services/forestService';
 import { useAuth } from '../hooks/useAuth';
 import type { ChatMessage, ChatSummary } from '../types';
@@ -73,22 +74,6 @@ function readImage(file: File): Promise<{ image_base64: string; image_type: stri
 /** Nickname if the other party has one, else the part of the email before @ (like a username) */
 function chatName(chat: Pick<ChatSummary, 'other_name' | 'other_email'>): string {
   return chat.other_name?.trim() || chat.other_email.split('@')[0];
-}
-
-// Avatar colours from the forest: moss, bark, lake, lichen, heather; picked by the name
-const AVATAR_TONES = ['#2f6b3a', '#7a4a2a', '#2f5f7a', '#6b7a2f', '#6a3f6e'];
-function avatarTone(name: string): string {
-  let hash = 0;
-  for (const char of name) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  return AVATAR_TONES[hash % AVATAR_TONES.length];
-}
-
-function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
-  return (
-    <span className={`chat-avatar chat-avatar-${size}`} style={{ ['--avatar-tone' as string]: avatarTone(name) }} aria-hidden="true">
-      {name.charAt(0).toUpperCase()}
-    </span>
-  );
 }
 
 /** The work request's first photo, or a tile in the work type's colour */

@@ -149,9 +149,25 @@ const DISPLAY_NAMES: Record<string, string> = {
   'yrittaja2@metsuri.test': 'Harvennus Oy',
 };
 
-const FORUM_THREADS: { title: string; posts: { author: string; body: string }[] }[] = [
+const FORUM_THREADS: { title: string; category: string; posts: { author: string; body: string }[] }[] = [
+  {
+    title: 'Mitä kuitupuusta maksetaan nyt Keski-Suomessa?',
+    category: 'puukauppa',
+    posts: [
+      { author: 'omistaja2@metsuri.test', body: 'Harvennus tulossa talvella. Mitä kuusikuidusta on teille tarjottu viime aikoina?' },
+      { author: 'yrittaja2@metsuri.test', body: 'Hinnat vaihtelevat paljon leimikon koon ja korjuukelin mukaan. Kannattaa pyytää useampi tarjous.' },
+    ],
+  },
+  {
+    title: 'Kokemuksia raivaussahaurakoitsijoista?',
+    category: 'urakointi',
+    posts: [
+      { author: 'admin@metsuri.test', body: 'Etsin tekijää noin hehtaarin taimikonhoitoon. Millä perusteella olette valinneet urakoitsijan?' },
+    ],
+  },
   {
     title: 'Milloin taimikonhoito kannattaa tehdä?',
+    category: 'metsanhoito',
     posts: [
       { author: 'omistaja2@metsuri.test', body: 'Kuusentaimikossa on paljon koivua. Kannattaako raivata jo nyt syksyllä vai odottaa kevääseen?' },
       { author: 'yrittaja@metsuri.test', body: 'Syksy lehtien pudottua on hyvä aika: taimet näkyvät ja vesat eivät enää kasva samana vuonna.' },
@@ -160,6 +176,7 @@ const FORUM_THREADS: { title: string; posts: { author: string; body: string }[] 
   },
   {
     title: 'Kokemuksia hirvituhoista männyntaimikossa',
+    category: 'tuhot',
     posts: [
       { author: 'omistaja3@metsuri.test', body: 'Hirvet ovat syöneet latvoja lähes joka toisesta männyntaimesta. Onko kenelläkään kokemusta karkotteista?' },
       { author: 'admin@metsuri.test', body: 'Meillä samaa. Ajattelin istuttaa seuraavaksi kuusta, sitä hirvi ei yleensä syö.' },
@@ -299,15 +316,22 @@ async function seedForum() {
   }
   for (const [t, thread] of FORUM_THREADS.entries()) {
     const exists = await pool.query('SELECT 1 FROM forum_threads WHERE title = $1', [thread.title]);
-    if (exists.rows.length > 0) continue;
+    if (exists.rows.length > 0) {
+      // Threads seeded before categories existed got the default; give them theirs
+      await pool.query(
+        "UPDATE forum_threads SET category = $2 WHERE title = $1 AND category = 'yleinen'",
+        [thread.title, thread.category]
+      );
+      continue;
+    }
     const starter = await pool.query('SELECT id, display_name FROM users WHERE email = $1', [thread.posts[0].author]);
     if (!starter.rows[0]) continue;
     // Older threads first: thread t started (t + 1) days ago, replies a few hours apart
     const created = await pool.query(
-      `INSERT INTO forum_threads (user_id, title, created_at, last_post_at)
-       VALUES ($1, $2, NOW() - make_interval(days => $3), NOW() - make_interval(days => $3))
+      `INSERT INTO forum_threads (user_id, title, category, created_at, last_post_at)
+       VALUES ($1, $2, $4, NOW() - make_interval(days => $3), NOW() - make_interval(days => $3))
        RETURNING id`,
-      [starter.rows[0].id, thread.title, FORUM_THREADS.length - t]
+      [starter.rows[0].id, thread.title, FORUM_THREADS.length - t, thread.category]
     );
     for (const [i, post] of thread.posts.entries()) {
       const author = await pool.query('SELECT id, display_name FROM users WHERE email = $1', [post.author]);
