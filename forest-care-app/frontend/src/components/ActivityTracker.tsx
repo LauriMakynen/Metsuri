@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { createPortal } from 'react-dom';
+import { Footprints, Pause, Play, Square, X } from 'lucide-react';
 import L from 'leaflet';
 import type { MultiPolygon, Polygon } from 'geojson';
 import {
@@ -310,7 +311,7 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
       <div className="activity-panel">
         <div className="activity-head">
           <strong>Aloita aktiviteetti</strong>
-          <button className="btn-icon" onClick={onClose} title="Sulje">✕</button>
+          <button className="btn-icon" onClick={onClose} title="Sulje" aria-label="Sulje"><X size={18} aria-hidden="true" /></button>
         </div>
         <p className="activity-sub">
           Palsta: <strong>{parcelName}</strong>. Kävele työalue läpi – sovellus maalaa kartalle
@@ -347,14 +348,14 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
         {gpsError && <p className="activity-alert activity-alert-danger">{gpsError}</p>}
         {isGuest ? (
           <>
-            <button className="activity-start-btn" onClick={startSimulation} disabled={!canStart}>🎬 Katso esimerkkikävely</button>
+            <button className="activity-start-btn" onClick={startSimulation} disabled={!canStart}><Footprints size={18} aria-hidden="true" /> Katso esimerkkikävely</button>
             <button className="btn-link activity-real-gps" onClick={start} disabled={!canStart}>
               tai aloita oikealla GPS:llä (vaatii, että olet palstalla)
             </button>
             <p className="activity-note">Demossa mitään ei tallenneta pysyvästi.</p>
           </>
         ) : (
-          <button className="activity-start-btn" onClick={start} disabled={!canStart}>▶ Aloita</button>
+          <button className="activity-start-btn" onClick={start} disabled={!canStart}><Play size={18} aria-hidden="true" /> Aloita</button>
         )}
       </div>
     );
@@ -391,7 +392,7 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
 
       {phase !== 'finished' && boundary.status === 'outside' && (
         <p className="activity-alert activity-alert-danger">
-          ⚠️ Olet poistunut omalta palstaltasi
+          Olet poistunut omalta palstaltasi
           {boundary.edgeDistanceM !== null && ` (${Math.round(boundary.edgeDistanceM)} m rajan ulkopuolella)`}.
           Tämä voi olla toisen metsänomistajan maata. Alueen maalaus on keskeytetty.
         </p>
@@ -431,11 +432,11 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
       ) : (
         <div className="activity-actions">
           {phase === 'tracking' ? (
-            <button className="btn btn-secondary" onClick={pause}>⏸ Tauko</button>
+            <button className="btn btn-secondary" onClick={pause}><Pause size={16} aria-hidden="true" /> Tauko</button>
           ) : (
-            <button className="btn btn-secondary" onClick={resume}>▶ Jatka</button>
+            <button className="btn btn-secondary" onClick={resume}><Play size={16} aria-hidden="true" /> Jatka</button>
           )}
-          <button className="btn btn-danger" onClick={finish}>■ Lopeta</button>
+          <button className="btn btn-danger" onClick={finish}><Square size={14} aria-hidden="true" /> Lopeta</button>
         </div>
       )}
 
@@ -452,7 +453,7 @@ export default function ActivityTracker({ mapRef, parcel, parcelName, isGuest, o
               <div className="modal-header">
                 <h2 id="activity-discard-title">Hylätäänkö aktiviteetti?</h2>
                 <button type="button" className="modal-close" onClick={() => setConfirmDiscard(false)} aria-label="Sulje">
-                  ✕
+                  <X size={20} aria-hidden="true" />
                 </button>
               </div>
               <p id="activity-discard-text" className="confirm-dialog-text">

@@ -1,3 +1,4 @@
+import { Trash } from 'lucide-react';
 import type { Property } from '../types';
 import ActivePropertyCard from './ActivePropertyCard';
 
@@ -25,7 +26,7 @@ export default function PropertyList({
   return (
     <>
       <button className="sidebar-section-header" onClick={onToggle} aria-expanded={isOpen}>
-        <h3>🌳 Omat kiinteistöt ({properties.length})</h3>
+        <h3>Omat kiinteistöt ({properties.length})</h3>
         <span className={`sidebar-chevron ${isOpen ? 'open' : ''}`} aria-hidden="true">⌄</span>
       </button>
       {isOpen && (
@@ -46,7 +47,7 @@ export default function PropertyList({
               onClick={() => onSelect(p)}
             >
               <div>
-                <span style={{ fontWeight: 600 }}>🌳 {p.name}</span>
+                <span style={{ fontWeight: 600 }}>{p.name}</span>
                 {p.property_code && <small style={{ color: '#6b7280' }}>{p.property_code}</small>}
                 {p.area_ha && (
                   <small style={{ color: '#6b7280', display: 'block' }}>
@@ -61,8 +62,9 @@ export default function PropertyList({
                   onDelete(p.id);
                 }}
                 title="Poista"
+                aria-label={`Poista kiinteistö ${p.name}`}
               >
-                🗑
+                <Trash size={16} aria-hidden="true" />
               </button>
             </li>
           ))

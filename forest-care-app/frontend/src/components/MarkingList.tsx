@@ -1,3 +1,4 @@
+import { Trash } from 'lucide-react';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { formatArea } from '../utils/measurement';
 import { MARKING_COLORS, MARKING_TYPE_LABELS, NOTE_COLOR, NOTE_LABEL } from '../utils/markingTypes';
@@ -14,8 +15,8 @@ interface MarkingListProps {
 }
 
 const VARIANT_TEXTS = {
-  work: { heading: '📍 Tehdyt työt', empty: 'Ei merkintöjä tällä kiinteistöllä.', select: 'Valitse kiinteistö nähdäksesi merkinnät.' },
-  notes: { heading: '📝 Muistiinpanot', empty: 'Ei muistiinpanoja tällä kiinteistöllä. Lisää niitä kartan Muistio-työkalulla.', select: 'Valitse kiinteistö nähdäksesi muistiinpanot.' },
+  work: { heading: 'Tehdyt työt', empty: 'Ei merkintöjä tällä kiinteistöllä.', select: 'Valitse kiinteistö nähdäksesi merkinnät.' },
+  notes: { heading: 'Muistiinpanot', empty: 'Ei muistiinpanoja tällä kiinteistöllä. Lisää niitä kartan Muistio-työkalulla.', select: 'Valitse kiinteistö nähdäksesi muistiinpanot.' },
 };
 
 // Done work or notes on the selected parcel (planned work lives in WorkRequestList)
@@ -59,7 +60,7 @@ export default function MarkingList({
                 )}
                 {(m.geometry?.type === 'Polygon' || m.geometry?.type === 'MultiPolygon') && m.area_ha != null && (
                   <small style={{ color: '#6b7280', display: 'block' }}>
-                    📐 {formatArea(m.area_ha)}
+                    {formatArea(m.area_ha)}
                   </small>
                 )}
                 {m.operation_date && (
@@ -83,7 +84,7 @@ export default function MarkingList({
                 title="Poista"
                 aria-label={`Poista ${notes ? NOTE_LABEL.toLowerCase() : 'merkintä'} ${m.title}`}
               >
-                🗑
+                <Trash size={16} aria-hidden="true" />
               </button>
             </li>
           ))

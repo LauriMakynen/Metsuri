@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import type { MarkingType, GeometryType } from '../types';
 
@@ -101,8 +102,8 @@ export default function MarkingForm({
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal-card">
         <div className="modal-header">
-          <h2>{isNoteForm ? '📝' : '📍'} Uusi {GEOMETRY_TYPE_LABELS[geometryType].toLowerCase()}</h2>
-          <button className="modal-close" onClick={onCancel}>✕</button>
+          <h2>Uusi {GEOMETRY_TYPE_LABELS[geometryType].toLowerCase()}</h2>
+          <button className="modal-close" onClick={onCancel} aria-label="Sulje"><X size={20} aria-hidden="true" /></button>
         </div>
 
         {error && <div className="error-message">{error}</div>}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { BookOpen } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import BackButton from './BackButton';
 import { shouldShowHelpTooltip } from '../utils/helpTooltip';
@@ -59,7 +60,7 @@ export default function TopNav() {
           aria-label="Tietoa metsänhoidosta"
           title="Tietoa metsänhoidosta"
         >
-          📖
+          <BookOpen size={20} aria-hidden="true" />
         </Link>
         {isGuest ? (
           <>

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { MapPin, Megaphone, Menu, Pentagon, Ruler, Spline, StickyNote, X } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -729,9 +730,9 @@ export default function MapPage() {
         // textContent: titles are user input
         const popup = document.createElement('div');
         const title = document.createElement('strong');
-        title.textContent = `📢 ${r.title}`;
+        title.textContent = r.title;
         const info = document.createElement('div');
-        info.textContent = `Työpyyntö · ${bidSummaryText(r)}`;
+        info.textContent = `Työpyyntö. ${bidSummaryText(r)}`;
         popup.append(title, info);
         layer.bindPopup(popup);
         group.addLayer(layer);
@@ -778,7 +779,7 @@ export default function MapPage() {
           fillOpacity: isSelected ? 0.25 : 0.15,
         },
       });
-      layer.bindPopup(`<strong>🌳 ${prop.name}</strong><br/>Metsäkiinteistö`);
+      layer.bindPopup(`<strong>${prop.name}</strong><br/>Metsäkiinteistö`);
       layer.on('click', () => {
         setSelectedPropertyId(prop.id);
         setSelectedPropertyGeometry(prop.geometry);
@@ -796,7 +797,7 @@ export default function MapPage() {
 
       const note = isNote(marking);
       const color = note ? NOTE_COLOR : MARKING_COLORS[marking.type] || '#666';
-      const label = note ? `📝 ${NOTE_LABEL}` : MARKING_TYPE_LABELS[marking.type] || marking.type;
+      const label = note ? NOTE_LABEL : MARKING_TYPE_LABELS[marking.type] || marking.type;
       let popupContent = `
         <strong>${marking.title}</strong><br/>
         <span style="color:${color}">● ${label}</span>
@@ -805,7 +806,7 @@ export default function MapPage() {
       
       // Add area for polygon markings
       if ((marking.geometry.type === 'Polygon' || marking.geometry.type === 'MultiPolygon') && marking.area_ha != null) {
-        popupContent += `<br/><span style="font-weight:500">📐 ${formatArea(marking.area_ha)}</span>`;
+        popupContent += `<br/><span style="font-weight:500">${formatArea(marking.area_ha)}</span>`;
       }
 
       if (marking.operation_date) {
@@ -1448,7 +1449,7 @@ export default function MapPage() {
           bubblingMouseEvents: false,
         });
         layer.bindTooltip(
-          `🌾 Pelto · ${formatArea(field.areaHa)}` +
+          `Pelto, ${formatArea(field.areaHa)}` +
             (field.source === 'owner' ? ` (${standTitle(field.standNumber).toLowerCase()} merkitty pelloksi)` : ' (peltolohkorekisteri)'),
           { sticky: true }
         );
@@ -1572,8 +1573,9 @@ export default function MapPage() {
             aria-expanded={sidebarOpen}
             aria-controls="map-sidebar"
             title="Valikko"
+            aria-label="Valikko"
           >
-            ☰
+            <Menu size={22} aria-hidden="true" />
           </button>
           {/* Opened from "Omat metsät" without in-app history: back leads there */}
           <BackButton fallbackPath={fromForestOverview ? '/omat-metsat' : '/start'} />
@@ -1735,7 +1737,7 @@ export default function MapPage() {
           {mmlMapUnavailable && !mapNoticeDismissed && (
             <div className="map-fallback-notice" role="status">
               <span>Maanmittauslaitoksen kartta ei ole juuri nyt saatavilla, joten näytetään OpenStreetMap.</span>
-              <button onClick={() => setMapNoticeDismissed(true)} aria-label="Sulje ilmoitus">✕</button>
+              <button onClick={() => setMapNoticeDismissed(true)} aria-label="Sulje ilmoitus"><X size={16} aria-hidden="true" /></button>
             </div>
           )}
 
@@ -1782,13 +1784,14 @@ export default function MapPage() {
                       className="btn-icon"
                       onClick={() => { setClickedCadastre(null); setClickedCadastreCustomName(''); }}
                       title="Sulje"
+                      aria-label="Sulje"
                     >
-                      ✕
+                      <X size={18} aria-hidden="true" />
                     </button>
                   </div>
                 </>
               ) : cadastreClickError ? (
-                <span className="cadastre-click-error" role="alert">⚠️ {cadastreClickError}</span>
+                <span className="cadastre-click-error" role="alert">{cadastreClickError}</span>
               ) : (
                 <span className="cadastre-click-hint">
                   Valitse kiinteistö klikkaamalla sitä kartalla. Zoomaa lähemmäs, jos rajoja ei näy.
@@ -1806,9 +1809,9 @@ export default function MapPage() {
                 title="Sulje"
                 aria-label="Sulje"
               >
-                ✕
+                <X size={18} aria-hidden="true" />
               </button>
-              <strong>🌲 Sinulla ei ole vielä lisättyä palstaa</strong>
+              <strong>Sinulla ei ole vielä lisättyä palstaa</strong>
               <p>Lisää oma metsäpalstasi, niin voit tehdä merkintöjä ja aloittaa aktiviteetin. Karttaa voit selata jo nyt.</p>
               {layerConfig.overlays?.kiinteistorajat && (
                 <div className="empty-parcel-actions">
@@ -1816,7 +1819,7 @@ export default function MapPage() {
                     className="btn btn-secondary btn-compact"
                     onClick={() => { setEmptyNoticeDismissed(true); setShowCadastreOverlay(true); }}
                   >
-                    🗺️ Valitse kartalta
+                    Valitse kartalta
                   </button>
                 </div>
               )}
@@ -1859,7 +1862,7 @@ export default function MapPage() {
                 onClick={cancelDraw}
                 title="Peruuta piirto"
               >
-                ✕<span>Peruuta</span>
+                <X aria-hidden="true" /><span>Peruuta</span>
               </button>
             )}
             <button
@@ -1867,21 +1870,21 @@ export default function MapPage() {
               onClick={() => (activeTool === 'point' ? startDraw(null) : startDraw('point'))}
               title="Lisää piste"
             >
-              📍<span>Piste</span>
+              <MapPin aria-hidden="true" /><span>Piste</span>
             </button>
             <button
               className={`tool-btn ${activeTool === 'line' ? 'active' : ''}`}
               onClick={() => (activeTool === 'line' ? startDraw(null) : startDraw('line'))}
               title="Lisää viiva"
             >
-              📏<span>Viiva</span>
+              <Spline aria-hidden="true" /><span>Viiva</span>
             </button>
             <button
               className={`tool-btn ${activeTool === 'area' ? 'active' : ''}`}
               onClick={() => (activeTool === 'area' ? startDraw(null) : startDraw('area'))}
               title="Lisää alue"
             >
-              🗺️<span>Alue</span>
+              <Pentagon aria-hidden="true" /><span>Alue</span>
             </button>
             {!careMode && (
             <button
@@ -1889,7 +1892,7 @@ export default function MapPage() {
               onClick={() => (activeTool === 'request' ? startDraw(null) : openNewWorkRequest())}
               title="Tee työpyyntö: piirrä alue ja pyydä hintatarjouksia"
             >
-              📢<span>Työpyyntö</span>
+              <Megaphone aria-hidden="true" /><span>Työpyyntö</span>
             </button>
             )}
             <button
@@ -1897,14 +1900,14 @@ export default function MapPage() {
               onClick={() => (activeTool === 'note' ? startDraw(null) : startDraw('note'))}
               title="Lisää muistiinpano"
             >
-              📝<span>Muistio</span>
+              <StickyNote aria-hidden="true" /><span>Muistio</span>
             </button>
             <button
               className={`tool-btn ${activeTool === 'measure' ? 'active' : ''}`}
               onClick={() => (activeTool === 'measure' ? startDraw(null) : startDraw('measure'))}
               title="Mittaa etäisyys"
             >
-              📐<span>Mittaa</span>
+              <Ruler aria-hidden="true" /><span>Mittaa</span>
             </button>
               </>
             )}
@@ -1912,7 +1915,7 @@ export default function MapPage() {
 
           {activeTool === 'request' && !showForm && (
             <div className="draw-hint" role="status">
-              📢 Piirrä kartalle alue, jolle työ tehdään. Napauta kulmapisteet ja lopuksi ensimmäistä pistettä.
+              Piirrä kartalle alue, jolle työ tehdään. Napauta kulmapisteet ja lopuksi ensimmäistä pistettä.
             </div>
           )}
 
@@ -1968,7 +1971,7 @@ export default function MapPage() {
 
           {error && (
             <div className="map-error" onClick={() => setError('')}>
-              ⚠️ {error}
+              {error}
             </div>
           )}
         </div>

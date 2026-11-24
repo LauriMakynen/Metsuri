@@ -164,7 +164,10 @@ html, body, #root {
 }
 .btn-small:hover { background: rgba(255,255,255,0.3); }
 .logout-icon { display: none; width: 1.5rem; height: 1.5rem; }
-.btn-icon { background: none; border: none; cursor: pointer; padding: 0.25rem; font-size: 1rem; opacity: 0.6; transition: opacity 0.2s; border-radius: 4px; }
+.btn-icon { background: none; border: none; cursor: pointer; padding: 0.25rem; font-size: 1rem; opacity: 0.6; transition: opacity 0.2s; border-radius: 4px; color: inherit; }
+/* Lucide icons inside text and buttons sit on the text's centre line */
+svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
+.btn-icon svg.lucide, .modal-close svg.lucide { vertical-align: middle; }
 .btn-icon:hover { opacity: 1; }
 .btn-icon.delete:hover { background: var(--error-bg); }
 
@@ -620,7 +623,8 @@ html, body, #root {
 /* Forest care panel in the map sidebar */
 .care-panel { border-bottom: 1px solid var(--border); background: #fffbeb; }
 .care-head { padding: 0.9rem 1rem 0.5rem; }
-.care-eyebrow { font-size: 0.75rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #b45309; }
+.care-eyebrow { font-size: 0.8rem; font-weight: 700; color: #b45309; }
+.care-location-text { display: inline-flex; align-items: center; gap: 0.35rem; }
 .care-title { font-size: 1.1rem; color: var(--text); margin-top: 0.15rem; overflow-wrap: anywhere; }
 .care-meta { color: var(--text-light); }
 .care-meta strong { color: #b45309; }
@@ -680,8 +684,7 @@ html, body, #root {
 .care-needed-groups { list-style: none; }
 .care-needed-groups ul { list-style: none; }
 .care-needed-when {
-  padding: 0.45rem 1rem 0.2rem; font-size: 0.75rem; font-weight: 800; text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--text-light);
+  padding: 0.45rem 1rem 0.2rem; font-size: 0.8rem; font-weight: 700; color: var(--text-light);
 }
 .care-needed-when.now { color: #b91c1c; }
 .care-needed-item { display: flex; align-items: flex-start; gap: 0.5rem; padding: 0.45rem 1rem; border-bottom: 1px solid #f3f4f6; }
@@ -1372,7 +1375,7 @@ html, body, #root {
 }
 
 .sidebar-header { padding: 0.75rem 1rem; background: var(--forest-green-bg); border-bottom: 1px solid var(--border); }
-.sidebar-header h3 { font-size: 0.9rem; font-weight: 700; color: var(--forest-green); text-transform: uppercase; letter-spacing: 0.05em; }
+.sidebar-header h3 { font-size: 0.95rem; font-weight: 700; color: var(--forest-green); }
 .sidebar-section-header {
   width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
   padding: 0.75rem 1rem; background: var(--forest-green-bg); border: none;
@@ -1382,8 +1385,7 @@ html, body, #root {
 .sidebar-section-header:hover { background: #dcfce7; }
 .sidebar-section-header:focus-visible { outline: 3px solid #93c5fd; outline-offset: -3px; }
 .sidebar-section-header h3 {
-  margin: 0; font-size: 0.9rem; font-weight: 700; color: inherit;
-  text-transform: uppercase; letter-spacing: 0.05em;
+  margin: 0; font-size: 0.95rem; font-weight: 700; color: inherit;
 }
 .sidebar-chevron {
   flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
@@ -1433,7 +1435,7 @@ html, body, #root {
 .property-item.selected { background: #ecfdf5; }
 .property-list-hint {
   margin: 0; padding: 0.6rem 1rem 0.2rem; color: var(--text-light);
-  font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  font-size: 0.8rem; font-weight: 600;
 }
 .property-select {
   background: transparent;
@@ -1537,7 +1539,9 @@ html, body, #root {
   background: none; cursor: pointer; font-size: 1.3rem; color: var(--text);
   transition: all 0.15s; min-width: 56px; min-height: 56px;
 }
-.tool-btn span { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-light); }
+.tool-btn span { font-size: 0.72rem; font-weight: 600; color: var(--text-light); }
+.tool-btn svg { width: 22px; height: 22px; stroke-width: 1.75; }
+.tool-btn-request svg { color: #c2410c; }
 .tool-btn:hover { background: var(--forest-green-bg); border-color: var(--accent); }
 .tool-btn.active { background: var(--forest-green-bg); border-color: var(--forest-green); color: var(--forest-green); }
 .tool-btn.active span { color: var(--forest-green); }
@@ -1567,11 +1571,9 @@ html, body, #root {
 }
 
 .measurement-info .measurement-label {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  text-transform: uppercase;
   color: var(--text-light);
-  letter-spacing: 0.05em;
 }
 
 .measurement-info .measurement-value {
@@ -1603,7 +1605,7 @@ html, body, #root {
 
 @media (max-width: 400px) {
   .tool-btn { min-width: 44px; padding: 0.4rem 0.4rem; }
-  .tool-btn span { font-size: 0.55rem; }
+  .tool-btn span { font-size: 0.62rem; }
 }
 
 @media (max-width: 899px) {
@@ -1831,7 +1833,7 @@ html, body, #root {
 .activity-gps.weak { color: #92400e; background: #fef3c7; }
 .activity-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; text-align: center; }
 .activity-stats div { background: var(--forest-green-bg); border-radius: 12px; padding: 0.6rem 0.25rem; display: flex; flex-direction: column; gap: 0.15rem; }
-.activity-stats span { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-light); }
+.activity-stats span { font-size: 0.78rem; font-weight: 600; color: var(--text-light); }
 .activity-stats strong { font-size: 1.35rem; font-variant-numeric: tabular-nums; color: var(--text); }
 .activity-alert { border-radius: 12px; padding: 0.75rem 0.9rem; font-size: 0.95rem; font-weight: 600; line-height: 1.4; }
 .activity-alert-danger { background: #dc2626; color: var(--white); }
@@ -2075,7 +2077,7 @@ html, body, #root {
   flex-direction: column;
   gap: 0.35rem;
 }
-.fv-card-label { font-size: 0.75rem; font-weight: 600; color: var(--text-light); text-transform: uppercase; letter-spacing: 0.04em; }
+.fv-card-label { font-size: 0.8rem; font-weight: 600; color: var(--text-light); }
 .fv-card-value { font-size: 1.35rem; font-weight: 700; color: var(--forest-green); line-height: 1.2; font-variant-numeric: tabular-nums; }
 .fv-card-volume { font-size: 0.85rem; color: var(--text); font-variant-numeric: tabular-nums; }
 .fv-card-message { font-size: 0.85rem; color: var(--text); line-height: 1.4; }

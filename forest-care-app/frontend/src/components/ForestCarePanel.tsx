@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { LocateFixed, Trash, Wheat } from 'lucide-react';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { formatArea } from '../utils/measurement';
 import { formatDistance } from '../utils/distance';
@@ -153,7 +154,7 @@ export default function ForestCarePanel({
   if (!property) {
     return (
       <section className="care-panel">
-        <p className="care-eyebrow">🪓 Metsänhoito</p>
+        <p className="care-eyebrow">Metsänhoito</p>
         <p className="care-empty">Valitse hoidettava palsta alta tai kartalta.</p>
       </section>
     );
@@ -194,11 +195,11 @@ export default function ForestCarePanel({
   return (
     <section className="care-panel" aria-label="Metsänhoito">
       <div className="care-head">
-        <p className="care-eyebrow">🪓 Hoidettava metsä</p>
+        <p className="care-eyebrow">Hoidettava metsä</p>
         <h3 className="care-title">{property.name}</h3>
         {(property.area_ha || areas.length > 1) && (
           <small className="care-meta">
-            📐 {property.area_ha ? formatArea(property.area_ha) : ''}
+            {property.area_ha ? formatArea(property.area_ha) : ''}
             {areas.length > 1 && (
               <>
                 {property.area_ha ? ' · ' : ''}
@@ -224,7 +225,10 @@ export default function ForestCarePanel({
       </button>
 
       <div className={`care-location ${location.status === 'unavailable' ? 'warn' : ''}`} role="status">
-        <span>📍 {locationText(location)}</span>
+        <span className="care-location-text">
+          <LocateFixed size={16} aria-hidden="true" />
+          {locationText(location)}
+        </span>
         {location.status === 'ok' && (
           <button className="btn-link" onClick={onShowLocation}>
             Näytä kartalla
@@ -236,7 +240,7 @@ export default function ForestCarePanel({
         <div className="care-fields" role="status">
           {fields.length > 0 && (
             <p>
-              🌾 <strong>Peltoa {formatArea(fieldAreaHa)}</strong> – pelloille ei lasketa puuston arvoa eikä anneta
+              <strong>Peltoa {formatArea(fieldAreaHa)}</strong> – pelloille ei lasketa puuston arvoa eikä anneta
               metsänhoitosuosituksia.
             </p>
           )}
@@ -274,7 +278,7 @@ export default function ForestCarePanel({
 
       <button className="sidebar-section-header care-needed-header" onClick={toggleNeeded} aria-expanded={neededOpen}>
         <h3>
-          🪵 Suositellut toimenpiteet ({allNeeded.length})
+          Suositellut toimenpiteet ({allNeeded.length})
           {neededNow > 0 && <span className="care-needed-now">{neededNow} nyt</span>}
         </h3>
         <span className={`sidebar-chevron ${neededOpen ? 'open' : ''}`} aria-hidden="true">⌄</span>
@@ -295,7 +299,11 @@ export default function ForestCarePanel({
                     disabled={fieldBusy !== null}
                     title="Kuvio on oikeasti peltoa: sille ei anneta metsänhoitosuosituksia"
                   >
-                    {fieldBusy === activeStandId ? 'Merkitään...' : '🌾 Tämä on pelto'}
+                    {fieldBusy === activeStandId ? 'Merkitään...' : (
+                      <>
+                        <Wheat size={14} aria-hidden="true" /> Tämä on pelto
+                      </>
+                    )}
                   </button>
                 )}
                 <button className="btn-link" onClick={onClearStand}>
@@ -379,7 +387,7 @@ export default function ForestCarePanel({
 
       {upcoming.length > 0 && (
         <div className="care-upcoming">
-          <strong>🔔 Tulevat tarkastukset</strong>
+          <strong>Tulevat tarkastukset</strong>
           {upcoming.slice(0, 3).map((m) => (
             <small key={m.id}>
               {formatDateRange(m.follow_up_date_start ?? '', m.follow_up_date_end ?? '')} · {m.title}
@@ -389,7 +397,7 @@ export default function ForestCarePanel({
       )}
 
       <button className="sidebar-section-header care-recent-header" onClick={toggleRecent} aria-expanded={recentOpen}>
-        <h3>🕒 Viimeisimmät toimenpiteet ({recent.length})</h3>
+        <h3>Viimeisimmät toimenpiteet ({recent.length})</h3>
         <span className={`sidebar-chevron ${recentOpen ? 'open' : ''}`} aria-hidden="true">⌄</span>
       </button>
       {recentOpen && (
@@ -418,7 +426,7 @@ export default function ForestCarePanel({
                   title="Poista"
                   aria-label={`Poista ${m.title}`}
                 >
-                  🗑
+                  <Trash size={16} aria-hidden="true" />
                 </button>
               </li>
             ))
