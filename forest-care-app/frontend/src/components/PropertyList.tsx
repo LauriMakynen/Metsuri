@@ -10,8 +10,6 @@ interface PropertyListProps {
   onOpenForestValue: () => void;
   isOpen: boolean;
   onToggle: () => void;
-  // Section title; forest care mode calls it "Tietoa valitusta metsästä"
-  title?: string;
 }
 
 export default function PropertyList({
@@ -23,12 +21,11 @@ export default function PropertyList({
   onOpenForestValue,
   isOpen,
   onToggle,
-  title,
 }: PropertyListProps) {
   return (
     <>
       <button className="sidebar-section-header" onClick={onToggle} aria-expanded={isOpen}>
-        <h3>🌳 {title ?? `Omat kiinteistöt (${properties.length})`}</h3>
+        <h3>🌳 Omat kiinteistöt ({properties.length})</h3>
         <span className={`sidebar-chevron ${isOpen ? 'open' : ''}`} aria-hidden="true">⌄</span>
       </button>
       {isOpen && (

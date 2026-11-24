@@ -67,8 +67,7 @@ export default function Sidebar({
   care = null,
 }: SidebarProps) {
   const [openSections, setOpenSections] = useState({
-    // In care mode the parcel is already chosen, so the parcel list starts collapsed
-    properties: !care,
+    properties: true,
     requests: false,
     markings: false,
     notes: false,
@@ -116,29 +115,33 @@ export default function Sidebar({
           />
         )}
 
-        <PropertyList
-          properties={properties}
-          selectedId={selectedPropertyId}
-          selectedProperty={selectedProperty}
-          onSelect={onSelectProperty}
-          onDelete={onDeleteProperty}
-          onOpenForestValue={onOpenForestValue}
-          isOpen={openSections.properties}
-          onToggle={() => toggleSection('properties')}
-          title={care ? 'Tietoa valitusta metsästä' : undefined}
-        />
+        {/* Care mode is for working in the forest: the value view and work requests stay out of the way */}
+        {!care && (
+          <>
+            <PropertyList
+              properties={properties}
+              selectedId={selectedPropertyId}
+              selectedProperty={selectedProperty}
+              onSelect={onSelectProperty}
+              onDelete={onDeleteProperty}
+              onOpenForestValue={onOpenForestValue}
+              isOpen={openSections.properties}
+              onToggle={() => toggleSection('properties')}
+            />
 
-        <WorkRequestList
-          requests={workRequests}
-          selectedPropertyId={selectedPropertyId}
-          canPublish={canPublishRequests}
-          onNewRequest={onNewWorkRequest}
-          onWithdraw={onWithdrawWorkRequest}
-          onUpdated={onWorkRequestUpdated}
-          isOpen={openSections.requests}
-          onToggle={() => toggleSection('requests')}
-          showAllProperties={showAllWorkRequests}
-        />
+            <WorkRequestList
+              requests={workRequests}
+              selectedPropertyId={selectedPropertyId}
+              canPublish={canPublishRequests}
+              onNewRequest={onNewWorkRequest}
+              onWithdraw={onWithdrawWorkRequest}
+              onUpdated={onWorkRequestUpdated}
+              isOpen={openSections.requests}
+              onToggle={() => toggleSection('requests')}
+              showAllProperties={showAllWorkRequests}
+            />
+          </>
+        )}
 
         {/* In care mode done work is listed under "Viimeisimmät toimenpiteet" instead */}
         {!care && (

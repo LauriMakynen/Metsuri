@@ -715,6 +715,8 @@ export default function MapPage() {
     }
     const group = requestsLayerRef.current;
     group.clearLayers();
+    // Care mode leaves planned work off the map, like the sidebar does
+    if (careMode) return;
     workRequests
       .filter((r) => r.property_id === selectedPropertyId && r.geometry)
       .forEach((r) => {
@@ -734,7 +736,7 @@ export default function MapPage() {
         layer.bindPopup(popup);
         group.addLayer(layer);
       });
-  }, [workRequests, selectedPropertyId]);
+  }, [workRequests, selectedPropertyId, careMode]);
 
   const renderSelectedHighlight = useCallback((geometry: GeoJSONGeometry, color: string) => {
     if (!mapRef.current || !geometry) return;
@@ -1881,6 +1883,7 @@ export default function MapPage() {
             >
               🗺️<span>Alue</span>
             </button>
+            {!careMode && (
             <button
               className={`tool-btn tool-btn-request ${activeTool === 'request' ? 'active' : ''}`}
               onClick={() => (activeTool === 'request' ? startDraw(null) : openNewWorkRequest())}
@@ -1888,6 +1891,7 @@ export default function MapPage() {
             >
               📢<span>Työpyyntö</span>
             </button>
+            )}
             <button
               className={`tool-btn ${activeTool === 'note' ? 'active' : ''}`}
               onClick={() => (activeTool === 'note' ? startDraw(null) : startDraw('note'))}
