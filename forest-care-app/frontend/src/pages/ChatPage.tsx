@@ -402,8 +402,8 @@ export default function ChatPage() {
             <div key={chat.id} className={`chat-list-item ${chat.id === Number(id) ? 'active' : ''} ${unread ? 'unread' : ''}`}>
               <Link to={`/chat/${chat.id}`} onClick={() => { if (isNarrowScreen) setIsChatListOpen(false); }}>
                 <span className="chat-list-visual">
+                  <Avatar name={chatName(chat)} size="xl" />
                   <RequestThumb chat={chat} />
-                  <Avatar name={chatName(chat)} size="sm" />
                 </span>
                 <span className="chat-list-text">
                   <span className="chat-list-top">
