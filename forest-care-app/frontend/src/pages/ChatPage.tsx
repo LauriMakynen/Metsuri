@@ -123,13 +123,19 @@ export default function ChatPage() {
 
   const loadChats = useCallback(async () => {
     try {
-      const list = await chatsService.getAll();
-      setChats(list);
-      if (!id && list[0]) navigate(`/chat/${list[0].id}`, { replace: true });
-    } catch {
-      setError('Chatien lataaminen epäonnistui.');
+    const list = await chatsService.getAll();
+    setChats(list);
+
+    if (list.length === 0) {
+      setIsChatListOpen(false);
+    } else if (!id && list[0]) {
+      setIsChatListOpen(true);
+      navigate(`/chat/${list[0].id}`, { replace: true });
     }
-  }, [id, navigate]);
+  } catch {
+    setError('Chatien lataaminen epäonnistui.');
+  }
+}, [id, navigate]);
 
   const loadMessages = useCallback(async (chatId: number) => {
     try {
@@ -320,7 +326,7 @@ export default function ChatPage() {
     <>
       <TopNav />
       <main className={`chat-page ${isChatListOpen ? 'chat-list-open' : 'chat-list-closed'}`}>
-        {(!isNarrowScreen || !isChatListOpen) && <button
+        {chats.length > 0 &&(!isNarrowScreen || !isChatListOpen) && <button
           type="button"
           className="chat-sidebar-toggle"
           onClick={() => setIsChatListOpen((open) => !open)}
@@ -335,6 +341,7 @@ export default function ChatPage() {
                 : <path d="M4 6h16M4 12h16M4 18h16" />}
           </svg>
         </button>}
+        {chats.length > 0&& (
         <aside ref={chatListRef} className="chat-list">
           <h1>Chatit</h1>
           {chats.map((chat) => (
@@ -370,8 +377,11 @@ export default function ChatPage() {
             </div>
           ))}
           {!chats.length && <p>Chat avautuu, kun työpyyntöön on tehty tarjous.</p>}
-        </aside>
-        <section className="chat-conversation">
+        </aside>)}
+        <section
+  className={`chat-conversation ${
+    !selected && chats.length === 0 ? 'chat-conversation-empty' : ''
+  }`}>
           {selected ? <><header><h2>{selected.other_email}</h2><p>{selected.title}</p></header>
             {selected.bid_id && <div className="chat-offer-card">
               <div>
@@ -500,8 +510,17 @@ export default function ChatPage() {
               </div>
             </form>
           </> : chats.length === 0
-            ? <p className="chat-empty-state">Ei keskusteluita vielä.</p>
-            : <p className="chat-empty-state">Valitse keskustelu.</p>}
+  ? (
+    <div className="chat-empty-state">
+      <h2>Ei vielä keskusteluita</h2>
+      <p>Keskustelu avautuu automaattisesti, kun</p>
+      <ul>
+        <li>teet tarjouksen jonkun toisen julkaisemaan työpyyntöön.</li>
+        <li>joku tekee tarjouksen sinun julkaisemaasi työpyyntöön.</li>
+      </ul>
+    </div>
+  )
+  : <p className="chat-empty-state">Valitse keskustelu.</p>}
           {error && <p className="chat-error">{error}</p>}
         </section>
       </main>
