@@ -25,7 +25,7 @@ The app can suggest when a follow-up or maintenance task may be due. Longer-term
 - API data uses GeoJSON where appropriate; authentication uses JWT.
 - `frontend/src/` contains the UI, pages, services, hooks, types, and utilities.
 - `backend/src/` contains API routes, services, database code, and authentication middleware.
-- `database/` contains database initialization and schema-related files.
+- The database schema is created by `backend/src/db/migrate.ts` (idempotent, run with `npm run migrate`).
 
 Follow the established patterns and types in the relevant part of the app. Keep changes focused, preserve existing behavior, and update directly related documentation when behavior changes.
 

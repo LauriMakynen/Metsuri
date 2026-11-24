@@ -266,6 +266,8 @@ export function valueStand(
       priceCutType: cutType,
       isForestLand: stand.isForestLand,
       inventoryYear: stand.inventoryYear,
+      valueByAssortment: priced.byAssortment,
+      fertilityClass: stand.fertilityClass,
     },
     bySpecies: priced.bySpecies,
     byAssortment: priced.byAssortment,
@@ -317,6 +319,8 @@ export interface ComputeForestValueInput {
   provider: ForestDataProvider;
   operations: RecommendedOperation[];
   currentYear: number;
+  /** Field area on the parcel; it is not expected to be covered by stands. */
+  fieldAreaHa?: number;
   now?: Date;
 }
 
@@ -374,10 +378,11 @@ export function computeForestValue(input: ComputeForestValueInput): ForestValueR
       message: 'Palstalla ei metsävaratiedon mukaan ole metsämaata, joten puustolle ei lasketa arvoa.',
     });
   }
-  if (input.provider !== 'manual' && parcelAreaHa > 0 && coveredAreaHa / parcelAreaHa < MIN_COVERAGE_SHARE) {
+  const nonFieldAreaHa = parcelAreaHa - (input.fieldAreaHa ?? 0);
+  if (input.provider !== 'manual' && nonFieldAreaHa > 0 && coveredAreaHa / nonFieldAreaHa < MIN_COVERAGE_SHARE) {
     warnings.push({
       code: 'partial_coverage',
-      message: `Metsävaratieto kattaa vain ${Math.round((coveredAreaHa / parcelAreaHa) * 100)} % palstasta. Arvo koskee vain sitä osaa.`,
+      message: `Metsävaratieto kattaa vain ${Math.round((coveredAreaHa / nonFieldAreaHa) * 100)} % ${input.fieldAreaHa ? 'palstan metsäalasta' : 'palstasta'}. Arvo koskee vain sitä osaa.`,
     });
   }
   if (prices.source === 'fallback') {

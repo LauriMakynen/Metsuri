@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { LocateFixed, X } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import BackButton from '../components/BackButton';
 import TopNav from '../components/TopNav';
 import WorkRequestCard from '../components/WorkRequestCard';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
@@ -11,10 +11,41 @@ import { workRequestsService } from '../services/forestService';
 import { MARKING_COLORS, MARKING_TYPE_LABELS, MARKING_TYPES } from '../utils/markingTypes';
 import { formatArea } from '../utils/measurement';
 import { bidSummaryText } from '../utils/bids';
-import type { MarkingType, PublicWorkRequest } from '../types';
+import { distanceKm, formatDistance } from '../utils/distance';
+import { AREA_RANGES, PRICE_RANGES, matchesRequestFilters, rangeLabel } from '../utils/requestFilters';
+import type { MarkingType, PublicWorkRequest, Region } from '../types';
+
+type LatLng = { lat: number; lng: number };
+
+const MIN_RADIUS_KM = 1;
+const MAX_RADIUS_KM = 100;
+const DEFAULT_RADIUS_KM = 25;
+
+function locationErrorText(error: GeolocationPositionError): string {
+  if (error.code === error.PERMISSION_DENIED) {
+    return 'Sijainnin käyttö estettiin. Salli sijainti selaimen asetuksista nähdäksesi lähellä olevat työpyynnöt.';
+  }
+  return 'Sijaintia ei saatu selvitettyä. Yritä hetken kuluttua uudelleen.';
+}
+
+function nearbyNoticeText(
+  count: number,
+  radiusKm: number,
+  nearestKm: number | null,
+  ownOnly: boolean
+): string {
+  if (count === 0) {
+    return `Ei ${ownOnly ? 'omia avoimia työpyyntöjä' : 'avoimia työpyyntöjä'} ${radiusKm} km säteellä sijainnistasi.`;
+  }
+  const requests = ownOnly
+    ? count === 1 ? '1 oma avoin työpyyntö' : `${count} omaa avointa työpyyntöä`
+    : count === 1 ? '1 avoin työpyyntö' : `${count} avointa työpyyntöä`;
+  const nearest = nearestKm !== null ? ` Lähin on ${formatDistance(nearestKm)} päässä.` : '';
+  return `${requests} ${radiusKm} km säteellä sijainnistasi.${nearest}`;
+}
 
 // Popup content is built with textContent: titles and notes are written by other users
-function buildPopup(request: PublicWorkRequest): HTMLElement {
+function buildPopup(request: PublicWorkRequest, distance: number | null): HTMLElement {
   const el = document.createElement('div');
   const title = document.createElement('strong');
   title.textContent = request.title;
@@ -22,11 +53,13 @@ function buildPopup(request: PublicWorkRequest): HTMLElement {
   meta.textContent = [
     MARKING_TYPE_LABELS[request.type],
     request.area_ha ? formatArea(request.area_ha) : null,
+    request.region_name,
+    distance !== null ? `${formatDistance(distance)} sinusta` : null,
   ]
     .filter(Boolean)
     .join(' · ');
   const bids = document.createElement('div');
-  bids.textContent = `💶 ${bidSummaryText(request)}`;
+  bids.textContent = bidSummaryText(request);
   el.append(title, meta, bids);
   return el;
 }
@@ -36,17 +69,31 @@ export default function EmployersPage() {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const requestsLayerRef = useRef<L.FeatureGroup | null>(null);
+  const locationLayerRef = useRef<L.LayerGroup | null>(null);
   const layersByIdRef = useRef<Map<number, L.Layer>>(new Map());
   // Fit the map to the requests only after a fresh load, not when a bid updates one row
   const fitPendingRef = useRef(true);
   const { isAuthenticated, logout } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedWorkRequestId = Number(searchParams.get('workRequest'));
 
   const [requests, setRequests] = useState<PublicWorkRequest[]>([]);
   const [typeFilter, setTypeFilter] = useState<MarkingType | null>(null);
+  const [ownOnly, setOwnOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [regions, setRegions] = useState<Region[]>([]);
+  const [regionFilter, setRegionFilter] = useState<string | null>(null);
+  // Owner's price and work area: filtered here from the loaded requests, so changes are instant
+  const [priceRange, setPriceRange] = useState<string | null>(null);
+  const [areaRange, setAreaRange] = useState<string | null>(null);
+  // The viewer's location stays in the browser; distances are computed here, not on the server
+  const [position, setPosition] = useState<LatLng | null>(null);
+  const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
 
   // Create the map once
   useEffect(() => {
@@ -57,20 +104,30 @@ export default function EmployersPage() {
       maxZoom: 19,
     }).addTo(map);
     const layer = new L.FeatureGroup().addTo(map);
+    const locationLayer = L.layerGroup().addTo(map);
     mapRef.current = map;
     requestsLayerRef.current = layer;
+    locationLayerRef.current = locationLayer;
     return () => {
       map.remove();
       mapRef.current = null;
       requestsLayerRef.current = null;
+      locationLayerRef.current = null;
     };
   }, []);
 
-  // Load open requests whenever the type filter changes
+  useEffect(() => {
+    workRequestsService
+      .getRegions()
+      .then(setRegions)
+      .catch(() => setRegions([]));
+  }, []);
+
+  // Load open requests whenever the type or region filter changes
   useEffect(() => {
     let cancelled = false;
     workRequestsService
-      .getOpen(typeFilter ?? undefined)
+      .getOpen({ type: typeFilter ?? undefined, region: regionFilter ?? undefined })
       .then((data) => {
         if (cancelled) return;
         fitPendingRef.current = true;
@@ -86,7 +143,22 @@ export default function EmployersPage() {
     return () => {
       cancelled = true;
     };
-  }, [typeFilter]);
+  }, [typeFilter, regionFilter]);
+
+  // With a location, only requests within the radius are shown, nearest first
+  const visibleRequests = useMemo(() => {
+    const withDistance = requests
+      .filter((request) => !ownOnly || request.is_own)
+      .filter((request) => matchesRequestFilters(request, priceRange, areaRange))
+      .map((request) => ({
+      request,
+      distance: position ? distanceKm(position, request) : null,
+      }));
+    if (!position) return withDistance;
+    return withDistance
+      .filter(({ distance }) => (distance as number) <= radiusKm)
+      .sort((a, b) => (a.distance as number) - (b.distance as number));
+  }, [requests, ownOnly, priceRange, areaRange, position, radiusKm]);
 
   // Draw requests on the map
   useEffect(() => {
@@ -97,26 +169,80 @@ export default function EmployersPage() {
     group.clearLayers();
     layersByIdRef.current.clear();
 
-    requests.forEach((request) => {
+    visibleRequests.forEach(({ request, distance }) => {
       if (!request.geometry) return;
+      // The whole property as a dashed outline around the work area (logged-in viewers only)
+      if (request.property_geometry) {
+        L.geoJSON(request.property_geometry as GeoJSON.Geometry, {
+          style: { color: '#0f3d24', weight: 2, dashArray: '6 5', fill: false },
+          interactive: false,
+        }).addTo(group);
+      }
       const color = MARKING_COLORS[request.type];
       const layer = L.geoJSON(request.geometry as GeoJSON.Geometry, {
         style: { color, weight: 3, fillColor: color, fillOpacity: 0.3 },
         pointToLayer: (_feature, latlng) =>
           L.circleMarker(latlng, { radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.9 }),
       });
-      layer.bindPopup(buildPopup(request));
+      layer.bindPopup(buildPopup(request, distance));
       layer.on('click', () => setSelectedId(request.id));
       layer.addTo(group);
       layersByIdRef.current.set(request.id, layer);
     });
 
+    // The radius circle decides the view while the distance filter is on
     const bounds = group.getBounds();
-    if (fitPendingRef.current && bounds.isValid()) {
+    if (fitPendingRef.current && !position && bounds.isValid()) {
       map.fitBounds(bounds, { padding: [30, 30], maxZoom: 13 });
       fitPendingRef.current = false;
     }
-  }, [requests]);
+  }, [visibleRequests, position]);
+
+  // Draw the viewer's location and the search radius
+  useEffect(() => {
+    const map = mapRef.current;
+    const layer = locationLayerRef.current;
+    if (!map || !layer) return;
+    layer.clearLayers();
+    if (!position) return;
+    const circle = L.circle(position, {
+      radius: radiusKm * 1000,
+      color: '#2563eb',
+      weight: 2,
+      fillColor: '#2563eb',
+      fillOpacity: 0.06,
+      interactive: false,
+    }).addTo(layer);
+    L.circleMarker(position, { radius: 7, color: '#fff', weight: 2, fillColor: '#2563eb', fillOpacity: 1 })
+      .bindTooltip('Sijaintisi')
+      .addTo(layer);
+    map.fitBounds(circle.getBounds(), { padding: [20, 20] });
+  }, [position, radiusKm]);
+
+  const toggleNearby = () => {
+    if (position) {
+      setPosition(null);
+      fitPendingRef.current = true;
+      return;
+    }
+    if (!navigator.geolocation) {
+      setLocationError('Selaimesi ei tue sijainnin käyttöä.');
+      return;
+    }
+    setLocating(true);
+    setLocationError('');
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        setPosition({ lat: coords.latitude, lng: coords.longitude });
+        setLocating(false);
+      },
+      (err) => {
+        setLocationError(locationErrorText(err));
+        setLocating(false);
+      },
+      { enableHighAccuracy: false, timeout: 15_000, maximumAge: 5 * 60_000 }
+    );
+  };
 
   const handleBidPlaced = (updated: PublicWorkRequest) => {
     setRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
@@ -133,22 +259,33 @@ export default function EmployersPage() {
     const map = mapRef.current;
     if (!layer || !map) return;
     const bounds = layer.getBounds();
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 15 });
+    // Show the whole property when its boundary is known, so the work area is seen in context
+    const view = request.property_geometry
+      ? L.geoJSON(request.property_geometry as GeoJSON.Geometry).getBounds().extend(bounds)
+      : bounds;
+    if (view.isValid()) {
+      map.fitBounds(view, { padding: [40, 40], maxZoom: 16 });
     }
     layer.openPopup(bounds.isValid() ? bounds.getCenter() : undefined);
     mapContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
 
+  useEffect(() => {
+    if (!Number.isSafeInteger(requestedWorkRequestId) || requestedWorkRequestId <= 0) return;
+    const request = requests.find((item) => item.id === requestedWorkRequestId);
+    if (!request) return;
+    const selection = window.setTimeout(() => setSelectedId(request.id), 0);
+    return () => window.clearTimeout(selection);
+  }, [requestedWorkRequestId, requests]);
+
   return (
     <div className="start-page forest-page">
       <SpruceForestBackdrop />
       <TopNav />
-      <BackButton />
 
       <main className="start-content forest-content">
         <header className="forest-hero">
-          <p className="forest-eyebrow">🌲 Työn tarjoajille</p>
+          <p className="forest-eyebrow">Työn tarjoajille</p>
           <h1>Metsätyöt odottavat tekijäänsä</h1>
           <p>
             Selaa metsäpalstoja, joille metsänomistajat ovat jättäneet työpyynnön, ja tarjoa hintaa.
@@ -175,31 +312,145 @@ export default function EmployersPage() {
               </button>
             ))}
           </div>
+          <div className="filter-extra-controls">
+            <label className="region-filter">
+              <span className="panel-title">Maakunta</span>
+              <select
+                value={regionFilter ?? ''}
+                onChange={(e) => setRegionFilter(e.target.value || null)}
+                aria-label="Suodata maakunnan mukaan"
+              >
+                <option value="">Koko Suomi</option>
+                {regions.map((region) => (
+                  <option key={region.code} value={region.code}>
+                    {region.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="region-filter range-filter">
+              <span className="panel-title">Hinta</span>
+              <select
+                value={priceRange ?? ''}
+                onChange={(e) => setPriceRange(e.target.value || null)}
+                aria-label="Suodata omistajan hinnan mukaan"
+              >
+                <option value="">Kaikki hinnat</option>
+                {PRICE_RANGES.map((range) => (
+                  <option key={range.value} value={range.value}>{range.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="region-filter range-filter">
+              <span className="panel-title">Työalueen koko</span>
+              <select
+                value={areaRange ?? ''}
+                onChange={(e) => setAreaRange(e.target.value || null)}
+                aria-label="Suodata työalueen koon mukaan"
+              >
+                <option value="">Kaikki koot</option>
+                {AREA_RANGES.map((range) => (
+                  <option key={range.value} value={range.value}>{range.label}</option>
+                ))}
+              </select>
+            </label>
+            {isAuthenticated && (
+              <label className="own-requests-filter">
+                <input
+                  type="checkbox"
+                  checked={ownOnly}
+                  onChange={(event) => setOwnOnly(event.target.checked)}
+                />
+                <span>Näytä vain omat työpyynnöt</span>
+              </label>
+            )}
+          </div>
         </section>
 
         {error && <div className="error-message">{error}</div>}
 
         <div className="requests-layout">
           <section className="glass-panel map-panel">
-            <h2 className="panel-title">🗺️ Kartta</h2>
+            <h2 className="panel-title">Kartta</h2>
+            <div className="nearby-bar">
+              <button
+                className={`filter-chip nearby-toggle ${position ? 'active' : ''}`}
+                onClick={toggleNearby}
+                disabled={locating}
+                aria-pressed={position !== null}
+              >
+                <LocateFixed size={16} aria-hidden="true" />{' '}
+                {locating ? 'Haetaan sijaintia...' : 'Lähellä minua'}
+                {position && !locating && <X size={14} aria-hidden="true" />}
+              </button>
+              {position && (
+                <label className="nearby-range">
+                  <span>
+                    Enintään <strong>{radiusKm} km</strong> linnuntietä
+                  </span>
+                  <input
+                    type="range"
+                    min={MIN_RADIUS_KM}
+                    max={MAX_RADIUS_KM}
+                    value={radiusKm}
+                    onChange={(e) => setRadiusKm(Number(e.target.value))}
+                    aria-label="Etäisyys sijainnistasi kilometreinä"
+                  />
+                </label>
+              )}
+            </div>
+            {locationError && <p className="nearby-notice error">{locationError}</p>}
+            {position && !loading && (
+              <p className="nearby-notice" role="status">
+                {nearbyNoticeText(visibleRequests.length, radiusKm, visibleRequests[0]?.distance ?? null, ownOnly)}
+              </p>
+            )}
             <div ref={mapContainerRef} className="requests-map" />
           </section>
 
           <section className="glass-panel requests-list">
             <h2 className="panel-title">
-              📢 {loading ? 'Ladataan työpyyntöjä...' : `Avoimet työpyynnöt (${requests.length})`}
+              {loading
+                ? 'Ladataan työpyyntöjä...'
+                : `${ownOnly ? 'Omat avoimet työpyynnöt' : 'Avoimet työpyynnöt'} (${visibleRequests.length})`}
             </h2>
 
-            {!loading && requests.length === 0 && !error && (
+            {!loading && visibleRequests.length === 0 && !error && (
               <p className="requests-empty">
-                Ei avoimia työpyyntöjä{typeFilter ? ` tyypille ${MARKING_TYPE_LABELS[typeFilter].toLowerCase()}` : ''}.
+                {ownOnly ? 'Ei omia avoimia työpyyntöjä' : 'Ei avoimia työpyyntöjä'}
+                {typeFilter ? ` tyypille ${MARKING_TYPE_LABELS[typeFilter].toLowerCase()}` : ''}
+                {regionFilter ? ` maakunnassa ${regions.find((r) => r.code === regionFilter)?.name ?? ''}` : ''}
+                {priceRange ? `, hinta ${rangeLabel(priceRange, PRICE_RANGES)?.toLowerCase()}` : ''}
+                {areaRange ? `, työalue ${rangeLabel(areaRange, AREA_RANGES)?.toLowerCase()}` : ''}
+                {position ? ` ${radiusKm} km säteellä` : ''}.
+                {(priceRange || areaRange) && (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className="btn-link"
+                      onClick={() => {
+                        setPriceRange(null);
+                        setAreaRange(null);
+                      }}
+                    >
+                      Näytä kaikki hinnat ja koot
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
+            {areaRange && !loading && visibleRequests.length > 0 && (
+              <p className="range-filter-note">
+                Pistemäiset työt, kuten rummun vaihto, eivät näy, kun työalueen koko on rajattu.
               </p>
             )}
 
-            {requests.map((request) => (
+            {visibleRequests.map(({ request, distance }) => (
               <WorkRequestCard
                 key={request.id}
                 request={request}
+                distanceKm={distance}
                 selected={selectedId === request.id}
                 canBid={isAuthenticated}
                 onFocus={() => focusRequest(request)}

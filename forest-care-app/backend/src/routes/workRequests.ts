@@ -7,6 +7,9 @@ import {
   detectImageType,
   parseTakenAt,
 } from '../services/workRequestPhotos';
+import { REGIONS, isValidRegionCode } from '../services/regions';
+import { FOREST_WORK_TYPES, checkWorkArea, landCheckEnabled, workAreaWarning } from '../services/workAreaCheck';
+import { createNotification } from '../services/notifications';
 
 const router = Router();
 
@@ -15,6 +18,7 @@ const VALID_GEOMETRIES = ['Polygon', 'MultiPolygon', 'Point'];
 const MAX_NOTE_LENGTH = 1000;
 const MAX_TITLE_LENGTH = 255;
 const MAX_EUR = 10_000_000;
+const BOUNDARY_TOLERANCE_M = 25;
 
 // Chosen by the owner when publishing:
 // owner_receives = timber sale (the buyer pays the owner) → highest offer is best,
@@ -28,7 +32,7 @@ const BID_SUMMARY_JOIN = `
            CASE WHEN wr.pricing = 'owner_receives' THEN MAX(amount_eur) ELSE MIN(amount_eur) END AS best_bid_eur,
            MAX(created_at) AS latest_bid_at
     FROM work_request_bids
-    WHERE work_request_id = wr.id
+    WHERE work_request_id = wr.id AND status = 'pending'
   ) b ON true`;
 
 // Columns describing the requested work itself
@@ -65,13 +69,22 @@ function isValidEur(value: unknown): value is number {
 /**
  * Open work requests as shown to work providers. Owner and bidder identities are never
  * exposed; with a logged-in viewer, is_own and my_bid_eur describe that viewer only.
+ * Logged-in viewers also see the property the work is on (kiinteistötunnus and boundary),
+ * but not the owner's own name for it, which may contain the owner's name.
  */
-async function fetchPublicRequests(viewerId: number | null, filters: { type?: string; id?: number }) {
+async function fetchPublicRequests(
+  viewerId: number | null,
+  filters: { type?: string; region?: string; id?: number }
+) {
   const values: unknown[] = [viewerId];
   let where = `wr.status = 'open'`;
   if (filters.type) {
     values.push(filters.type);
     where += ` AND wr.type = $${values.length}`;
+  }
+  if (filters.region) {
+    values.push(filters.region);
+    where += ` AND region.code = $${values.length}`;
   }
   if (filters.id) {
     values.push(filters.id);
@@ -83,14 +96,32 @@ async function fetchPublicRequests(viewerId: number | null, filters: { type?: st
             ST_Y(ST_PointOnSurface(wr.geometry)) AS lat,
             ST_X(ST_PointOnSurface(wr.geometry)) AS lng,
             COALESCE(wr.user_id = $1, false) AS is_own,
-            mine.my_bid_eur
+            mine.my_bid_eur,
+            mine.my_bid_chat_id,
+            region.code AS region_code,
+            region.name AS region_name,
+            CASE WHEN $1::int IS NOT NULL THEN prop.property_code END AS property_code,
+            CASE WHEN $1::int IS NOT NULL THEN prop.area_ha END AS property_area_ha,
+            CASE WHEN $1::int IS NOT NULL THEN ST_AsGeoJSON(prop.geometry, 6)::json END AS property_geometry
      FROM work_requests wr
+     -- Only when the work area is on the property (older requests may not be)
+     LEFT JOIN properties prop ON prop.id = wr.property_id
+       AND ST_Intersects(prop.geometry, ST_Buffer(wr.geometry::geography, ${BOUNDARY_TOLERANCE_M})::geometry)
      ${BID_SUMMARY_JOIN}
+     -- Region containing the request; the nearest one catches coastal spots outside the generalised borders
      LEFT JOIN LATERAL (
-       SELECT amount_eur AS my_bid_eur
-       FROM work_request_bids
-       WHERE work_request_id = wr.id AND user_id = $1
-       ORDER BY created_at DESC
+       SELECT r.code, r.name
+       FROM regions r
+       WHERE ST_DWithin(r.geometry, ST_PointOnSurface(wr.geometry), 0.5)
+       ORDER BY ST_Distance(r.geometry, ST_PointOnSurface(wr.geometry))
+       LIMIT 1
+     ) region ON true
+     LEFT JOIN LATERAL (
+       SELECT b.amount_eur AS my_bid_eur, c.id AS my_bid_chat_id
+       FROM work_request_bids b
+       LEFT JOIN work_request_chats c ON c.bid_id = b.id
+       WHERE b.work_request_id = wr.id AND b.user_id = $1 AND b.status = 'pending'
+       ORDER BY b.created_at DESC
        LIMIT 1
      ) mine ON true
      WHERE ${where}
@@ -109,8 +140,9 @@ async function fetchOwnRequests(userId: number, id?: number) {
     where += ' AND wr.id = $2';
   }
   const result = await pool.query(
-    `SELECT ${REQUEST_COLUMNS}, wr.property_id, wr.status, wr.updated_at
+    `SELECT ${REQUEST_COLUMNS}, wr.property_id, wr.status, wr.updated_at, prop.property_code
      FROM work_requests wr
+     LEFT JOIN properties prop ON prop.id = wr.property_id
      ${BID_SUMMARY_JOIN}
      WHERE ${where}
      ORDER BY wr.created_at DESC`,
@@ -122,18 +154,32 @@ async function fetchOwnRequests(userId: number, id?: number) {
 // GET /api/work-requests - Public list of open work requests for work providers.
 router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
   const typeQuery = typeof req.query.type === 'string' ? req.query.type : undefined;
+  const regionQuery = typeof req.query.region === 'string' ? req.query.region : undefined;
 
   if (typeQuery && !VALID_TYPES.includes(typeQuery)) {
     res.status(400).json({ error: 'Invalid type' });
     return;
   }
+  if (regionQuery && !isValidRegionCode(regionQuery)) {
+    res.status(400).json({ error: 'Invalid region' });
+    return;
+  }
 
   try {
-    res.json(await fetchPublicRequests(req.userId ?? null, { type: typeQuery }));
+    res.json(await fetchPublicRequests(req.userId ?? null, { type: typeQuery, region: regionQuery }));
   } catch (error) {
     console.error('Get work requests error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// GET /api/work-requests/regions - Regions (maakunnat) for the region filter, alphabetically
+router.get('/regions', (_req, res: Response): void => {
+  res.json(
+    REGIONS.features
+      .map(({ properties }) => ({ code: properties.code, name: properties.name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fi'))
+  );
 });
 
 // GET /api/work-requests/mine - The authenticated owner's own work requests with bid summary
@@ -148,7 +194,7 @@ router.get('/mine', authMiddleware, async (req: AuthRequest, res: Response): Pro
 
 // POST /api/work-requests - Publish planned work on one of the user's parcels
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
-  const { property_id, type, title, geometry, note, pricing, target_price_eur } = req.body ?? {};
+  const { property_id, type, title, geometry, note, pricing, target_price_eur, confirm_land_check } = req.body ?? {};
 
   if (!Number.isInteger(property_id)) {
     res.status(400).json({ error: 'property_id is required' });
@@ -180,13 +226,31 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response): Promis
   }
 
   try {
-    const propCheck = await pool.query('SELECT id FROM properties WHERE id = $1 AND user_id = $2', [
-      property_id,
-      req.userId,
-    ]);
+    // The request is tied to the property: its work area must lie within the property's
+    // boundary (a few metres of slack for drawing along the edge)
+    const propCheck = await pool.query(
+      `SELECT ST_Within(ST_SetSRID(ST_GeomFromGeoJSON($3), 4326),
+                        ST_Buffer(geometry::geography, $4)::geometry) AS inside
+       FROM properties WHERE id = $1 AND user_id = $2`,
+      [property_id, req.userId, JSON.stringify(geometry), BOUNDARY_TOLERANCE_M]
+    );
     if (propCheck.rows.length === 0) {
       res.status(404).json({ error: 'Property not found' });
       return;
+    }
+    if (propCheck.rows[0].inside === false) {
+      res.status(400).json({ error: 'Työn alueen pitää olla valitun kiinteistön rajojen sisällä' });
+      return;
+    }
+    // Forest work on a field or a built-up area: the owner confirms before it is published
+    if (FOREST_WORK_TYPES.includes(type) && confirm_land_check !== true && landCheckEnabled()) {
+      // A failed check never blocks publishing
+      const land = await checkWorkArea(geometry).catch(() => ({ fieldShare: null, forestShare: null }));
+      const warning = workAreaWarning(type, land);
+      if (warning) {
+        res.status(409).json({ error: warning, code: 'land_check' });
+        return;
+      }
     }
 
     // Area is computed on the server from the geometry (geodesic), not trusted from the client
@@ -226,7 +290,10 @@ router.post('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response)
   }
 
   try {
-    const request = await pool.query('SELECT user_id, status FROM work_requests WHERE id = $1', [id]);
+    const request = await pool.query(
+      'SELECT user_id, status, title, pricing FROM work_requests WHERE id = $1',
+      [id]
+    );
     if (request.rows.length === 0 || request.rows[0].status !== 'open') {
       res.status(404).json({ error: 'Työpyyntöä ei löytynyt tai se ei ole enää avoinna' });
       return;
@@ -236,10 +303,78 @@ router.post('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response)
       return;
     }
 
-    await pool.query(
-      'INSERT INTO work_request_bids (work_request_id, user_id, amount_eur) VALUES ($1, $2, $3)',
-      [id, req.userId, Math.round(amount * 100) / 100]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const bestOrder = request.rows[0].pricing === 'owner_receives'
+        ? 'b.amount_eur DESC'
+        : 'b.amount_eur ASC';
+      const previousBest = await client.query(
+        `SELECT b.user_id, b.amount_eur
+         FROM work_request_bids b
+         WHERE b.work_request_id = $1 AND b.status = 'pending'
+         ORDER BY ${bestOrder}, b.created_at ASC, b.id ASC
+         LIMIT 1`,
+        [id]
+      );
+      const bid = await client.query(
+        `INSERT INTO work_request_bids (work_request_id, user_id, amount_eur)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
+        [id, req.userId, Math.round(amount * 100) / 100]
+      );
+      await client.query(
+        `INSERT INTO work_request_chats (work_request_id, owner_id, provider_id, bid_id)
+         VALUES ($1, $2, $3, $4)`,
+        [id, request.rows[0].user_id, req.userId, bid.rows[0].id]
+      );
+      const currentBest = await client.query(
+        `SELECT b.user_id, b.amount_eur
+         FROM work_request_bids b
+         WHERE b.work_request_id = $1 AND b.status = 'pending'
+         ORDER BY ${bestOrder}, b.created_at ASC, b.id ASC
+         LIMIT 1`,
+        [id]
+      );
+      const formattedAmount = amount.toLocaleString('fi-FI', { maximumFractionDigits: 2 });
+      await createNotification(client, {
+        userId: request.rows[0].user_id,
+        type: 'new_bid',
+        title: `Uusi tarjous ${formattedAmount} € työpyyntöön ${request.rows[0].title}`,
+        body: 'Työpyyntöösi on tullut uusi tarjous.',
+        link: `/map?workRequest=${id}`,
+      });
+
+      const best = currentBest.rows[0];
+      if (best.user_id !== req.userId) {
+        await createNotification(client, {
+          userId: req.userId as number,
+          type: 'bid_no_longer_best',
+          title: `Työpyyntöön ${request.rows[0].title} tuli parempi tarjous`,
+          body: 'Oma tarjouksesi ei ole enää paras.',
+          link: `/tyontarjoajat?workRequest=${id}`,
+        });
+      }
+      if (
+        previousBest.rows[0] &&
+        previousBest.rows[0].user_id !== best.user_id &&
+        previousBest.rows[0].user_id !== req.userId
+      ) {
+        await createNotification(client, {
+          userId: previousBest.rows[0].user_id,
+          type: 'bid_no_longer_best',
+          title: `Työpyyntöön ${request.rows[0].title} tuli parempi tarjous`,
+          body: 'Oma tarjouksesi ei ole enää paras.',
+          link: `/tyontarjoajat?workRequest=${id}`,
+        });
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
 
     const [updated] = await fetchPublicRequests(req.userId ?? null, { id: Number(id) });
     res.status(201).json(updated);
@@ -259,13 +394,58 @@ router.delete('/:id/bids', authMiddleware, async (req: AuthRequest, res: Respons
   }
 
   try {
-    const result = await pool.query(
-      'DELETE FROM work_request_bids WHERE work_request_id = $1 AND user_id = $2 RETURNING id',
-      [id, req.userId]
-    );
-    if (result.rows.length === 0) {
-      res.status(404).json({ error: 'Tarjousta ei löytynyt' });
-      return;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const request = await client.query(
+        'SELECT user_id, title, status FROM work_requests WHERE id = $1',
+        [id]
+      );
+      if (request.rows.length === 0 || request.rows[0].status !== 'open') {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Työpyyntöä ei löytynyt tai se ei ole enää avoinna' });
+        return;
+      }
+
+      const result = await client.query(
+        `UPDATE work_request_bids
+         SET status = 'withdrawn', created_at = NOW()
+         WHERE work_request_id = $1 AND user_id = $2 AND status = 'pending'
+         RETURNING id`,
+        [id, req.userId]
+      );
+      if (result.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Tarjousta ei löytynyt' });
+        return;
+      }
+      await client.query(
+        `UPDATE chat_messages
+         SET counter_offer_status = 'withdrawn', body = NULL
+         WHERE chat_id IN (
+           SELECT id FROM work_request_chats
+           WHERE work_request_id = $1 AND provider_id = $2
+             AND bid_id = ANY($3::int[])
+         )
+           AND sender_id = $2
+           AND counter_offer_status = 'pending'`,
+        [id, req.userId, result.rows.map((row) => row.id)]
+      );
+
+      await createNotification(client, {
+        userId: request.rows[0].user_id,
+        type: 'bid_removed',
+        title: `Tarjous poistettiin työpyynnöstä ${request.rows[0].title}`,
+        body: 'Työpyyntöösi tehty tarjous poistettiin.',
+        link: `/map?workRequest=${id}`,
+      });
+
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
 
     const [updated] = await fetchPublicRequests(req.userId ?? null, { id: Number(id) });
@@ -277,6 +457,37 @@ router.delete('/:id/bids', authMiddleware, async (req: AuthRequest, res: Respons
   } catch (error) {
     console.error('Delete bid error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/work-requests/:id/bids - Update the authenticated user's pending bid
+router.put('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const amount = Number(req.body?.amount_eur);
+  if (!/^\d+$/.test(id) || !isValidEur(amount)) {
+    res.status(400).json({ error: `Tarjouksen pitää olla 0–${MAX_EUR} €` });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE work_request_bids b
+       SET amount_eur = $1, created_at = NOW()
+       FROM work_requests wr
+       WHERE b.work_request_id = wr.id AND b.work_request_id = $2 AND b.user_id = $3
+         AND wr.status = 'open' AND b.status = 'pending'
+       RETURNING b.id`,
+      [Math.round(amount * 100) / 100, id, req.userId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Muokattavaa tarjousta ei löytynyt' });
+      return;
+    }
+    const [updated] = await fetchPublicRequests(req.userId ?? null, { id: Number(id) });
+    res.json(updated);
+  } catch (error) {
+    console.error('Update bid error:', error);
+    res.status(500).json({ error: 'Tarjouksen muokkaus epäonnistui' });
   }
 });
 
@@ -369,13 +580,38 @@ router.delete('/:id', authMiddleware, async (req: AuthRequest, res: Response): P
   }
 
   try {
-    const result = await pool.query(
-      'DELETE FROM work_requests WHERE id = $1 AND user_id = $2 RETURNING id',
-      [id, req.userId]
-    );
-    if (result.rows.length === 0) {
-      res.status(404).json({ error: 'Work request not found' });
-      return;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const request = await client.query(
+        'SELECT title FROM work_requests WHERE id = $1 AND user_id = $2',
+        [id, req.userId]
+      );
+      if (request.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Work request not found' });
+        return;
+      }
+      const bidders = await client.query(
+        'SELECT DISTINCT user_id FROM work_request_bids WHERE work_request_id = $1',
+        [id]
+      );
+      for (const bidder of bidders.rows) {
+        await createNotification(client, {
+          userId: bidder.user_id,
+          type: 'work_request_cancelled',
+          title: `Työpyyntö ${request.rows[0].title} peruttiin`,
+          body: 'Työpyyntö, johon olit tarjonnut, peruttiin.',
+          link: `/tyontarjoajat?workRequest=${id}`,
+        });
+      }
+      await client.query('DELETE FROM work_requests WHERE id = $1 AND user_id = $2', [id, req.userId]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
     res.json({ message: 'Work request withdrawn' });
   } catch (error) {

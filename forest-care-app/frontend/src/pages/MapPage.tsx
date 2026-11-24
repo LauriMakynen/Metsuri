@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { MapPin, Megaphone, Menu, Pentagon, Ruler, Spline, StickyNote, X } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -15,8 +16,9 @@ import {
 import { calculateAreaHa, formatArea, calculateDistance, formatDistance } from '../utils/measurement';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { getFollowUpRecommendation } from '../utils/followUpRecommendation';
-import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
+import { isNote, MARKING_COLORS, MARKING_TYPE_LABELS, NOTE_COLOR, NOTE_LABEL } from '../utils/markingTypes';
 import { DEMO_MARKINGS, DEMO_PROPERTY } from '../utils/demoData';
+import HelpMenu from '../components/HelpMenu';
 import type {
   Property,
   Marking,
@@ -33,11 +35,16 @@ import Sidebar from '../components/Sidebar';
 import ActivityTracker from '../components/ActivityTracker';
 import WorkRequestForm from '../components/WorkRequestForm';
 import ForestValuePanel from '../components/forestValue/ForestValuePanel';
+import BackButton from '../components/BackButton';
+import NotificationsBell from '../components/NotificationsBell';
+import ChatsIcon from '../components/ChatsIcon';
 import { useForestValue } from '../hooks/useForestValue';
-import { OPERATION_LABEL, OPERATION_WORK_TYPE, standTitle } from '../utils/forestValueFormat';
+import { OPERATION_LABEL, OPERATION_WORK_TYPE, isCareOperation, standTitle } from '../utils/forestValueFormat';
 import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
 import { bidSummaryText, suggestedPricing } from '../utils/bids';
 import type { ActivityResult } from '../components/ActivityTracker';
+import { parcelProximity } from '../utils/distance';
+import { parcelAreas } from '../utils/parcelAreas';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -46,16 +53,17 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-// Properties are not drawn by hand: they come from MML (code search or a click on the cadastre layer)
+// Properties are not drawn by hand: they come from MML via the cadastre layer
 type DrawTool = 'point' | 'line' | 'area' | 'note' | 'measure' | 'request' | null;
 type BaseLayerKey = 'maastokartta' | 'peruskartta' | 'ortokuva';
 
-// Same rule as the backend: 1–3, 1–3, 1–4 and 1–4 digits (e.g. 91-2-9901-100), or the 14-digit form
-const PROPERTY_CODE_REGEX = /^(\d{1,3}-\d{1,3}-\d{1,4}-\d{1,4}|\d{14})$/;
 // MML tiles exist up to zoom 18; beyond that Leaflet upscales them instead of showing grey
 const MAX_TILE_ZOOM = 18;
 // Zooming to a (small) parcel stops here so its surroundings stay visible
 const FIT_MAX_ZOOM = 17;
+// Leaflet panes: own properties below the default overlay pane (400), markings above it
+const PROPERTIES_PANE = 'propertiesPane';
+const MARKINGS_PANE = 'markingsPane';
 const MAP_VIEW_STORAGE_KEY = 'metsuri-map-view';
 
 const FALLBACK_LAYER_CONFIG: MapLayerConfig = {
@@ -126,6 +134,35 @@ function toBounds(geometry: GeoJSONGeometry): L.LatLngBounds | null {
   return layer.getBounds();
 }
 
+// The open sidebar lies on top of the map: keep fitted areas clear of it, unless it covers
+// most of a narrow screen (then the area would get squeezed into a sliver)
+/** Care mode popup on a stand: its recommended operations, soonest first */
+function careStandPopup(title: string, ops: RecommendedOperation[]): HTMLElement {
+  const root = document.createElement('div');
+  root.className = 'care-stand-popup';
+  const heading = document.createElement('strong');
+  heading.textContent = title;
+  root.append(heading);
+  [...ops].sort((a, b) => a.year - b.year).forEach((op) => {
+    const item = document.createElement('div');
+    item.className = 'care-stand-popup-op';
+    const name = document.createElement('span');
+    name.className = 'care-stand-popup-name';
+    name.textContent = `${OPERATION_LABEL[op.type]}, ${op.source === 'metsakeskus' ? `Metsäkeskus ${op.year}` : `n. ${op.year}`}`;
+    const reason = document.createElement('small');
+    reason.textContent = op.reason;
+    item.append(name, reason);
+    root.append(item);
+  });
+  return root;
+}
+
+function fitPadding(): L.FitBoundsOptions {
+  const sidebarWidth = document.querySelector('.map-sidebar.open')?.clientWidth ?? 0;
+  const left = sidebarWidth > 0 && window.innerWidth - sidebarWidth >= 320 ? sidebarWidth + 40 : 40;
+  return { paddingTopLeft: [left, 40], paddingBottomRight: [40, 40] };
+}
+
 function getMapLayerConfigFromEnv(): MapLayerConfig | null {
   const key = import.meta.env.VITE_MML_API_KEY as string | undefined;
   if (!key) return null;
@@ -135,22 +172,43 @@ function getMapLayerConfigFromEnv(): MapLayerConfig | null {
 export default function MapPage() {
   const mapRef = useRef<L.Map | null>(null);
   const mapContainerRef = useRef<HTMLDivElement>(null);
+  const layerSwitcherRef = useRef<HTMLDivElement>(null);
+  const activityFabRef = useRef<HTMLButtonElement>(null);
   const drawControlRef = useRef<L.Control.Draw | null>(null);
   const drawnLayersRef = useRef<L.FeatureGroup | null>(null);
   const propertiesLayerRef = useRef<L.FeatureGroup | null>(null);
   const markingsLayerRef = useRef<L.FeatureGroup | null>(null);
   const selectedHighlightLayerRef = useRef<L.Layer | null>(null);
-  const cadastreLayerRef = useRef<L.Layer | null>(null);
   const overlayLayerRef = useRef<L.TileLayer | null>(null);
   const baseLayersRef = useRef<Record<BaseLayerKey, L.TileLayer> | null>(null);
   const clickedCadastreLayerRef = useRef<L.Layer | null>(null);
   const measurementLayerRef = useRef<L.FeatureGroup | null>(null);
   const autoSelectedRef = useRef(false);
+  // The parcel from ?propertyId= is fitted once; later selections in the sidebar take over
+  const requestedFitDoneRef = useRef(false);
   const requestsLayerRef = useRef<L.FeatureGroup | null>(null);
+  const careLocationLayerRef = useRef<L.LayerGroup | null>(null);
+  const careFittedRef = useRef(false);
 
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
+  // "Hoida omaa metsää" opens /map?hoida=<property id>: forest care mode on that parcel
+  const [searchParams, setSearchParams] = useSearchParams();
+  const careMode = searchParams.has('hoida');
+  // Read once: later the URL follows the selected parcel (below) without reloading the data
+  const [carePropertyId] = useState(() => Number(searchParams.get('hoida')) || null);
+  // "Omat metsät" opens /map?propertyId=<id> (optionally &standId=… from the value view)
+  const requestedPropertyId = Number(searchParams.get('propertyId'));
+  const requestedWorkRequestId = Number(searchParams.get('workRequest'));
+  const hasPropertyParameter = searchParams.has('propertyId');
+  const hasRequestedProperty =
+    hasPropertyParameter && Number.isSafeInteger(requestedPropertyId) && requestedPropertyId > 0;
+  const showAllWorkRequests = searchParams.get('section') === 'work-requests';
+  const fromForestOverview = searchParams.get('from') === 'forests';
+  const requestedStandId = searchParams.get('standId');
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
+  const [layerMenuOpen, setLayerMenuOpen] = useState(true);
+  const [drawMenuOpen, setDrawMenuOpen] = useState(true);
   // Guests start on an example parcel so the demo has something to try right away
   const [properties, setProperties] = useState<Property[]>(() => (isGuest ? [DEMO_PROPERTY] : []));
   const [markings, setMarkings] = useState<Marking[]>(() => (isGuest ? DEMO_MARKINGS : []));
@@ -158,7 +216,7 @@ export default function MapPage() {
   const [pendingGeometry, setPendingGeometry] = useState<GeoJSONGeometry>(null);
   const [pendingGeometryType, setPendingGeometryType] = useState<GeometryType>('point');
   const [error, setError] = useState('');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(() =>
     isGuest ? DEMO_PROPERTY.id : null
@@ -167,16 +225,18 @@ export default function MapPage() {
     isGuest ? DEMO_PROPERTY.geometry : null
   );
 
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchResult, setSearchResult] = useState<CadastreFeature | null>(null);
-  const [savingSearchResult, setSavingSearchResult] = useState(false);
+  const [savingClickedCadastre, setSavingClickedCadastre] = useState(false);
 
   const [layerConfig, setLayerConfig] = useState<MapLayerConfig>(FALLBACK_LAYER_CONFIG);
   const [activeBaseLayer, setActiveBaseLayer] = useState<BaseLayerKey>('maastokartta');
   const [showCadastreOverlay, setShowCadastreOverlay] = useState(false);
-  const [forestValueOpen, setForestValueOpen] = useState(false);
+  const [forestValueOpen, setForestValueOpen] = useState(() => Boolean(requestedStandId));
   // Stand highlighted from the value view; tied to the parcel so it resets on reselect
-  const [highlightedStand, setHighlightedStand] = useState<{ propertyId: number; standId: string } | null>(null);
+  const [highlightedStand, setHighlightedStand] = useState<{ propertyId: number; standId: string } | null>(() =>
+    requestedStandId && hasRequestedProperty
+      ? { propertyId: requestedPropertyId, standId: requestedStandId }
+      : null
+  );
   // Prefilled work request opened from a recommended operation
   const [requestDraft, setRequestDraft] = useState<WorkRequestDraft | null>(null);
   const [tileLoading, setTileLoading] = useState(false);
@@ -197,6 +257,45 @@ export default function MapPage() {
   const [measurementPoints, setMeasurementPoints] = useState<[number, number][]>([]);
   const [measurementDistance, setMeasurementDistance] = useState<number | null>(null);
 
+  useEffect(() => {
+    const layerSwitcher = layerSwitcherRef.current;
+    if (!layerSwitcher) return;
+
+    const updateHeight = () => {
+      layerSwitcher.parentElement?.style.setProperty(
+        '--layer-switcher-height',
+        `${layerSwitcher.getBoundingClientRect().height}px`
+      );
+    };
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(layerSwitcher);
+    updateHeight();
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const mapPage = mapContainerRef.current?.closest<HTMLElement>('.map-page');
+    const activityFab = activityFabRef.current;
+    if (!mapPage || !activityFab) return;
+
+    const updatePosition = () => {
+      mapPage.style.setProperty(
+        '--activity-help-top',
+        `${activityFab.getBoundingClientRect().bottom + 12}px`,
+      );
+    };
+
+    const observer = new ResizeObserver(updatePosition);
+    observer.observe(activityFab);
+    window.addEventListener('resize', updatePosition);
+    updatePosition();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updatePosition);
+      mapPage.style.removeProperty('--activity-help-top');
+    };
+  }, [selectedPropertyId, activeTool, showForm, showCadastreOverlay, activityOpen]);
+
   const selectedProperty = useMemo(
     () => properties.find((p) => p.id === selectedPropertyId) ?? null,
     [properties, selectedPropertyId]
@@ -213,13 +312,46 @@ export default function MapPage() {
     const props = await propertiesService.getAll();
     setProperties(props);
     setPropertiesLoaded(true);
-    // "Avaa oma metsäpalsta" should land on the parcel, not on the whole of Finland
-    if (props.length > 0 && !autoSelectedRef.current) {
+    if (autoSelectedRef.current) return;
+    // Opened from "Omat metsät": land on the chosen parcel
+    if (hasPropertyParameter && !careMode) {
       autoSelectedRef.current = true;
-      setSelectedPropertyId((current) => current ?? props[0].id);
-      setSelectedPropertyGeometry((current) => current ?? props[0].geometry);
+      const requestedProperty = hasRequestedProperty
+        ? props.find((property) => property.id === requestedPropertyId)
+        : undefined;
+      if (requestedProperty) {
+        setSelectedPropertyId(requestedProperty.id);
+        setSelectedPropertyGeometry(requestedProperty.geometry);
+        setSidebarOpen(true);
+      } else {
+        setError('Valittua metsäpalstaa ei löytynyt. Tarkista omat metsäsi.');
+      }
+      return;
     }
-  }, [isGuest]);
+    if (props.length === 0) return;
+    autoSelectedRef.current = true;
+    if (careMode) {
+      // Care mode lands on the chosen parcel; with a single parcel the choice was skipped
+      const careProperty = props.find((p) => p.id === carePropertyId) ?? (props.length === 1 ? props[0] : null);
+      if (careProperty) {
+        setSelectedPropertyId(careProperty.id);
+        setSelectedPropertyGeometry(careProperty.geometry);
+      } else {
+        setError('Valittua metsää ei löytynyt. Valitse hoidettava palsta sivupalkista.');
+      }
+      return;
+    }
+    // "Avaa oma metsäpalsta" shows all own parcels without choosing one
+    const bounds = L.geoJSON({
+      type: 'FeatureCollection',
+      features: props
+        .filter((p) => p.geometry)
+        .map((p) => ({ type: 'Feature', properties: {}, geometry: p.geometry as GeoJSON.Geometry })),
+    } as GeoJSON.FeatureCollection).getBounds();
+    if (bounds.isValid() && mapRef.current) {
+      mapRef.current.fitBounds(bounds, { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
+    }
+  }, [isGuest, careMode, carePropertyId, hasPropertyParameter, hasRequestedProperty, requestedPropertyId]);
 
   const loadMarkings = useCallback(async (propertyId?: number | null) => {
     if (isGuest) return;
@@ -265,6 +397,11 @@ export default function MapPage() {
       zoom,
       zoomControl: true,
     });
+    // Fixed stacking instead of draw order: properties are redrawn whenever the list reloads
+    // (e.g. after selecting one), and in the shared overlay pane they then covered the markings,
+    // which could no longer be clicked (issue #20)
+    map.createPane(PROPERTIES_PANE).style.zIndex = '380';
+    map.createPane(MARKINGS_PANE).style.zIndex = '450';
     const saveMapView = () => {
       const currentCenter = map.getCenter();
       try {
@@ -487,6 +624,39 @@ export default function MapPage() {
     refreshData();
   }, [refreshData]);
 
+  // Runs again whenever the property list reloads (e.g. after selecting another parcel), so it
+  // must fit only once: otherwise the map jumps back to the parcel in the URL (issue #89)
+  useEffect(() => {
+    if (requestedFitDoneRef.current || !propertiesLoaded || !hasPropertyParameter) return;
+    const property = properties.find((item) => item.id === requestedPropertyId);
+    if (!property) return;
+    const bounds = toBounds(property.geometry);
+    if (bounds?.isValid() && mapRef.current) {
+      requestedFitDoneRef.current = true;
+      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
+    }
+  }, [hasPropertyParameter, propertiesLoaded, properties, requestedPropertyId]);
+
+  useEffect(() => {
+    if (!forestValueOpen || !highlightedStandId || !forestValueResult) return;
+    const stand = forestValueResult.stands.find((item) => item.standId === highlightedStandId);
+    const bounds = stand ? toBounds(stand.geometry) : null;
+    const map = mapRef.current;
+    if (!map || !bounds?.isValid()) return;
+
+    if (window.innerWidth < 900) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+      return;
+    }
+
+    const panelWidth = document.querySelector('.fv-panel')?.clientWidth ?? 0;
+    map.fitBounds(bounds, {
+      paddingTopLeft: [40, 40],
+      paddingBottomRight: [panelWidth + 40, 40],
+      maxZoom: 16,
+    });
+  }, [forestValueOpen, forestValueResult, highlightedStandId]);
+
   useEffect(() => {
     loadMarkings(selectedPropertyId).catch(() => setError('Tietojen lataaminen epäonnistui'));
   }, [selectedPropertyId, loadMarkings]);
@@ -499,6 +669,20 @@ export default function MapPage() {
       .then(setWorkRequests)
       .catch(() => setError('Työpyyntöjen lataaminen epäonnistui'));
   }, [isGuest]);
+
+  useEffect(() => {
+    if (isGuest || !Number.isSafeInteger(requestedWorkRequestId) || requestedWorkRequestId <= 0) return;
+    const request = workRequests.find((item) => item.id === requestedWorkRequestId);
+    if (!request) return;
+    const selection = window.setTimeout(() => {
+      setSelectedPropertyId(request.property_id);
+      setSelectedPropertyGeometry(
+        properties.find((property) => property.id === request.property_id)?.geometry ?? null
+      );
+      setSidebarOpen(true);
+    }, 0);
+    return () => window.clearTimeout(selection);
+  }, [isGuest, requestedWorkRequestId, workRequests, properties]);
 
   // Publish the area just drawn with the "Työpyyntö" tool
   const handleCreateWorkRequest = async (data: WorkRequestFormData): Promise<WorkRequest> => {
@@ -544,6 +728,8 @@ export default function MapPage() {
     }
     const group = requestsLayerRef.current;
     group.clearLayers();
+    // Care mode leaves planned work off the map, like the sidebar does
+    if (careMode) return;
     workRequests
       .filter((r) => r.property_id === selectedPropertyId && r.geometry)
       .forEach((r) => {
@@ -556,14 +742,14 @@ export default function MapPage() {
         // textContent: titles are user input
         const popup = document.createElement('div');
         const title = document.createElement('strong');
-        title.textContent = `📢 ${r.title}`;
+        title.textContent = r.title;
         const info = document.createElement('div');
-        info.textContent = `Työpyyntö · ${bidSummaryText(r)}`;
+        info.textContent = `Työpyyntö. ${bidSummaryText(r)}`;
         popup.append(title, info);
         layer.bindPopup(popup);
         group.addLayer(layer);
       });
-  }, [workRequests, selectedPropertyId]);
+  }, [workRequests, selectedPropertyId, careMode]);
 
   const renderSelectedHighlight = useCallback((geometry: GeoJSONGeometry, color: string) => {
     if (!mapRef.current || !geometry) return;
@@ -574,6 +760,8 @@ export default function MapPage() {
     }
 
     const layer = L.geoJSON(geometry as GeoJSON.Geometry, {
+      // The highlight is visual only; it must not block clicks on properties or markings below it.
+      interactive: false,
       style: {
         color,
         weight: 4,
@@ -595,6 +783,7 @@ export default function MapPage() {
       if (!prop.geometry) return;
       const isSelected = prop.id === selectedPropertyId;
       const layer = L.geoJSON(prop.geometry as GeoJSON.Geometry, {
+        pane: PROPERTIES_PANE,
         style: {
           color: isSelected ? '#0f172a' : '#166534',
           weight: isSelected ? 4 : 2,
@@ -602,7 +791,7 @@ export default function MapPage() {
           fillOpacity: isSelected ? 0.25 : 0.15,
         },
       });
-      layer.bindPopup(`<strong>🌳 ${prop.name}</strong><br/>Metsäkiinteistö`);
+      layer.bindPopup(`<strong>${prop.name}</strong><br/>Metsäkiinteistö`);
       layer.on('click', () => {
         setSelectedPropertyId(prop.id);
         setSelectedPropertyGeometry(prop.geometry);
@@ -618,8 +807,9 @@ export default function MapPage() {
     markings.forEach((marking) => {
       if (!marking.geometry) return;
 
-      const color = MARKING_COLORS[marking.type] || '#666';
-      const label = MARKING_TYPE_LABELS[marking.type] || marking.type;
+      const note = isNote(marking);
+      const color = note ? NOTE_COLOR : MARKING_COLORS[marking.type] || '#666';
+      const label = note ? NOTE_LABEL : MARKING_TYPE_LABELS[marking.type] || marking.type;
       let popupContent = `
         <strong>${marking.title}</strong><br/>
         <span style="color:${color}">● ${label}</span>
@@ -628,11 +818,11 @@ export default function MapPage() {
       
       // Add area for polygon markings
       if ((marking.geometry.type === 'Polygon' || marking.geometry.type === 'MultiPolygon') && marking.area_ha != null) {
-        popupContent += `<br/><span style="font-weight:500">📐 ${formatArea(marking.area_ha)}</span>`;
+        popupContent += `<br/><span style="font-weight:500">${formatArea(marking.area_ha)}</span>`;
       }
 
       if (marking.operation_date) {
-        popupContent += `<br/><span>Toimenpide tehty: ${formatDate(marking.operation_date)}</span>`;
+        popupContent += `<br/><span>${note ? '' : 'Toimenpide tehty: '}${formatDate(marking.operation_date)}</span>`;
       }
 
       if (marking.follow_up_note) {
@@ -649,6 +839,7 @@ export default function MapPage() {
       if (marking.geometry.type === 'Point') {
         const coords = marking.geometry.coordinates as [number, number];
         const marker = L.circleMarker([coords[1], coords[0]], {
+          pane: MARKINGS_PANE,
           radius: 8,
           fillColor: color,
           color: '#fff',
@@ -659,6 +850,7 @@ export default function MapPage() {
         markingsLayerRef.current!.addLayer(marker);
       } else {
         const layer = L.geoJSON(marking.geometry as GeoJSON.Geometry, {
+          pane: MARKINGS_PANE,
           style: { color, weight: 3, fillOpacity: 0.3 },
         });
         layer.bindPopup(popupContent);
@@ -668,12 +860,18 @@ export default function MapPage() {
   }, [markings]);
 
   useEffect(() => {
-    if (!selectedPropertyGeometry) return;
+    if (!selectedPropertyGeometry) {
+      if (selectedHighlightLayerRef.current && mapRef.current) {
+        mapRef.current.removeLayer(selectedHighlightLayerRef.current);
+        selectedHighlightLayerRef.current = null;
+      }
+      return;
+    }
     renderSelectedHighlight(selectedPropertyGeometry, '#0f172a');
 
     const bounds = toBounds(selectedPropertyGeometry);
     if (bounds && mapRef.current) {
-      mapRef.current.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
+      mapRef.current.fitBounds(bounds, { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
     }
   }, [selectedPropertyGeometry, renderSelectedHighlight]);
 
@@ -902,6 +1100,8 @@ export default function MapPage() {
     description: string;
     operation_date: string;
     area_ha?: number | null;
+    income_eur?: number | null;
+    cost_eur?: number | null;
   }) => {
     if (!selectedPropertyId) {
       setError('Valitse ensin kiinteistö, johon merkintä liitetään.');
@@ -914,7 +1114,11 @@ export default function MapPage() {
       areaHa = calculateAreaHa(pendingGeometry);
     }
 
-    const followUp = getFollowUpRecommendation(data.type, data.operation_date);
+    // Notes are reminders, not done work: no follow-up check
+    const followUp =
+      pendingGeometryType === 'note'
+        ? { followUpDateStart: null, followUpDateEnd: null, followUpNote: null }
+        : getFollowUpRecommendation(data.type, data.operation_date);
 
     try {
       let marking: Marking;
@@ -932,6 +1136,8 @@ export default function MapPage() {
           follow_up_date_start: followUp.followUpDateStart,
           follow_up_date_end: followUp.followUpDateEnd,
           follow_up_note: followUp.followUpNote,
+          income_eur: data.income_eur ?? null,
+          cost_eur: data.cost_eur ?? null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -945,6 +1151,8 @@ export default function MapPage() {
           geometry: pendingGeometry,
           area_ha: areaHa,
           operation_date: data.operation_date,
+          income_eur: data.income_eur ?? null,
+          cost_eur: data.cost_eur ?? null,
         });
       }
       setMarkings((prev) => [marking, ...prev]);
@@ -965,6 +1173,69 @@ export default function MapPage() {
     startDraw('request');
   };
 
+  // Care mode: keep ?hoida= on the selected parcel, so a reload or shared link opens the same forest
+  useEffect(() => {
+    if (!careMode || isGuest || selectedPropertyId === null) return;
+    if (searchParams.get('hoida') === String(selectedPropertyId)) return;
+    setSearchParams({ hoida: String(selectedPropertyId) }, { replace: true });
+  }, [careMode, isGuest, selectedPropertyId, searchParams, setSearchParams]);
+
+  // Care mode: follow the user's GPS position on the map (the activity tracker has its own while open)
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!careMode || activityOpen || !map || !('geolocation' in navigator)) return;
+    const layer = L.layerGroup().addTo(map);
+    careLocationLayerRef.current = layer;
+    const watchId = navigator.geolocation.watchPosition(
+      ({ coords }) => {
+        const latLng = L.latLng(coords.latitude, coords.longitude);
+        layer.clearLayers();
+        L.circle(latLng, {
+          radius: coords.accuracy, color: '#2563eb', weight: 1, fillOpacity: 0.08, interactive: false,
+        }).addTo(layer);
+        L.circleMarker(latLng, { radius: 8, color: '#fff', weight: 3, fillColor: '#2563eb', fillOpacity: 1 })
+          .bindTooltip('Olet tässä')
+          .addTo(layer);
+        const proximity = parcelProximity(selectedPropertyGeometry, { lat: coords.latitude, lng: coords.longitude });
+        // Show the user and the parcel together once, when they are near each other
+        const parcelBounds = selectedPropertyGeometry ? toBounds(selectedPropertyGeometry) : null;
+        if (!careFittedRef.current && parcelBounds?.isValid() && proximity && proximity.distanceKm <= 30) {
+          careFittedRef.current = true;
+          map.fitBounds(parcelBounds.extend(latLng), { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
+        }
+      },
+      // Without a position the map simply shows no dot; the activity explains GPS problems itself
+      undefined,
+      { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 }
+    );
+    return () => {
+      navigator.geolocation.clearWatch(watchId);
+      map.removeLayer(layer);
+      careLocationLayerRef.current = null;
+    };
+  }, [careMode, activityOpen, selectedPropertyGeometry]);
+
+  // Care mode: number the separate areas of a multi-area property on the map ("Alue 1, 2, …")
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!careMode || !map) return;
+    const areas = parcelAreas(selectedPropertyGeometry);
+    if (areas.length < 2) return;
+    const layer = L.layerGroup(
+      areas.map((area) =>
+        L.marker(area.labelPosition, {
+          icon: L.divIcon({ className: 'care-area-label', html: String(area.number), iconSize: [26, 26] }),
+          title: `Alue ${area.number}`,
+          interactive: false,
+          keyboard: false,
+        })
+      )
+    ).addTo(map);
+    return () => {
+      map.removeLayer(layer);
+    };
+  }, [careMode, selectedPropertyGeometry]);
+
   const openActivity = () => {
     if (!selectedPropertyId) {
       setError('Valitse ensin palsta, jolla aktiviteetti tehdään.');
@@ -982,7 +1253,7 @@ export default function MapPage() {
     const today = new Date();
     const operationDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     const minutes = Math.max(1, Math.round(result.durationS / 60));
-    const title = `${MARKING_TYPE_LABELS[result.type]} ${today.toLocaleDateString('fi-FI')}`;
+    const title = result.title ?? `${MARKING_TYPE_LABELS[result.type]} ${today.toLocaleDateString('fi-FI')}`;
     const description = `GPS-aktiviteetti: ${minutes} min, ${formatDistance(result.distanceM)} kävelty.`;
     const geometry = result.geometry as GeoJSONGeometry;
     const areaHa = Math.round(result.areaHa * 100) / 100;
@@ -1084,7 +1355,7 @@ export default function MapPage() {
 
   const handleSaveClickedCadastre = async () => {
     if (!clickedCadastre) return;
-    setSavingSearchResult(true);
+    setSavingClickedCadastre(true);
     setError('');
     const saveName = clickedCadastreCustomName.trim() || clickedCadastre.properties.propertyCode;
     try {
@@ -1119,7 +1390,7 @@ export default function MapPage() {
           : 'Kiinteistön tallennus epäonnistui'
       );
     } finally {
-      setSavingSearchResult(false);
+      setSavingClickedCadastre(false);
     }
   };
 
@@ -1132,7 +1403,63 @@ export default function MapPage() {
     }
     const group = standsLayerRef.current;
     group.clearLayers();
-    if (!forestValueResult || (!forestValueOpen && !highlightedStandId)) return;
+    if (!forestValueResult) return;
+
+    // Fields first, so stands stay on top; they get no value and no recommendations
+    const addFieldLayers = () => {
+      (forestValueResult.fields ?? []).forEach((field) => {
+        if (!field.geometry) return;
+        const layer = L.geoJSON(field.geometry as GeoJSON.Geometry, {
+          style: { color: '#a16207', weight: 1.5, dashArray: '2 4', fillColor: '#facc15', fillOpacity: 0.3 },
+          bubblingMouseEvents: false,
+        });
+        layer.bindTooltip(
+          `Pelto, ${formatArea(field.areaHa)}` +
+            (field.source === 'owner' ? ` (${standTitle(field.standNumber).toLowerCase()} merkitty pelloksi)` : ' (peltolohkorekisteri)'),
+          { sticky: true }
+        );
+        group.addLayer(layer);
+      });
+    };
+
+    // Care mode: stands that need work are clickable and show their recommendations in a popup
+    if (careMode && !forestValueOpen) {
+      addFieldLayers();
+      const careOps = forestValueResult.operations.filter(isCareOperation);
+      forestValueResult.stands.forEach((stand) => {
+        const op = careOps.find((o) => o.standId === stand.standId);
+        if (!stand.geometry || !op) return;
+        const selected = stand.standId === highlightedStandId;
+        const color = MARKING_COLORS[OPERATION_WORK_TYPE[op.type]];
+        const layer = L.geoJSON(stand.geometry as GeoJSON.Geometry, {
+          style: {
+            color: selected ? '#1d4ed8' : color,
+            weight: selected ? 3.5 : 2,
+            dashArray: selected ? undefined : '6 4',
+            fillColor: selected ? '#3b82f6' : color,
+            fillOpacity: selected ? 0.4 : 0.18,
+          },
+          bubblingMouseEvents: false,
+        });
+        layer.bindTooltip(`${standTitle(stand.standNumber)}: ${OPERATION_LABEL[op.type]}`, { sticky: true });
+        // Highlight while the popup is open; styled on the layer itself, since redrawing the
+        // layers (a React state change) would close the popup right away
+        const baseStyle = { color, weight: 2, dashArray: '6 4', fillColor: color, fillOpacity: 0.18 };
+        layer.bindPopup(careStandPopup(standTitle(stand.standNumber), careOps.filter((o) => o.standId === stand.standId)));
+        layer.on('popupopen', () => {
+          layer.setStyle({ color: '#1d4ed8', weight: 3.5, dashArray: '', fillColor: '#3b82f6', fillOpacity: 0.4 });
+          layer.bringToFront();
+        });
+        layer.on('popupclose', () => layer.setStyle(baseStyle));
+        layer.on('click', (e) => L.DomEvent.stopPropagation(e));
+        group.addLayer(layer);
+        if (selected) layer.bringToFront();
+      });
+      return;
+    }
+
+    if (!forestValueOpen && !highlightedStandId) return;
+    addFieldLayers();
     forestValueResult.stands.forEach((stand) => {
       if (!stand.geometry) return;
       const selected = stand.standId === highlightedStandId;
@@ -1148,7 +1475,7 @@ export default function MapPage() {
       group.addLayer(layer);
       if (selected) layer.bringToFront();
     });
-  }, [forestValueResult, forestValueOpen, highlightedStandId]);
+  }, [forestValueResult, forestValueOpen, highlightedStandId, careMode]);
 
   const handleSelectStand = (standId: string) => {
     if (selectedPropertyId === null) return;
@@ -1196,138 +1523,45 @@ export default function MapPage() {
   };
 
   const handleSelectProperty = (property: Property) => {
+    if (selectedPropertyId === property.id) {
+      setSelectedPropertyId(null);
+      setSelectedPropertyGeometry(null);
+      return;
+    }
     setSelectedPropertyId(property.id);
     setSelectedPropertyGeometry(property.geometry);
     setSidebarOpen(true);
-  };
-
-  const handleSaveCadastreToProperties = async () => {
-    if (!searchResult) return;
-
-    setSavingSearchResult(true);
-    setError('');
-    try {
-      let created: Property;
-      if (isGuest) {
-        created = {
-          id: -Date.now(),
-          name: searchResult.properties.name,
-          property_code: searchResult.properties.propertyCode,
-          area_ha: searchResult.properties.areaHa,
-          geometry: searchResult.geometry,
-          created_at: new Date().toISOString(),
-        };
-      } else {
-        created = await propertiesService.importFromCadastre({
-          name: searchResult.properties.name,
-          property_code: searchResult.properties.propertyCode,
-          geometry: searchResult.geometry,
-          area_ha: searchResult.properties.areaHa,
-        });
-      }
-
-      setProperties((prev) => [created, ...prev]);
-      setSelectedPropertyId(created.id);
-      setSelectedPropertyGeometry(created.geometry);
-      setSearchResult(null);
-
-      if (cadastreLayerRef.current && mapRef.current) {
-        mapRef.current.removeLayer(cadastreLayerRef.current);
-        cadastreLayerRef.current = null;
-      }
-    } catch (err: unknown) {
-      const status =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { status?: number } }).response?.status
-          : undefined;
-
-      if (status === 409) {
-        setError('Kiinteistö on jo tallennettu omiin kiinteistöihin');
-      } else {
-        setError('Kiinteistön tallennus epäonnistui');
-      }
-    } finally {
-      setSavingSearchResult(false);
-    }
-  };
-
-  const handleOnSearch = async (propertyCode: string): Promise<CadastreFeature | null> => {
-    const code = propertyCode.trim().replace(/\s*-\s*/g, '-').replace(/\s+/g, '-');
-    if (!PROPERTY_CODE_REGEX.test(code)) {
-      setError('Kiinteistötunnus on väärässä muodossa. Anna se esim. muodossa 91-401-5-24.');
-      return null;
-    }
-
-    setSearchLoading(true);
-    setError('');
-    try {
-      const feature = await cadastreService.searchByPropertyCode(code);
-      setSearchResult(feature);
-
-      if (cadastreLayerRef.current && mapRef.current) {
-        mapRef.current.removeLayer(cadastreLayerRef.current);
-      }
-
-      const layer = L.geoJSON(feature.geometry as GeoJSON.Geometry, {
-        style: {
-          color: '#0369a1',
-          weight: 3,
-          fillColor: '#38bdf8',
-          fillOpacity: 0.2,
-        },
-      });
-      layer.bindPopup(`<strong>${feature.properties.name}</strong><br/>${feature.properties.propertyCode}`);
-      layer.addTo(mapRef.current!);
-      cadastreLayerRef.current = layer;
-
-      const bounds = layer.getBounds();
-      if (bounds.isValid()) {
-        mapRef.current?.fitBounds(bounds, { padding: [40, 40], maxZoom: FIT_MAX_ZOOM });
-      }
-
-      renderSelectedHighlight(feature.geometry, '#0369a1');
-      return feature;
-    } catch (err: unknown) {
-      const status =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { status?: number; data?: { error?: string } } }).response?.status
-          : undefined;
-      const backendMessage =
-        err && typeof err === 'object' && 'response' in err
-          ? (err as { response?: { data?: { error?: string } } }).response?.data?.error
-          : undefined;
-
-      if (status === 404) {
-        setError('Kiinteistöä ei löytynyt');
-      } else if (backendMessage) {
-        setError(backendMessage);
-      } else {
-        setError('Kiinteistön haku epäonnistui');
-      }
-      setSearchResult(null);
-      return null;
-    } finally {
-      setSearchLoading(false);
-    }
   };
 
   return (
     <div className={`map-page ${activityOpen ? 'activity-mode' : ''}`}>
       <nav className="map-nav">
         <div className="map-nav-left">
-          <button
-            className="sidebar-toggle"
-            onClick={() => setSidebarOpen((isOpen) => !isOpen)}
-            aria-expanded={sidebarOpen}
-            aria-controls="map-sidebar"
-            title="Valikko"
-          >
-            ☰
-          </button>
-          <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä">🌲 Metsuri</Link>
+          {/* Care mode is the map alone: the same details are on "Minun metsäni" */}
+          {!careMode && (
+            <button
+              className="sidebar-toggle"
+              onClick={() => setSidebarOpen((isOpen) => !isOpen)}
+              aria-expanded={sidebarOpen}
+              aria-controls="map-sidebar"
+              title="Valikko"
+              aria-label="Valikko"
+            >
+              <Menu size={22} aria-hidden="true" />
+            </button>
+          )}
+          {/* Opened from "Omat metsät" without in-app history: back leads there */}
+          <BackButton fallbackPath={fromForestOverview ? '/omat-metsat' : '/start'} />
+          <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä" aria-label="Metsuri – aloitusnäkymä">
+            <img className="nav-logo-wordmark" src="/media/white_wordmark.png" alt="Metsuri" />
+            <img className="nav-logo-symbol" src="/media/white_symbol.png" alt="" aria-hidden="true" />
+          </Link>
         </div>
         <div className="map-nav-right">
-          {isGuest ? (
+        {!isGuest && <NotificationsBell />}
+        {!isGuest && <ChatsIcon />}
+        <HelpMenu />
+        {isGuest ? (
             <>
               <span className="user-email guest-label">Vierailija</span>
               <button className="btn btn-small btn-primary" onClick={() => { logout(); navigate('/login'); }}>
@@ -1337,15 +1571,20 @@ export default function MapPage() {
           ) : (
             <>
               <span className="user-email">{user?.email}</span>
-              <button className="btn btn-small" onClick={logout}>
-                Kirjaudu ulos
+              <button className="btn btn-small logout-button" onClick={logout} aria-label="Kirjaudu ulos" title="Kirjaudu ulos">
+                <span className="logout-label">Kirjaudu ulos</span>
+                <svg className="logout-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 17l5-5-5-5" />
+                  <path d="M15 12H3" />
+                  <path d="M21 19V5a2 2 0 0 0-2-2h-5" />
+                </svg>
               </button>
             </>
           )}
         </div>
       </nav>
 
-      <div className={`map-content ${isGuest ? 'has-guest-banner' : ''} ${sidebarOpen ? 'sidebar-open' : ''}`}>
+      <div className={`map-content ${isGuest ? 'has-guest-banner' : ''} ${sidebarOpen && !careMode ? 'sidebar-open' : ''}`}>
         {isGuest && (
           <div className="guest-banner">
             <span>Demotila – mitään ei tallenneta</span>
@@ -1354,7 +1593,7 @@ export default function MapPage() {
             </button>
           </div>
         )}
-        <Sidebar
+        {!careMode && <Sidebar
           isOpen={sidebarOpen}
           properties={properties}
           markings={markings}
@@ -1364,9 +1603,6 @@ export default function MapPage() {
             setForestValueOpen(true);
             setSidebarOpen(false);
           }}
-          isSearching={searchLoading}
-          onSearch={handleOnSearch}
-          onSelectResult={handleSaveCadastreToProperties}
           onSelectProperty={handleSelectProperty}
           onDeleteProperty={handleDeleteProperty}
           onDeleteMarking={handleDeleteMarking}
@@ -1375,25 +1611,49 @@ export default function MapPage() {
           onNewWorkRequest={openNewWorkRequest}
           onWithdrawWorkRequest={handleWithdrawWorkRequest}
           onWorkRequestUpdated={handleWorkRequestUpdated}
-        />
+          focusWorkRequests={
+            showAllWorkRequests ||
+            (!isGuest &&
+              Number.isSafeInteger(requestedWorkRequestId) &&
+              requestedWorkRequestId > 0)
+          }
+          showAllWorkRequests={showAllWorkRequests && !isGuest}
+        />}
 
         <div className="map-wrapper">
           <div ref={mapContainerRef} className="leaflet-map" />
 
-          <div className="layer-switcher" role="group" aria-label="Karttataso">
+          <div
+            ref={layerSwitcherRef}
+            className={`layer-switcher ${layerMenuOpen ? 'menu-open' : 'menu-closed'}`}
+            role="group"
+            aria-label="Karttataso"
+          >
             <button
-              className={`layer-btn ${activeBaseLayer === 'maastokartta' || activeBaseLayer === 'peruskartta' ? 'active' : ''}`}
-              onClick={() => setActiveBaseLayer('maastokartta')}
+              className="map-control-toggle"
+              onClick={() => setLayerMenuOpen((open) => !open)}
+              aria-expanded={layerMenuOpen}
+              aria-label="Karttatasot"
             >
-              Maastokartta
+              ▾
             </button>
-            <button
-              className={`layer-btn ${activeBaseLayer === 'ortokuva' ? 'active' : ''}`}
-              onClick={() => setActiveBaseLayer('ortokuva')}
-            >
-              Ortokuva
-            </button>
-            {layerConfig.overlays?.kiinteistorajat && (
+            {layerMenuOpen && (
+              <>
+                <button
+                  className={`layer-btn ${activeBaseLayer === 'maastokartta' || activeBaseLayer === 'peruskartta' ? 'active' : ''}`}
+                  onClick={() => setActiveBaseLayer('maastokartta')}
+                >
+                  Maastokartta
+                </button>
+                <button
+                  className={`layer-btn ${activeBaseLayer === 'ortokuva' ? 'active' : ''}`}
+                  onClick={() => setActiveBaseLayer('ortokuva')}
+                >
+                  Ortokuva
+                </button>
+              </>
+            )}
+            {layerMenuOpen && layerConfig.overlays?.kiinteistorajat && (
               <button
                 className={`layer-btn ${showCadastreOverlay ? 'active' : ''}`}
                 onClick={() => { setCadastreClickError(''); setShowCadastreOverlay((v) => !v); }}
@@ -1417,7 +1677,7 @@ export default function MapPage() {
           {mmlMapUnavailable && !mapNoticeDismissed && (
             <div className="map-fallback-notice" role="status">
               <span>Maanmittauslaitoksen kartta ei ole juuri nyt saatavilla, joten näytetään OpenStreetMap.</span>
-              <button onClick={() => setMapNoticeDismissed(true)} aria-label="Sulje ilmoitus">✕</button>
+              <button onClick={() => setMapNoticeDismissed(true)} aria-label="Sulje ilmoitus"><X size={16} aria-hidden="true" /></button>
             </div>
           )}
 
@@ -1456,21 +1716,22 @@ export default function MapPage() {
                     <button
                       className="btn btn-primary btn-small"
                       onClick={handleSaveClickedCadastre}
-                      disabled={savingSearchResult}
+                      disabled={savingClickedCadastre}
                     >
-                      {savingSearchResult ? 'Tallennetaan...' : '+ Omiin kiinteistöihin'}
+                      {savingClickedCadastre ? 'Tallennetaan...' : '+ Omiin kiinteistöihin'}
                     </button>
                     <button
                       className="btn-icon"
                       onClick={() => { setClickedCadastre(null); setClickedCadastreCustomName(''); }}
                       title="Sulje"
+                      aria-label="Sulje"
                     >
-                      ✕
+                      <X size={18} aria-hidden="true" />
                     </button>
                   </div>
                 </>
               ) : cadastreClickError ? (
-                <span className="cadastre-click-error" role="alert">⚠️ {cadastreClickError}</span>
+                <span className="cadastre-click-error" role="alert">{cadastreClickError}</span>
               ) : (
                 <span className="cadastre-click-hint">
                   Valitse kiinteistö klikkaamalla sitä kartalla. Zoomaa lähemmäs, jos rajoja ei näy.
@@ -1488,26 +1749,20 @@ export default function MapPage() {
                 title="Sulje"
                 aria-label="Sulje"
               >
-                ✕
+                <X size={18} aria-hidden="true" />
               </button>
-              <strong>🌲 Sinulla ei ole vielä lisättyä palstaa</strong>
+              <strong>Sinulla ei ole vielä lisättyä palstaa</strong>
               <p>Lisää oma metsäpalstasi, niin voit tehdä merkintöjä ja aloittaa aktiviteetin. Karttaa voit selata jo nyt.</p>
-              <div className="empty-parcel-actions">
-                <button
-                  className="btn btn-primary btn-compact"
-                  onClick={() => { setEmptyNoticeDismissed(true); setSidebarOpen(true); }}
-                >
-                  🔍 Hae kiinteistötunnuksella
-                </button>
-                {layerConfig.overlays?.kiinteistorajat && (
+              {layerConfig.overlays?.kiinteistorajat && (
+                <div className="empty-parcel-actions">
                   <button
                     className="btn btn-secondary btn-compact"
                     onClick={() => { setEmptyNoticeDismissed(true); setShowCadastreOverlay(true); }}
                   >
-                    🗺️ Valitse kartalta
+                    Valitse kartalta
                   </button>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1523,20 +1778,31 @@ export default function MapPage() {
           ) : (
             // Hidden while choosing a property on the cadastre layer: the panel uses the same spot
             selectedPropertyId && !activeTool && !showForm && !(showCadastreOverlay && layerConfig.overlays?.kiinteistorajat) && (
-              <button className="activity-fab" onClick={openActivity}>
-                ▶ Aloita aktiviteetti
+              <button ref={activityFabRef} className="activity-fab" onClick={openActivity}>
+                <span className="activity-fab-icon" aria-hidden="true">▶</span>
+                <span>Aloita aktiviteetti</span>
               </button>
             )
           )}
 
-          <div className="draw-toolbar">
+          <div className={`draw-toolbar ${drawMenuOpen ? 'menu-open' : 'menu-closed'}`}>
+            <button
+              className="map-control-toggle"
+              onClick={() => setDrawMenuOpen((open) => !open)}
+              aria-expanded={drawMenuOpen}
+              aria-label="Piirtotyökalut"
+            >
+              ▴
+            </button>
+            {drawMenuOpen && (
+              <>
             {activeTool && (
               <button
                 className="tool-btn cancel-btn"
                 onClick={cancelDraw}
                 title="Peruuta piirto"
               >
-                ✕<span>Peruuta</span>
+                <X aria-hidden="true" /><span>Peruuta</span>
               </button>
             )}
             <button
@@ -1544,48 +1810,52 @@ export default function MapPage() {
               onClick={() => (activeTool === 'point' ? startDraw(null) : startDraw('point'))}
               title="Lisää piste"
             >
-              📍<span>Piste</span>
+              <MapPin aria-hidden="true" /><span>Piste</span>
             </button>
             <button
               className={`tool-btn ${activeTool === 'line' ? 'active' : ''}`}
               onClick={() => (activeTool === 'line' ? startDraw(null) : startDraw('line'))}
               title="Lisää viiva"
             >
-              📏<span>Viiva</span>
+              <Spline aria-hidden="true" /><span>Viiva</span>
             </button>
             <button
               className={`tool-btn ${activeTool === 'area' ? 'active' : ''}`}
               onClick={() => (activeTool === 'area' ? startDraw(null) : startDraw('area'))}
               title="Lisää alue"
             >
-              🗺️<span>Alue</span>
+              <Pentagon aria-hidden="true" /><span>Alue</span>
             </button>
+            {!careMode && (
             <button
               className={`tool-btn tool-btn-request ${activeTool === 'request' ? 'active' : ''}`}
               onClick={() => (activeTool === 'request' ? startDraw(null) : openNewWorkRequest())}
               title="Tee työpyyntö: piirrä alue ja pyydä hintatarjouksia"
             >
-              📢<span>Työpyyntö</span>
+              <Megaphone aria-hidden="true" /><span>Työpyyntö</span>
             </button>
+            )}
             <button
               className={`tool-btn ${activeTool === 'note' ? 'active' : ''}`}
               onClick={() => (activeTool === 'note' ? startDraw(null) : startDraw('note'))}
               title="Lisää muistiinpano"
             >
-              📝<span>Muistio</span>
+              <StickyNote aria-hidden="true" /><span>Muistio</span>
             </button>
             <button
               className={`tool-btn ${activeTool === 'measure' ? 'active' : ''}`}
               onClick={() => (activeTool === 'measure' ? startDraw(null) : startDraw('measure'))}
               title="Mittaa etäisyys"
             >
-              📐<span>Mittaa</span>
+              <Ruler aria-hidden="true" /><span>Mittaa</span>
             </button>
+              </>
+            )}
           </div>
 
           {activeTool === 'request' && !showForm && (
             <div className="draw-hint" role="status">
-              📢 Piirrä kartalle alue, jolle työ tehdään. Napauta kulmapisteet ja lopuksi ensimmäistä pistettä.
+              Piirrä kartalle alue, jolle työ tehdään. Napauta kulmapisteet ja lopuksi ensimmäistä pistettä.
             </div>
           )}
 
@@ -1633,7 +1903,7 @@ export default function MapPage() {
             />
           )}
 
-          {!forestValueOpen && highlightedStandId && (
+          {!forestValueOpen && highlightedStandId && !careMode && (
             <button type="button" className="fv-back-chip" onClick={() => setForestValueOpen(true)}>
               ← Takaisin arvoon
             </button>
@@ -1641,7 +1911,7 @@ export default function MapPage() {
 
           {error && (
             <div className="map-error" onClick={() => setError('')}>
-              ⚠️ {error}
+              {error}
             </div>
           )}
         </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import type { MarkingType, GeometryType } from '../types';
 
@@ -16,8 +17,20 @@ interface MarkingFormProps {
     description: string;
     operation_date: string;
     area_ha?: number | null;
+    income_eur?: number | null;
+    cost_eur?: number | null;
   }) => Promise<void>;
   onCancel: () => void;
+}
+
+// Harvests bring timber sale income; every work can have a cost
+const HARVEST_TYPES: MarkingType[] = ['harvennus', 'avohakkuu'];
+
+/** "1 500,50" → 1500.5; empty → null; anything else → undefined (invalid) */
+function parseEur(text: string): number | null | undefined {
+  if (!text.trim()) return null;
+  const value = Number(text.replace(/\s/g, '').replace(',', '.'));
+  return Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 // Finnish labels for marking types
@@ -46,13 +59,24 @@ export default function MarkingForm({
   const [description, setDescription] = useState('');
   const [type, setType] = useState<MarkingType>('muu_tyo');
   const [operationDate, setOperationDate] = useState(getLocalIsoDate);
+  const [income, setIncome] = useState('');
+  const [cost, setCost] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // A note ("Muistio") is a reminder, not done work: no work type or money
+  const isNoteForm = geometryType === 'note';
+  const isHarvest = !isNoteForm && HARVEST_TYPES.includes(type);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       setError('Nimi on pakollinen');
+      return;
+    }
+    const incomeEur = isHarvest ? parseEur(income) : null;
+    const costEur = isNoteForm ? null : parseEur(cost);
+    if (incomeEur === undefined || costEur === undefined) {
+      setError('Anna tulo ja kulu euroina, esim. 1500');
       return;
     }
     setLoading(true);
@@ -61,10 +85,12 @@ export default function MarkingForm({
     try {
       const normalizedOperationDate = operationDate || getLocalIsoDate();
       await onSaveMarking({
-        type,
+        type: isNoteForm ? 'muu_tyo' : type,
         title: title.trim(),
         description: description.trim(),
         operation_date: normalizedOperationDate,
+        income_eur: incomeEur,
+        cost_eur: costEur,
       });
     } catch {
       setError('Tallennus epäonnistui');
@@ -76,8 +102,8 @@ export default function MarkingForm({
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal-card">
         <div className="modal-header">
-          <h2>📍 Uusi {GEOMETRY_TYPE_LABELS[geometryType]}</h2>
-          <button className="modal-close" onClick={onCancel}>✕</button>
+          <h2>Uusi {GEOMETRY_TYPE_LABELS[geometryType].toLowerCase()}</h2>
+          <button className="modal-close" onClick={onCancel} aria-label="Sulje"><X size={20} aria-hidden="true" /></button>
         </div>
 
         {error && <div className="error-message">{error}</div>}
@@ -90,13 +116,13 @@ export default function MarkingForm({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="esim. Harvennettu alue"
+              placeholder={isNoteForm ? 'esim. Kaatunut kuusi tiellä' : 'esim. Harvennettu alue'}
               required
               autoFocus
             />
           </div>
 
-          <div className="form-group">
+          {!isNoteForm && <div className="form-group">
             <label htmlFor="type">Tyyppi</label>
             <select
               id="type"
@@ -109,10 +135,10 @@ export default function MarkingForm({
                 </option>
               ))}
             </select>
-          </div>
+          </div>}
 
           <div className="form-group">
-            <label htmlFor="description">Kuvaus</label>
+            <label htmlFor="description">{isNoteForm ? 'Muistiinpano' : 'Kuvaus'}</label>
             <textarea
               id="description"
               value={description}
@@ -123,7 +149,7 @@ export default function MarkingForm({
           </div>
 
           <div className="form-group">
-            <label htmlFor="operationDate">Toimenpiteen päivämäärä</label>
+            <label htmlFor="operationDate">{isNoteForm ? 'Päivämäärä' : 'Toimenpiteen päivämäärä'}</label>
             <input
               id="operationDate"
               type="date"
@@ -132,6 +158,39 @@ export default function MarkingForm({
               required
             />
           </div>
+
+          {/* Optional money: makes the return history a total return (income − costs) */}
+          {!isNoteForm && <>
+          <div className="marking-money">
+            {isHarvest && (
+              <div className="form-group">
+                <label htmlFor="income">Puukauppatulo (€)</label>
+                <input
+                  id="income"
+                  type="text"
+                  inputMode="decimal"
+                  value={income}
+                  onChange={(e) => setIncome(e.target.value)}
+                  placeholder="esim. 6500"
+                />
+              </div>
+            )}
+            <div className="form-group">
+              <label htmlFor="cost">Työn kulu (€)</label>
+              <input
+                id="cost"
+                type="text"
+                inputMode="decimal"
+                value={cost}
+                onChange={(e) => setCost(e.target.value)}
+                placeholder="esim. 800"
+              />
+            </div>
+          </div>
+          <small className="request-form-hint">
+            Vapaaehtoinen. Tulot ja kulut lasketaan mukaan metsän tuottohistoriaan.
+          </small>
+          </>}
 
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={onCancel}>

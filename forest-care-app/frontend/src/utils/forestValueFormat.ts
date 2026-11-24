@@ -1,7 +1,9 @@
 import type {
   DevelopmentClass,
   MarkingType,
+  ForestValueHistory,
   ForestValueResult,
+  HistoryPeriod,
   OperationTiming,
   OperationType,
   PriceCutType,
@@ -88,6 +90,22 @@ export function formatEur(value: number): string {
   return `${formatNumber(Math.round(value))} €`;
 }
 
+/** "+1 200 €" / "−300 €": a change with its sign (proper minus) */
+export function formatSigned(value: number, format: (v: number) => string): string {
+  const text = format(Math.abs(value));
+  return value > 0 ? `+${text}` : value < 0 ? `−${text}` : text;
+}
+
+export function formatSignedPct(value: number): string {
+  return formatSigned(value, (v) => `${formatNumber(v, 1)} %`);
+}
+
+/** Return history period shown first: 5 years when it can be estimated, else the longest usable one */
+export function defaultHistoryPeriod(history: ForestValueHistory): HistoryPeriod | null {
+  const usable = history.periods.filter((p) => p.accuracy !== 'unavailable');
+  return usable.find((p) => p.years === 5) ?? usable[usable.length - 1] ?? null;
+}
+
 export function formatEurRange(low: number, high: number): string {
   return `${formatNumber(low)}–${formatNumber(high)} €`;
 }
@@ -124,6 +142,13 @@ export const OPERATION_WORK_TYPE: Record<OperationType, MarkingType> = {
   soil_preparation: 'muu_tyo',
   planting: 'istutus',
 };
+
+// Work the owner plans and orders in forest care mode; soil preparation stays in the value view
+const CARE_WORK_TYPES: MarkingType[] = ['vesakonhoito', 'harvennus', 'avohakkuu', 'istutus'];
+
+export function isCareOperation(op: { type: OperationType }): boolean {
+  return CARE_WORK_TYPES.includes(OPERATION_WORK_TYPE[op.type]);
+}
 
 export function standTitle(standNumber: string | null): string {
   return standNumber ? `Kuvio ${standNumber}` : 'Kuvio';

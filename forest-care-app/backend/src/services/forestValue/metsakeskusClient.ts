@@ -272,8 +272,10 @@ export async function fetchJson(url: string, init: RequestInit = {}): Promise<un
  * Fetch all stands intersecting a bounding box (EPSG:3067).
  * The bbox filter is coarse; callers clip the stands to the parcel.
  */
-export async function fetchStandsInBbox(bbox: [number, number, number, number]): Promise<MetsakeskusStand[]> {
-  const baseUrl = process.env.METSAKESKUS_WFS_URL;
+export async function fetchStandsInBbox(
+  bbox: [number, number, number, number],
+  baseUrl: string | undefined = process.env.METSAKESKUS_WFS_URL
+): Promise<MetsakeskusStand[]> {
   if (!baseUrl) throw new ExternalApiError('METSAKESKUS_WFS_URL is not set');
   const typeName = process.env.METSAKESKUS_WFS_TYPENAME || 'v2:stand';
 

@@ -5,6 +5,54 @@ export interface User {
   email: string;
 }
 
+export interface Notification {
+  id: number;
+  type: 'new_bid' | 'bid_no_longer_best' | 'bid_removed' | 'work_request_cancelled' | 'chat_message';
+  title: string;
+  body: string;
+  link: string;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface ChatSummary {
+  id: number;
+  work_request_id: number;
+  title: string;
+  other_user_id: number;
+  other_email: string;
+  /** The other party's forum nickname, if they have one */
+  other_name?: string | null;
+  pricing?: Pricing;
+  request_type?: MarkingType;
+  request_area_ha?: number | string | null;
+  request_target_price_eur?: number | string | null;
+  request_status?: 'open' | 'closed';
+  request_photo_id?: number | null;
+  last_message: string | null;
+  last_counter_offer_eur?: number | string | null;
+  last_has_image?: boolean | null;
+  last_message_at: string | null;
+  unread_count: number;
+  created_at: string;
+  owner_id: number;
+  provider_id: number;
+  bid_id?: number | null;
+  bid_amount_eur?: number | string | null;
+  bid_status?: 'pending' | 'accepted' | 'withdrawn' | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  sender_id: number;
+  body: string | null;
+  image_base64: string | null;
+  image_type: string | null;
+  counter_offer_eur: number | string | null;
+  counter_offer_status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | null;
+  created_at: string;
+}
+
 export interface AuthState {
   token: string | null;
   user: User | null;
@@ -49,6 +97,9 @@ export interface Marking {
   follow_up_date_start?: string | null;
   follow_up_date_end?: string | null;
   follow_up_note?: string | null;
+  // Money that moved with the work: timber sale income and the cost of the work (both optional)
+  income_eur?: number | null;
+  cost_eur?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -88,6 +139,7 @@ interface WorkRequestBase extends BidSummary {
 // A forest owner's own work request
 export interface WorkRequest extends WorkRequestBase {
   property_id: number | null;
+  property_code: string | null;
   status: 'open' | 'closed';
   updated_at: string;
 }
@@ -100,6 +152,8 @@ export interface NewWorkRequest {
   note: string;
   pricing: Pricing;
   target_price_eur: number;
+  // The owner confirmed publishing although the area does not look like forest
+  confirm_land_check?: boolean;
 }
 
 // Open work request as shown publicly to work providers (no owner or bidder details)
@@ -109,6 +163,20 @@ export interface PublicWorkRequest extends WorkRequestBase {
   // Only meaningful for a logged-in viewer
   is_own: boolean;
   my_bid_eur: number | null;
+  my_bid_chat_id: number | null;
+  // The property the work is on; only for logged-in viewers (null otherwise)
+  property_code: string | null;
+  property_area_ha: number | null;
+  property_geometry: GeoJSONGeometry;
+  // Region (maakunta) the request lies in; null if it could not be determined
+  region_code: string | null;
+  region_name: string | null;
+}
+
+// Finnish region (maakunta) for filtering work requests
+export interface Region {
+  code: string;
+  name: string;
 }
 
 export interface CadastreFeatureProperties {
@@ -217,7 +285,20 @@ export type ForestValueWarningCode =
   | 'no_forest_land'
   | 'partial_coverage'
   | 'fallback_prices'
-  | 'stale_cache';
+  | 'stale_cache'
+  | 'field_area'
+  | 'fields_unavailable';
+
+// Field (pelto) on the parcel: no timber value, no forest management recommendations
+export interface FieldArea {
+  // register = Ruokavirasto's field parcel register, owner = the owner marked a stand as field
+  source: 'register' | 'owner';
+  fieldId: string | null;
+  standId: string | null;
+  standNumber: string | null;
+  geometry: GeoJSONGeometry;
+  areaHa: number;
+}
 
 export interface ForestValueWarning {
   code: ForestValueWarningCode;
@@ -237,6 +318,8 @@ export interface ForestValueResult {
   valueByAssortment: Record<TimberAssortment, number>;
   stands: StandValuation[];
   operations: RecommendedOperation[];
+  // Missing in results computed before fields were checked
+  fields?: FieldArea[];
   data: {
     provider: 'metsakeskus' | 'mock' | 'manual';
     inventoryYearMin: number | null;
@@ -255,6 +338,93 @@ export interface ForestValueResult {
 
 export type ForestValueResponse =
   | { status: 'available'; result: ForestValueResult; stale: boolean }
+  | { status: 'no_data'; message: string }
+  | { status: 'error'; message: string };
+
+// Return history ("tuottohistoria"): estimated change of the timber's value over past years
+export type HistoryAccuracy = 'good' | 'rough' | 'unavailable';
+
+export interface HistoryPeriod {
+  years: number;
+  fromYear: number;
+  accuracy: HistoryAccuracy;
+  note: string | null;
+  volumeThenM3: number;
+  volumeNowM3: number;
+  valueThenEur: number;
+  valueNowEur: number;
+  changeEur: number;
+  changePct: number | null;
+  annualPct: number | null;
+  // changeEur in parts that add up: more wood, pulpwood grown into sawlog, price, harvested wood (≤ 0)
+  growthEffectEur: number;
+  qualityEffectEur: number;
+  priceEffectEur: number;
+  harvestedEur: number;
+  // Money recorded on done works during the period
+  incomeEur: number;
+  costEur: number;
+  // Value change + income − costs
+  totalReturnEur: number;
+  totalReturnPct: number | null;
+  totalAnnualPct: number | null;
+  inflationPct: number | null;
+  realTotalReturnPct: number | null;
+  realTotalAnnualPct: number | null;
+  unrecordedHarvests: number;
+}
+
+export interface HistoryPoint {
+  year: number;
+  volumeM3: number;
+  valueEur: number;
+  lowEur: number;
+  highEur: number;
+  // Consumer prices that year relative to now (1 = today's money)
+  priceLevel: number;
+}
+
+export interface HistoryEvent {
+  date: string;
+  type: MarkingType;
+  title: string;
+  incomeEur: number | null;
+  costEur: number | null;
+}
+
+export interface StandGrowth {
+  standId: string;
+  standNumber: string | null;
+  areaHa: number;
+  ageYears: number | null;
+  mainSpecies: TreeSpecies | null;
+  developmentClass: DevelopmentClass | null;
+  volumeNowM3: number;
+  valueNowEur: number;
+  volumeGrowthPct: number;
+  valueGrowthPct: number | null;
+}
+
+export interface ForestValueHistory {
+  propertyId: number;
+  forestAreaHa: number;
+  periods: HistoryPeriod[];
+  // Estimated value per year, oldest first, ending in the current year
+  series: HistoryPoint[];
+  // Projection for the coming years at today's prices
+  forecast: HistoryPoint[];
+  events: HistoryEvent[];
+  stands: StandGrowth[];
+  // Values the app has actually stored, one per month
+  recorded: { date: string; volumeM3: number; valueEur: number }[];
+  provider: 'metsakeskus' | 'mock' | 'manual';
+  priceSource: 'luke' | 'bundled';
+  priceYears: { from: number; to: number };
+  computedAt: string;
+}
+
+export type ForestValueHistoryResponse =
+  | { status: 'available'; history: ForestValueHistory }
   | { status: 'no_data'; message: string }
   | { status: 'error'; message: string };
 

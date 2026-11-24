@@ -20,7 +20,14 @@ function hasUnsavedChanges() {
   );
 }
 
-export default function BackButton() {
+// Back button for the left end of the top bar; shown on every page except the start page
+export default function BackButton({
+  fallbackPath = '/start',
+  alwaysNavigateToFallback = false,
+}: {
+  fallbackPath?: string;
+  alwaysNavigateToFallback?: boolean;
+}) {
   const navigate = useNavigate();
 
   const handleBack = () => {
@@ -31,20 +38,25 @@ export default function BackButton() {
       return;
     }
 
+    if (alwaysNavigateToFallback) {
+      navigate(fallbackPath);
+      return;
+    }
+
     const historyIndex = window.history.state?.idx;
     if (typeof historyIndex === 'number' && historyIndex > 0) {
       navigate(-1);
     } else {
-      navigate('/map');
+      // Opened directly (no in-app history): go to the fallback page
+      navigate(fallbackPath);
     }
   };
 
+  const label = alwaysNavigateToFallback ? 'Etusivulle' : 'Takaisin';
   return (
-    <div className="back-button-row">
-      <button type="button" className="btn btn-primary back-button" onClick={handleBack} aria-label="Takaisin">
-        <span aria-hidden="true">←</span>
-        Takaisin
-      </button>
-    </div>
+    <button type="button" className="nav-back-btn" onClick={handleBack} aria-label={label} title={label}>
+      <span className="nav-back-arrow" aria-hidden="true">←</span>
+      <span className="nav-back-label">{label}</span>
+    </button>
   );
 }

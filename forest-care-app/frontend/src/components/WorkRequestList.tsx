@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import { formatArea } from '../utils/measurement';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { TARGET_PRICE_LABEL, bidSummaryText, formatEur } from '../utils/bids';
@@ -12,6 +13,9 @@ interface WorkRequestListProps {
   onNewRequest: () => void;
   onWithdraw: (requestId: number) => Promise<void>;
   onUpdated: (updated: WorkRequest) => void;
+  isOpen: boolean;
+  onToggle: () => void;
+  showAllProperties?: boolean;
 }
 
 // The owner's own work requests (planned work) on the selected parcel, with anonymous offers
@@ -22,10 +26,21 @@ export default function WorkRequestList({
   onNewRequest,
   onWithdraw,
   onUpdated,
+  isOpen,
+  onToggle,
+  showAllProperties = false,
 }: WorkRequestListProps) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [requestToWithdraw, setRequestToWithdraw] = useState<WorkRequest | null>(null);
-  const visible = requests.filter((r) => r.property_id === selectedPropertyId);
+  const [showAllRequests, setShowAllRequests] = useState(false);
+  const propertyRequests = showAllProperties
+    ? requests
+    : requests.filter((r) => r.property_id === selectedPropertyId);
+  const activeCount = propertyRequests.filter((r) => r.status === 'open').length;
+  const visible = showAllRequests
+    ? propertyRequests
+    : propertyRequests.filter((r) => r.status === 'open');
+  const requestCount = showAllProperties || selectedPropertyId ? propertyRequests.length : 0;
 
   const withdraw = async () => {
     if (!requestToWithdraw) return;
@@ -41,10 +56,11 @@ export default function WorkRequestList({
 
   return (
     <>
-      <div className="sidebar-header">
-        <h3>📢 Työpyynnöt ({selectedPropertyId ? visible.length : 0})</h3>
-      </div>
-      {selectedPropertyId && (
+      <button className="sidebar-section-header" onClick={onToggle} aria-expanded={isOpen}>
+        <h3>Työpyynnöt ({requestCount})</h3>
+        <span className={`sidebar-chevron ${isOpen ? 'open' : ''}`} aria-hidden="true">⌄</span>
+      </button>
+      {isOpen && selectedPropertyId && (
         <div className="request-new">
           {canPublish ? (
             <button className="btn btn-primary btn-compact" onClick={onNewRequest}>
@@ -55,11 +71,35 @@ export default function WorkRequestList({
           )}
         </div>
       )}
-      <ul className="sidebar-list">
-        {!selectedPropertyId ? (
+      {isOpen && propertyRequests.length > 0 && (
+        <div className="work-request-filters" role="group" aria-label="Työpyyntöjen suodatus">
+          <button
+            type="button"
+            className={`work-request-filter${showAllRequests ? '' : ' active'}`}
+            aria-pressed={!showAllRequests}
+            onClick={() => setShowAllRequests(false)}
+          >
+            Aktiiviset ({activeCount})
+          </button>
+          <button
+            type="button"
+            className={`work-request-filter${showAllRequests ? ' active' : ''}`}
+            aria-pressed={showAllRequests}
+            onClick={() => setShowAllRequests(true)}
+          >
+            Kaikki ({propertyRequests.length})
+          </button>
+        </div>
+      )}
+      {isOpen && <ul className="sidebar-list">
+        {!selectedPropertyId && !showAllProperties ? (
           <li className="sidebar-empty">Valitse kiinteistö nähdäksesi työpyynnöt.</li>
         ) : visible.length === 0 ? (
-          <li className="sidebar-empty">Ei työpyyntöjä. Pyydä tekijää tulevalle työlle ja saa hintatarjouksia.</li>
+          <li className="sidebar-empty">
+            {propertyRequests.length > 0
+              ? 'Ei aktiivisia työpyyntöjä. Valitse Kaikki nähdäksesi myös muut pyynnöt.'
+              : 'Ei työpyyntöjä. Pyydä tekijää tulevalle työlle ja saa hintatarjouksia.'}
+          </li>
         ) : (
           visible.map((r) => (
             <li key={r.id} className="sidebar-item sidebar-item-stacked">
@@ -68,10 +108,12 @@ export default function WorkRequestList({
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginBottom: '0.2rem' }}>
                     <span style={{ color: MARKING_COLORS[r.type] }}>●</span>
                     <strong style={{ fontSize: '0.9rem' }}>{r.title}</strong>
+                    {r.status === 'closed' && <small className="work-request-status">Suljettu</small>}
                   </span>
                   <small style={{ color: '#6b7280', display: 'block' }}>
                     {MARKING_TYPE_LABELS[r.type]}
                     {r.area_ha ? ` · ${formatArea(r.area_ha)}` : ''}
+                    {r.property_code ? ` · kiinteistö ${r.property_code}` : ''}
                   </small>
                 </div>
               </div>
@@ -81,7 +123,7 @@ export default function WorkRequestList({
                     {TARGET_PRICE_LABEL[r.pricing]}: <strong>{formatEur(r.target_price_eur)}</strong>
                   </small>
                 )}
-                <small className="work-request-bids">💶 {bidSummaryText(r)}</small>
+                <small className="work-request-bids">{bidSummaryText(r)}</small>
                 {r.note && <small className="work-request-note">{r.note}</small>}
                 <WorkRequestPhotoGallery requestId={r.id} photos={r.photos} editable onUpdated={onUpdated} />
                 <button className="btn-link" disabled={busyId === r.id} onClick={() => setRequestToWithdraw(r)}>
@@ -91,7 +133,7 @@ export default function WorkRequestList({
             </li>
           ))
         )}
-      </ul>
+      </ul>}
       {requestToWithdraw && (
         <div className="modal-overlay" onClick={() => busyId === null && setRequestToWithdraw(null)}>
           <div className="modal-card confirm-dialog work-request-confirm" onClick={(e) => e.stopPropagation()}>
@@ -103,7 +145,7 @@ export default function WorkRequestList({
                 aria-label="Sulje"
                 disabled={busyId !== null}
               >
-                ✕
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
             <div className="work-request-confirm-details">

@@ -8,10 +8,15 @@ import type {
   CadastreFeature,
   MapLayerConfig,
   ForestValueResponse,
+  ForestValueHistoryResponse,
   ManualStandInput,
   WorkRequest,
   PublicWorkRequest,
   NewWorkRequest,
+  Region,
+  Notification,
+  ChatSummary,
+  ChatMessage,
 } from '../types';
 
 function normalizeDate(value: unknown): string | null {
@@ -60,6 +65,8 @@ function normalizeMarking(marking: Marking): Marking {
     operation_date: normalizeDate(marking.operation_date),
     follow_up_date_start: normalizeDate(marking.follow_up_date_start),
     follow_up_date_end: normalizeDate(marking.follow_up_date_end),
+    income_eur: normalizeNumber(marking.income_eur),
+    cost_eur: normalizeNumber(marking.cost_eur),
   };
 }
 
@@ -99,6 +106,66 @@ export const authService = {
   resetPassword: async (token: string, password: string): Promise<string> => {
     const response = await api.post<{ message: string }>('/api/auth/reset-password', { token, password });
     return response.data.message;
+  },
+};
+
+export const notificationsService = {
+  getAll: async (): Promise<{ notifications: Notification[]; unreadCount: number }> => {
+    const response = await api.get<{ notifications: Notification[]; unreadCount: number }>('/api/notifications');
+    return response.data;
+  },
+  markRead: async (id: number): Promise<void> => {
+    await api.post(`/api/notifications/${id}/read`);
+  },
+  markAllRead: async (): Promise<void> => {
+    await api.post('/api/notifications/read-all');
+  },
+};
+
+export const chatsService = {
+  getAll: async (): Promise<ChatSummary[]> => {
+    const response = await api.get<ChatSummary[]>('/api/chats');
+    return response.data;
+  },
+  getMessages: async (id: number): Promise<{ chat: ChatSummary; messages: ChatMessage[] }> => {
+    const response = await api.get<{ chat: ChatSummary; messages: ChatMessage[] }>(`/api/chats/${id}/messages`);
+    return response.data;
+  },
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/api/chats/${id}`);
+  },
+  updatePresence: async (id: number): Promise<void> => {
+    await api.post(`/api/chats/${id}/presence`);
+  },
+  clearPresence: async (id: number): Promise<void> => {
+    await api.delete(`/api/chats/${id}/presence`);
+  },
+  sendMessage: async (id: number, data: {
+    body?: string;
+    image_base64?: string;
+    image_type?: string;
+    counter_offer_eur?: number;
+  }): Promise<ChatMessage> => {
+    const response = await api.post<ChatMessage>(`/api/chats/${id}/messages`, data);
+    return response.data;
+  },
+  acceptCounterOffer: async (chatId: number, messageId: number): Promise<void> => {
+    await api.post(`/api/chats/${chatId}/messages/${messageId}/accept`);
+  },
+  rejectCounterOffer: async (chatId: number, messageId: number): Promise<void> => {
+    await api.post(`/api/chats/${chatId}/messages/${messageId}/reject`);
+  },
+  acceptOffer: async (chatId: number): Promise<void> => {
+    await api.post(`/api/chats/${chatId}/offer/accept`);
+  },
+  cancelOffer: async (chatId: number): Promise<void> => {
+    await api.post(`/api/chats/${chatId}/offer/cancel`);
+  },
+  createNewOffer: async (chatId: number, amountEur: number): Promise<ChatMessage> => {
+    const response = await api.post<ChatMessage>(`/api/chats/${chatId}/offer/new`, {
+      amount_eur: amountEur,
+    });
+    return response.data;
   },
 };
 
@@ -147,8 +214,21 @@ export const propertiesService = {
   },
 
   // Owner-entered basics when there is no forest resource data
+  // Estimated return over the last 1…30 years; numbers are plain JSON numbers, not NUMERIC strings
+  getForestValueHistory: async (propertyId: number): Promise<ForestValueHistoryResponse> => {
+    const response = await api.get<ForestValueHistoryResponse>(`/api/properties/${propertyId}/forest-value/history`);
+    return response.data;
+  },
+
   submitManualForestValue: async (propertyId: number, input: ManualStandInput): Promise<ForestValueResponse> => {
     const response = await api.post<ForestValueResponse>(`/api/properties/${propertyId}/forest-value/manual`, input);
+    return response.data;
+  },
+
+  // The owner marks a stand as field ("Tämä on pelto") or undoes it; returns the recomputed value
+  setFieldMark: async (propertyId: number, standId: string, isField: boolean): Promise<ForestValueResponse> => {
+    const url = `/api/properties/${propertyId}/forest-value/fields/${encodeURIComponent(standId)}`;
+    const response = isField ? await api.put<ForestValueResponse>(url) : await api.delete<ForestValueResponse>(url);
     return response.data;
   },
 };
@@ -186,6 +266,8 @@ export const markingsService = {
     geometry?: GeoJSONGeometry;
     area_ha?: number | null;
     operation_date: string;
+    income_eur?: number | null;
+    cost_eur?: number | null;
   }): Promise<Marking> => {
     const response = await api.post<Marking>('/api/markings', data);
     return normalizeMarking(response.data);
@@ -203,6 +285,8 @@ export const markingsService = {
     follow_up_note: string | null;
     follow_up_date_start: string | null;
     follow_up_date_end: string | null;
+    income_eur: number | null;
+    cost_eur: number | null;
   }>): Promise<Marking> => {
     const response = await api.put<Marking>(`/api/markings/${id}`, data);
     return normalizeMarking(response.data);
@@ -221,6 +305,10 @@ function normalizePublicRequest(r: PublicWorkRequest): PublicWorkRequest {
     target_price_eur: normalizeNumber(r.target_price_eur),
     best_bid_eur: normalizeNumber(r.best_bid_eur),
     my_bid_eur: normalizeNumber(r.my_bid_eur),
+    my_bid_chat_id: r.my_bid_chat_id ?? null,
+    property_code: r.property_code ?? null,
+    property_area_ha: normalizeNumber(r.property_area_ha),
+    property_geometry: r.property_geometry ? normalizeGeometry(r.property_geometry) : null,
     photos: r.photos ?? [],
   };
 }
@@ -232,17 +320,20 @@ function normalizeOwnRequest(r: WorkRequest): WorkRequest {
     target_price_eur: normalizeNumber(r.target_price_eur),
     bid_count: r.bid_count ?? 0,
     best_bid_eur: normalizeNumber(r.best_bid_eur),
+    property_code: r.property_code ?? null,
     photos: r.photos ?? [],
   };
 }
 
 export const workRequestsService = {
   // Public: open requests for work providers (works without login)
-  getOpen: async (type?: MarkingType): Promise<PublicWorkRequest[]> => {
-    const response = await api.get<PublicWorkRequest[]>('/api/work-requests', {
-      params: type ? { type } : undefined,
-    });
+  getOpen: async (filters: { type?: MarkingType; region?: string } = {}): Promise<PublicWorkRequest[]> => {
+    const response = await api.get<PublicWorkRequest[]>('/api/work-requests', { params: filters });
     return response.data.map(normalizePublicRequest);
+  },
+  getRegions: async (): Promise<Region[]> => {
+    const response = await api.get<Region[]>('/api/work-requests/regions');
+    return response.data;
   },
   getMine: async (): Promise<WorkRequest[]> => {
     const response = await api.get<WorkRequest[]>('/api/work-requests/mine');
@@ -255,6 +346,12 @@ export const workRequestsService = {
   // Offer a total price in euros; returns the request with its updated bid summary
   placeBid: async (requestId: number, amountEur: number): Promise<PublicWorkRequest> => {
     const response = await api.post<PublicWorkRequest>(`/api/work-requests/${requestId}/bids`, {
+      amount_eur: amountEur,
+    });
+    return normalizePublicRequest(response.data);
+  },
+  updateBid: async (requestId: number, amountEur: number): Promise<PublicWorkRequest> => {
+    const response = await api.put<PublicWorkRequest>(`/api/work-requests/${requestId}/bids`, {
       amount_eur: amountEur,
     });
     return normalizePublicRequest(response.data);

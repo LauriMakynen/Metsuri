@@ -1,15 +1,20 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, Lock, MapPin, Navigation, X } from 'lucide-react';
 import { workRequestsService } from '../services/forestService';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { formatArea } from '../utils/measurement';
 import { formatDate } from '../utils/dateFormatting';
+import { formatDistance } from '../utils/distance';
 import { BEST_BID_LABEL, PRICING_HINT, TARGET_PRICE_LABEL, formatEur } from '../utils/bids';
 import WorkRequestPhotoGallery from './WorkRequestPhotos';
 import type { PublicWorkRequest } from '../types';
 
 interface WorkRequestCardProps {
   request: PublicWorkRequest;
+  // Distance from the viewer's location, when the distance filter is on
+  distanceKm?: number | null;
   selected: boolean;
   canBid: boolean;
   onFocus: () => void;
@@ -20,24 +25,40 @@ interface WorkRequestCardProps {
 // One open work request for work providers: details, anonymous best offer and a bid form
 export default function WorkRequestCard({
   request,
+  distanceKm = null,
   selected,
   canBid,
   onFocus,
   onBidPlaced,
   onLoginToBid,
 }: WorkRequestCardProps) {
+  const navigate = useNavigate();
   const [formOpen, setFormOpen] = useState(false);
   const [amount, setAmount] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
   const [confirmationAmount, setConfirmationAmount] = useState<number | null>(null);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
 
   const color = MARKING_COLORS[request.type];
   const hasBids = request.bid_count > 0 && request.best_bid_eur !== null;
-  const perHa =
-    hasBids && request.area_ha ? Math.round((request.best_bid_eur as number) / request.area_ha) : null;
+  const perHa = (eur: number | null) => (eur !== null && request.area_ha ? Math.round(eur / request.area_ha) : null);
+  const bestPerHa = hasBids ? perHa(request.best_bid_eur) : null;
+  const targetPerHa = perHa(request.target_price_eur);
+  // Best offer against the owner's price: for a service lower is better, for a timber sale higher
+  const comparison =
+    hasBids && request.target_price_eur
+      ? Math.round(((request.best_bid_eur as number) / request.target_price_eur - 1) * 100)
+      : null;
+  const comparisonText =
+    comparison === null
+      ? null
+      : comparison === 0
+        ? 'Paras tarjous on sama kuin omistajan hinta'
+        : `Paras tarjous on ${Math.abs(comparison)} % ${comparison < 0 ? 'alle' : 'yli'} omistajan hinnan`;
+  const comparisonGood =
+    comparison !== null && (request.pricing === 'owner_pays' ? comparison <= 0 : comparison >= 0);
+  const myBidIsBest = request.my_bid_eur !== null && request.my_bid_eur === request.best_bid_eur;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -59,7 +80,6 @@ export default function WorkRequestCard({
       setFormOpen(false);
       setAmount('');
       setConfirmationAmount(null);
-      setSent(true);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
       setError(message || 'Tarjouksen lähetys epäonnistui');
@@ -72,9 +92,9 @@ export default function WorkRequestCard({
     setSending(true);
     setError('');
     try {
-      onBidPlaced(await workRequestsService.deleteBid(request.id));
+      const updated = await workRequestsService.deleteBid(request.id);
+      onBidPlaced(updated);
       setDeleteConfirmationOpen(false);
-      setSent(false);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
       setError(message || 'Tarjouksen poisto epäonnistui');
@@ -89,58 +109,103 @@ export default function WorkRequestCard({
         <span className="request-tags">
           <span className="request-type" style={{ color }}>{MARKING_TYPE_LABELS[request.type]}</span>
           <span className={`pricing-tag ${request.pricing}`}>
-            {request.pricing === 'owner_receives' ? '💰 Puukauppa' : '🧾 Palvelutyö'}
+            {request.pricing === 'owner_receives' ? 'Puukauppa' : 'Palvelutyö'}
           </span>
         </span>
         <strong className="request-title">{request.title}</strong>
-        <span className="request-meta">
-          {request.area_ha ? `📐 ${formatArea(request.area_ha)} · ` : ''}
-          Julkaistu {formatDate(request.created_at.slice(0, 10))}
+        <span className="request-facts">
+          {request.area_ha ? <span>{formatArea(request.area_ha)}</span> : null}
+          <span><Calendar size={14} aria-hidden="true" /> {formatDate(request.created_at.slice(0, 10))}</span>
+          {request.region_name && <span><MapPin size={14} aria-hidden="true" /> {request.region_name}</span>}
+          {distanceKm !== null && <span><Navigation size={14} aria-hidden="true" /> {formatDistance(distanceKm)} sinusta</span>}
         </span>
         {request.note && <span className="request-note">{request.note}</span>}
       </button>
+
+      {request.property_code || request.property_geometry ? (
+        <div className="request-property">
+          <span className="request-property-text">
+            <span className="request-property-label">Kiinteistö</span>
+            {/* Parcels drawn by hand before property search have a boundary but no code */}
+            <strong>{request.property_code ?? 'Rajattu kartalle'}</strong>
+            {request.property_area_ha ? <span> · {formatArea(request.property_area_ha)}</span> : null}
+          </span>
+          <button type="button" className="btn-link" onClick={onFocus}>
+            Näytä rajat kartalla
+          </button>
+        </div>
+      ) : (
+        !canBid && (
+          <div className="request-property request-property-locked">
+            <Lock size={14} aria-hidden="true" /> Kiinteistötunnus ja rajat näkyvät kirjautuneille
+          </div>
+        )
+      )}
+
       <WorkRequestPhotoGallery requestId={request.id} photos={request.photos} />
 
       <div className="bid-box">
-        {request.target_price_eur !== null && (
-          <span className="bid-target">
-            {TARGET_PRICE_LABEL[request.pricing]}: <strong>{formatEur(request.target_price_eur)}</strong>
-          </span>
-        )}
-        {hasBids ? (
-          <div className="bid-best">
-            <span className="bid-best-label">{BEST_BID_LABEL[request.pricing]}</span>
-            <strong className="bid-best-value">{formatEur(request.best_bid_eur as number)}</strong>
-            <span className="bid-best-meta">
-              {request.bid_count === 1 ? '1 tarjous' : `${request.bid_count} tarjousta`}
-              {perHa !== null && ` · ≈ ${formatEur(perHa)}/ha`}
-            </span>
+        <div className="bid-stats">
+          {request.target_price_eur !== null && (
+            <div className="bid-stat">
+              <span className="bid-stat-label">{TARGET_PRICE_LABEL[request.pricing]}</span>
+              <strong className="bid-stat-value">{formatEur(request.target_price_eur)}</strong>
+              {targetPerHa !== null && <span className="bid-stat-meta">≈ {formatEur(targetPerHa)}/ha</span>}
+            </div>
+          )}
+          <div className={`bid-stat bid-stat-best ${hasBids ? '' : 'empty'}`}>
+            <span className="bid-stat-label">{BEST_BID_LABEL[request.pricing]}</span>
+            {hasBids ? (
+              <>
+                <strong className="bid-stat-value">{formatEur(request.best_bid_eur as number)}</strong>
+                <span className="bid-stat-meta">
+                  {request.bid_count === 1 ? '1 tarjous' : `${request.bid_count} tarjousta`}
+                  {bestPerHa !== null && ` · ≈ ${formatEur(bestPerHa)}/ha`}
+                </span>
+              </>
+            ) : (
+              <>
+                <strong className="bid-stat-value">–</strong>
+                <span className="bid-stat-meta">Ei vielä tarjouksia</span>
+              </>
+            )}
           </div>
-        ) : (
-          <span className="bid-none">Ei vielä tarjouksia – ole ensimmäinen</span>
+        </div>
+
+        {comparisonText && (
+          <span className={`bid-comparison ${comparisonGood ? 'good' : ''}`}>{comparisonText}</span>
         )}
 
         {request.my_bid_eur !== null && (
-          <>
-            <span className="bid-mine">
-              {sent ? '✓ Tarjouksesi on jätetty: ' : 'Oma tarjouksesi: '}
-              {formatEur(request.my_bid_eur)}
+          <div className={`bid-mine ${myBidIsBest ? 'best' : ''}`}>
+            <span>
+              Oma tarjouksesi: <strong>{formatEur(request.my_bid_eur)}</strong>
+              {myBidIsBest && <span className="bid-mine-badge">Paras tarjous</span>}
             </span>
+            {request.my_bid_chat_id !== null && (
+              <button
+                type="button"
+                className="btn-link bid-chat-button"
+                onClick={() => navigate(`/chat/${request.my_bid_chat_id}`)}
+              >
+                Chat
+              </button>
+            )}
             <button
               type="button"
               className="btn-link bid-delete-link"
               onClick={() => setDeleteConfirmationOpen(true)}
               disabled={sending}
             >
-              Poista tarjous
+              Poista
             </button>
-          </>
+          </div>
         )}
 
         {request.is_own ? (
           <span className="bid-note">Tämä on oma työpyyntösi.</span>
         ) : !canBid ? (
-          <button className="btn-link" onClick={onLoginToBid}>Kirjaudu sisään tehdäksesi tarjouksen →</button>
+          <button className="btn-link" onClick={onLoginToBid}>Kirjaudu sisään tehdäksesi tarjouksen</button>
         ) : formOpen ? (
           <form className="bid-form" onSubmit={submit}>
             <p className="bid-note">{PRICING_HINT[request.pricing]} Tarjoajan nimeä ei näytetä muille.</p>
@@ -167,8 +232,8 @@ export default function WorkRequestCard({
             </button>
           </form>
         ) : (
-          <button className="btn btn-primary btn-compact bid-open-btn" onClick={() => { setFormOpen(true); setSent(false); }}>
-            💶 {request.my_bid_eur !== null ? 'Päivitä tarjous' : 'Tee tarjous'}
+          <button className="btn btn-primary bid-open-btn" onClick={() => { setFormOpen(true); }}>
+            {request.my_bid_eur !== null ? 'Päivitä tarjous' : hasBids ? 'Tee tarjous' : 'Tee ensimmäinen tarjous'}
           </button>
         )}
       </div>
@@ -184,7 +249,7 @@ export default function WorkRequestCard({
                 aria-label="Sulje"
                 disabled={sending}
               >
-                ✕
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
             <p className="confirm-dialog-text">
@@ -219,13 +284,14 @@ export default function WorkRequestCard({
                 aria-label="Sulje"
                 disabled={sending}
               >
-                ✕
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
             <p className="confirm-dialog-text">
               Haluatko varmasti poistaa tarjouksesi <strong>{formatEur(request.my_bid_eur ?? 0)}</strong> työpyynnöstä{' '}
               <strong>“{request.title}”</strong>?
             </p>
+            {error && <p className="bid-error" role="alert">{error}</p>}
             <div className="modal-actions">
               <button
                 type="button"

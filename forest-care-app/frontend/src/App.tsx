@@ -6,8 +6,14 @@ import RegisterPage from './pages/RegisterPage';
 import MapPage from './pages/MapPage';
 import StartPage from './pages/StartPage';
 import EmployersPage from './pages/EmployersPage';
+import ForestOverviewPage from './pages/ForestOverviewPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import HelpPage from './pages/HelpPage';
+import ForestryGuidePage from './pages/ForestryGuidePage';
+import AddForestPage from './pages/AddForestPage';
+import ForumPage from './pages/ForumPage';
+import ChatPage from './pages/ChatPage';
 
 function AppLayout() {
   return <Outlet />;
@@ -23,6 +29,8 @@ function App() {
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
+            <Route path="/ohje" element={<HelpPage />} />
+            <Route path="/metsanhoito" element={<ForestryGuidePage />} />
             <Route
               path="/start"
               element={
@@ -40,12 +48,44 @@ function App() {
               }
             />
             <Route
+              path="/omat-metsat"
+              element={
+                <PrivateRoute authenticatedOnly>
+                  <ForestOverviewPage />
+                </PrivateRoute>
+              }
+            />
+            {/* Guests may read the forum; writing needs an account */}
+            {['/foorumi', '/foorumi/:id'].map((path) => (
+              <Route
+                key={path}
+                path={path}
+                element={
+                  <PrivateRoute>
+                    <ForumPage />
+                  </PrivateRoute>
+                }
+              />
+            ))}
+            <Route
+              path="/lisaa-metsa"
+              element={
+                <PrivateRoute authenticatedOnly>
+                  <AddForestPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
               path="/map"
               element={
                 <PrivateRoute>
                   <MapPage />
                 </PrivateRoute>
               }
+            />
+            <Route
+              path="/chat/:id?"
+              element={<PrivateRoute authenticatedOnly><ChatPage /></PrivateRoute>}
             />
             <Route path="/" element={<Navigate to="/start" replace />} />
             <Route path="*" element={<Navigate to="/start" replace />} />

@@ -10,12 +10,21 @@ import mapRoutes from './routes/map';
 import workRequestsRoutes from './routes/workRequests';
 import forestValueRoutes from './routes/forestValue';
 import workRequestPhotosRoutes from './routes/workRequestPhotos';
+import notificationsRoutes from './routes/notifications';
+import forumRoutes from './routes/forum';
+import forumModerationRoutes from './routes/forumModeration';
+import chatsRoutes from './routes/chats';
 import { getAllowedOrigins, isAllowedOrigin } from './config/allowedOrigins';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Behind one proxy (Render in production, the Vite dev proxy locally): take the client's IP
+// from X-Forwarded-For, so the rate limiters count each user separately instead of
+// putting everyone behind the proxy's single address
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS ?? 1));
 
 // Middleware
 const allowedOrigins = getAllowedOrigins(process.env.FRONTEND_URL, process.env.FRONTEND_URLS);
@@ -26,7 +35,7 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '7mb' }));
 
 // Rate limiting for auth endpoints - strict limit to prevent brute-force attacks
 const authLimiter = rateLimit({
@@ -42,6 +51,14 @@ const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 300,
   message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const communicationLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 900,
+  message: { error: 'Too many communication requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -73,6 +90,10 @@ app.use('/api/map', apiLimiter, mapRoutes);
 app.use('/api/work-requests', apiLimiter, workRequestsRoutes);
 app.use('/api/forest-value', apiLimiter, forestValueRoutes);
 app.use('/api/work-request-photos', photoLimiter, workRequestPhotosRoutes);
+app.use('/api/notifications', communicationLimiter, notificationsRoutes);
+app.use('/api/chats', communicationLimiter, chatsRoutes);
+app.use('/api/forum/admin', apiLimiter, forumModerationRoutes);
+app.use('/api/forum', apiLimiter, forumRoutes);
 
 // Health check endpoints
 app.get('/health', (_req, res) => {

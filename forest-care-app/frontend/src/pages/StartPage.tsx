@@ -1,19 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { TreePine, X } from 'lucide-react';
+import RootsBackdrop from '../components/RootsBackdrop';
 import { useAuth } from '../hooks/useAuth';
 import TopNav from '../components/TopNav';
-import { workRequestsService } from '../services/forestService';
-
-// Spruce treeline silhouette used at the bottom edge of the hero
-const TREELINE_PATH =
-  'M0 120 V90 L30 50 L45 70 L60 20 L75 70 L90 55 L110 85 L135 40 L150 65 L170 10 L190 65 L205 45 L225 90 ' +
-  'L250 55 L265 75 L285 25 L305 75 L320 60 L340 95 L365 45 L380 70 L400 15 L420 70 L435 50 L455 90 L480 35 ' +
-  'L500 70 L520 5 L540 70 L555 55 L575 90 L600 45 L615 70 L635 20 L655 70 L670 50 L690 95 L715 40 L730 65 ' +
-  'L750 10 L770 65 L785 50 L805 90 L830 50 L845 75 L865 25 L885 75 L900 55 L920 95 L945 40 L960 70 L980 15 ' +
-  'L1000 70 L1015 50 L1035 90 L1060 45 L1075 70 L1095 20 L1115 70 L1130 55 L1150 90 L1175 40 L1200 75 V120 Z';
+import { propertiesService, workRequestsService } from '../services/forestService';
+import { formatArea } from '../utils/measurement';
+import { parcelAreaCount } from '../utils/parcelAreas';
+import type { Property } from '../types';
 
 const OWNER_FEATURES = [
-  'Hae kiinteistö tunnuksella ja näe rajat kartalla',
+  'Hoida metsää: viimeisimmät toimenpiteet ja GPS-aktiviteetti',
+  'Valitse kiinteistö kartalta ja näe sen rajat',
   'Merkitse harvennukset, istutukset ja muut työt',
   'Mittaa etäisyydet ja pinta-alat hehtaareina',
   'Julkaise työpyyntö, kun tarvitset tekijää',
@@ -22,52 +20,139 @@ const OWNER_FEATURES = [
 const PROVIDER_FEATURES = [
   'Metsäyrittäjille, yrityksille ja yhdistyksille',
   'Avoimet työpyynnöt kartalla ja listana',
-  'Suodata työtyypin mukaan',
-  'Ei vaadi kirjautumista',
+  'Suodata työtyypin, maakunnan ja etäisyyden mukaan',
+  'Tarjoa hintaa – nimesi ei näy muille',
+];
+
+const FORUM_FEATURES = [
+  'Kysy neuvoa metsänhoidosta ja puukaupasta',
+  'Jaa kokemuksia urakoitsijoista ja hinnoista',
+  'Metsänomistajat ja tekijät samassa keskustelussa',
+  'Kirjoita nimimerkillä – sähköpostisi ei näy',
 ];
 
 // Start page shown after login (and for guests): choose what to do next
+/** "lauri.makynen@example.com" → "Lauri": the first word before the @ for a friendlier greeting */
+function firstName(email: string | undefined): string | null {
+  const word = email?.split('@')[0].split(/[._\-+0-9]/).find(Boolean);
+  return word ? word.charAt(0).toUpperCase() + word.slice(1) : null;
+}
+
 export default function StartPage() {
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
-  const [openRequestCount, setOpenRequestCount] = useState<number | null>(null);
+  // Parcels to choose from after "Hoida omaa metsää"; null while the picker is closed
+  const [careChoices, setCareChoices] = useState<Property[] | null>(null);
+  const [careLoading, setCareLoading] = useState(false);
+  const [careError, setCareError] = useState('');
+  const [workRequestSummary, setWorkRequestSummary] = useState<{ requestCount: number; bidCount: number } | null>(null);
 
   useEffect(() => {
+    if (isGuest || !user) return;
+
+    let active = true;
     workRequestsService
-      .getOpen()
-      .then((requests) => setOpenRequestCount(requests.length))
-      .catch(() => setOpenRequestCount(null));
-  }, []);
+      .getMine()
+      .then((requests) => {
+        const openRequests = requests.filter((request) => request.status === 'open');
+        if (!active) return;
+        if (openRequests.length === 0) {
+          setWorkRequestSummary(null);
+          return;
+        }
+        setWorkRequestSummary({
+          requestCount: openRequests.length,
+          bidCount: openRequests.reduce((total, request) => total + request.bid_count, 0),
+        });
+      })
+      .catch(() => {
+        if (active) setWorkRequestSummary(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isGuest, user]);
 
   const goToLogin = () => {
     logout();
     navigate('/login');
   };
 
-  const openOwnForest = isGuest ? goToLogin : () => navigate('/map');
-  const greeting = isGuest ? 'Tervetuloa Metsuriin' : `Tervetuloa takaisin${user?.email ? `, ${user.email}` : ''}`;
+  const openOwnForest = isGuest ? goToLogin : () => navigate('/omat-metsat');
+
+  const openCare = (property: Property) => navigate(`/map?hoida=${property.id}`);
+
+  // With one parcel go straight to it; with several ask which forest to care for
+  const startForestCare = async () => {
+    if (isGuest) {
+      navigate('/map?hoida');
+      return;
+    }
+    setCareLoading(true);
+    setCareError('');
+    try {
+      const properties = await propertiesService.getAll();
+      if (properties.length === 0) navigate('/map');
+      else if (properties.length === 1) openCare(properties[0]);
+      else setCareChoices(properties);
+    } catch {
+      setCareError('Metsien lataaminen epäonnistui. Yritä uudelleen.');
+    } finally {
+      setCareLoading(false);
+    }
+  };
+  const greeting = isGuest ? 'Tervetuloa Metsuriin' : `Tervetuloa${firstName(user?.email) ? `, ${firstName(user?.email)}` : ''}`;
+  const workRequestSummaryText = workRequestSummary
+    ? `${workRequestSummary.requestCount} ${
+        workRequestSummary.requestCount === 1 ? 'aktiivinen työpyyntö' : 'aktiivista työpyyntöä'
+      } · ${workRequestSummary.bidCount} ${
+        workRequestSummary.bidCount === 1 ? 'tarjous' : 'tarjousta'
+      }`
+    : null;
 
   return (
-    <div className="start-page">
+    <div className="start-page home-page">
       <TopNav />
 
-      <section className="hero">
+      <section className="hero hero-photo">
+        {/* Real forest work photo (taimikonhoito); decorative, the text carries the meaning */}
+        <div className="hero-photo-bg" aria-hidden="true" />
         <div className="hero-inner">
           <p className="hero-eyebrow">{greeting}</p>
-          <h1 className="hero-title">Metsäsi hoito yhdellä kartalla</h1>
+          <h1 className="hero-title">
+            Metsäsi hoito <em>yhdellä kartalla</em>
+          </h1>
           <p className="hero-lead">
             Suunnittele metsänhoitotyöt omalle palstallesi ja löydä niille tekijät, tai selaa
             palstoja, jotka odottavat hoitoa.
           </p>
 
           <div className="hero-actions">
+            <button className="hero-btn hero-btn-care" onClick={startForestCare} disabled={careLoading}>
+              {careLoading ? 'Haetaan metsiä...' : 'Hoida omaa metsää'}
+            </button>
             <button className="hero-btn hero-btn-primary" onClick={openOwnForest}>
-              🌲 {isGuest ? 'Kirjaudu omalle palstalle' : 'Avaa oma metsäpalsta'}
+              {isGuest ? 'Kirjaudu omalle palstalle' : 'Minun metsäni'}
             </button>
             <button className="hero-btn hero-btn-secondary" onClick={() => navigate('/tyontarjoajat')}>
-              🤝 Selaa työpyyntöjä
+              Selaa työpyyntöjä
             </button>
           </div>
+
+          {workRequestSummaryText && (
+            <button
+              className="hero-request-stat"
+              onClick={() => navigate('/map?section=work-requests')}
+              aria-label={`${workRequestSummaryText}. Avaa omat työpyynnöt.`}
+            >
+              <span className="hero-request-stat-dot" aria-hidden="true" />
+              <span>{workRequestSummaryText}</span>
+              <span className="hero-request-stat-arrow" aria-hidden="true">›</span>
+            </button>
+          )}
+
+          {careError && <p className="hero-error" role="alert">{careError}</p>}
 
           {isGuest && (
             <button className="hero-demo-link" onClick={() => navigate('/map')}>
@@ -75,23 +160,16 @@ export default function StartPage() {
             </button>
           )}
 
-          {openRequestCount !== null && openRequestCount > 0 && (
-            <p className="hero-stat">
-              <span className="hero-stat-dot" /> {openRequestCount} avointa työpyyntöä juuri nyt
-            </p>
-          )}
         </div>
-
-        <svg className="hero-treeline" viewBox="0 0 1200 120" preserveAspectRatio="none" aria-hidden="true">
-          <path d={TREELINE_PATH} className="treeline-back" transform="translate(-40 -18)" />
-          <path d={TREELINE_PATH} className="treeline-front" />
-        </svg>
       </section>
 
+      {/* Below the forest photo: soil with tree roots, darkening to black */}
+      <div className="underground">
+      <RootsBackdrop />
       <main className="start-content start-cards">
         <div className="start-grid">
-          <section className="choice-card">
-            <div className="choice-icon">🌲</div>
+          {/* Photo card: a forest owner felling a spruce; the text sits on the dark lower part */}
+          <section className="choice-card choice-card-photo choice-card-owner">
             <h2>Metsänomistajille</h2>
             <ul className="feature-list">
               {OWNER_FEATURES.map((feature) => (
@@ -99,8 +177,11 @@ export default function StartPage() {
               ))}
             </ul>
             <div className="choice-actions">
+              <button className="btn btn-care" onClick={startForestCare} disabled={careLoading}>
+                Hoida omaa metsää
+              </button>
               <button className="btn btn-primary" onClick={openOwnForest}>
-                {isGuest ? 'Kirjaudu omalle palstalle' : 'Avaa oma metsäpalsta'}
+                {isGuest ? 'Kirjaudu omalle palstalle' : 'Minun metsäni'}
               </button>
               {isGuest && (
                 <button className="btn-link choice-demo-link" onClick={() => navigate('/map')}>
@@ -110,8 +191,8 @@ export default function StartPage() {
             </div>
           </section>
 
-          <section className="choice-card choice-card-alt">
-            <div className="choice-icon">🤝</div>
+          {/* Photo card: a forwarder collecting timber after a felling */}
+          <section className="choice-card choice-card-alt choice-card-photo choice-card-provider">
             <h2>Työn tarjoajille</h2>
             <ul className="feature-list">
               {PROVIDER_FEATURES.map((feature) => (
@@ -124,8 +205,66 @@ export default function StartPage() {
               </button>
             </div>
           </section>
+
+          {/* Photo card: two woodsmen talking on a log pile */}
+          <section className="choice-card choice-card-photo choice-card-forum">
+            <h2>Foorumi</h2>
+            <ul className="feature-list">
+              {FORUM_FEATURES.map((feature) => (
+                <li key={feature}>{feature}</li>
+              ))}
+            </ul>
+            <div className="choice-actions">
+              <button className="btn btn-primary" onClick={() => navigate('/foorumi')}>
+                Avaa foorumi
+              </button>
+            </div>
+          </section>
         </div>
       </main>
+      </div>
+
+      {careChoices && (
+        <div className="modal-overlay" onClick={() => setCareChoices(null)}>
+          <div
+            className="modal-card care-picker"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="care-picker-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-header">
+              <h2 id="care-picker-title">Valitse metsä</h2>
+              <button className="modal-close" onClick={() => setCareChoices(null)} aria-label="Sulje">
+                <X size={20} aria-hidden="true" />
+              </button>
+            </div>
+            <p className="care-picker-lead">Mitä metsää aloitat hoitamaan?</p>
+            <ul className="care-picker-list">
+              {careChoices.map((property) => (
+                <li key={property.id}>
+                  <button className="care-picker-item" onClick={() => openCare(property)}>
+                    <span className="care-picker-icon" aria-hidden="true"><TreePine size={22} /></span>
+                    <span className="care-picker-text">
+                      <strong>{property.name}</strong>
+                      <small>
+                        {[
+                          property.property_code,
+                          property.area_ha ? formatArea(property.area_ha) : null,
+                          parcelAreaCount(property.geometry) > 1 ? `${parcelAreaCount(property.geometry)} aluetta` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ') || 'Oma palsta'}
+                      </small>
+                    </span>
+                    <span aria-hidden="true">›</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,10 +2,19 @@ import { Router, Response } from 'express';
 import pool from '../db/pool';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { parsePropertyCode } from '../services/cadastreService';
-import { getForestValue, getManualForestValue } from '../services/forestValue/forestValueService';
+import {
+  getForestValue,
+  getForestValueHistory,
+  getManualForestValue,
+  setFieldMark,
+} from '../services/forestValue/forestValueService';
+import { HISTORY_PERIODS } from '../services/forestValue/history';
 import { validateManualInput } from '../services/forestValue/manualStand';
 
 const router = Router();
+
+/** properties.name is VARCHAR(255) */
+const MAX_PROPERTY_NAME = 255;
 
 // All property routes require authentication
 router.use(authMiddleware);
@@ -117,7 +126,7 @@ router.get('/:id/markings', async (req: AuthRequest, res: Response): Promise<voi
           `SELECT id, user_id, property_id, type, geometry_type, title, description,
             ST_AsGeoJSON(geometry)::json AS geometry, area_ha,
             operation_date, follow_up_date_start, follow_up_date_end, follow_up_note,
-              created_at, updated_at
+              income_eur, cost_eur, created_at, updated_at
        FROM markings
        WHERE user_id = $1 AND property_id = $2
        ORDER BY created_at DESC`,
@@ -134,8 +143,14 @@ router.get('/:id/markings', async (req: AuthRequest, res: Response): Promise<voi
 // PUT /api/properties/:id - Update a property (user must own it)
 router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { name, geometry } = req.body;
+  const { geometry } = req.body;
+  // The owner renames a forest from "Minun metsäni": one line, not empty, fits the column
+  const name = typeof req.body.name === 'string' ? req.body.name.replace(/\s+/g, ' ').trim() : req.body.name;
 
+  if (name !== undefined && (typeof name !== 'string' || name.length < 1 || name.length > MAX_PROPERTY_NAME)) {
+    res.status(400).json({ error: `Anna metsälle nimi (1–${MAX_PROPERTY_NAME} merkkiä)` });
+    return;
+  }
   if (!name && !geometry) {
     res.status(400).json({ error: 'At least name or geometry is required' });
     return;
@@ -224,6 +239,35 @@ router.get('/:id/forest-value', async (req: AuthRequest, res: Response): Promise
   }
 });
 
+// GET /api/properties/:id/forest-value/history - Estimated return over the last years
+// ?years=1,5,10 picks the periods (default 1, 5, 10, 20 and 30 years)
+router.get('/:id/forest-value/history', async (req: AuthRequest, res: Response): Promise<void> => {
+  const propertyId = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(propertyId)) {
+    res.status(400).json({ error: 'Invalid property id' });
+    return;
+  }
+  let periods = HISTORY_PERIODS;
+  if (typeof req.query.years === 'string') {
+    periods = [...new Set(req.query.years.split(',').map(Number))];
+    if (periods.length === 0 || periods.length > 10 || periods.some((y) => !Number.isInteger(y) || y < 1 || y > 30)) {
+      res.status(400).json({ error: 'years must be a comma-separated list of whole years between 1 and 30' });
+      return;
+    }
+  }
+  try {
+    const response = await getForestValueHistory(propertyId, req.userId as number, periods);
+    if (!response) {
+      res.status(404).json({ error: 'Property not found' });
+      return;
+    }
+    res.json(response);
+  } catch (error) {
+    console.error('Get forest value history error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /api/properties/:id/forest-value/manual - Value from owner-entered basics
 // (species, ageYears, volumeM3PerHa) when there is no forest resource data
 router.post('/:id/forest-value/manual', async (req: AuthRequest, res: Response): Promise<void> => {
@@ -249,5 +293,32 @@ router.post('/:id/forest-value/manual', async (req: AuthRequest, res: Response):
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+const MAX_STAND_ID_LENGTH = 200;
+
+// PUT /api/properties/:id/forest-value/fields/:standId - The owner marks a stand as field ("Tämä on pelto")
+// DELETE the same path undoes the mark. Both answer with the recomputed forest value.
+async function handleFieldMark(req: AuthRequest, res: Response, isField: boolean): Promise<void> {
+  const propertyId = Number.parseInt(req.params.id, 10);
+  const { standId } = req.params;
+  if (!Number.isInteger(propertyId) || !standId || standId.length > MAX_STAND_ID_LENGTH) {
+    res.status(400).json({ error: 'Invalid property or stand id' });
+    return;
+  }
+  try {
+    const response = await setFieldMark(propertyId, req.userId as number, standId, isField);
+    if (!response) {
+      res.status(404).json({ error: 'Property not found' });
+      return;
+    }
+    res.json(response);
+  } catch (error) {
+    console.error('Field mark error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+router.put('/:id/forest-value/fields/:standId', (req: AuthRequest, res: Response) => handleFieldMark(req, res, true));
+router.delete('/:id/forest-value/fields/:standId', (req: AuthRequest, res: Response) => handleFieldMark(req, res, false));
 
 export default router;

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link } from 'react-router-dom';
+import { KeyRound } from 'lucide-react';
 import { authService } from '../services/forestService';
 import { AuthBackdrop } from '../components/VideoBackdrop';
 
@@ -29,13 +30,13 @@ export default function ForgotPasswordPage() {
     <div className="auth-container">
       <AuthBackdrop />
       <div className="auth-card">
-        <div className="auth-logo">🔑</div>
+        <div className="auth-logo"><KeyRound size={40} strokeWidth={1.75} aria-hidden="true" /></div>
         <h1 className="auth-title">Salasana unohtunut?</h1>
 
         {sentMessage ? (
           <>
             <div className="success-message">
-              <strong>📧 Tarkista sähköpostisi</strong>
+              <strong>Tarkista sähköpostisi</strong>
               <p>{sentMessage}</p>
               <p>Linkki on voimassa 30 minuuttia. Katso tarvittaessa myös roskapostikansio.</p>
             </div>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { KeyRound } from 'lucide-react';
 import { authService } from '../services/forestService';
 import { useAuth } from '../hooks/useAuth';
 import { AuthBackdrop } from '../components/VideoBackdrop';
@@ -49,7 +50,7 @@ export default function ResetPasswordPage() {
     <div className="auth-container">
       <AuthBackdrop />
       <div className="auth-card">
-        <div className="auth-logo">🔑</div>
+        <div className="auth-logo"><KeyRound size={40} strokeWidth={1.75} aria-hidden="true" /></div>
         <h1 className="auth-title">Uusi salasana</h1>
 
         {!token ? (
@@ -60,7 +61,7 @@ export default function ResetPasswordPage() {
         ) : doneMessage ? (
           <>
             <div className="success-message">
-              <strong>✅ Salasana vaihdettu</strong>
+              <strong>Salasana vaihdettu</strong>
               <p>{doneMessage}</p>
             </div>
             <Link to="/login" className="btn btn-primary">Kirjaudu sisään</Link>

@@ -7,9 +7,11 @@ Tämä dokumentaatio kuvaa kuinka deployata Metsuri-sovellus tuotantoon.
 ```
 forest-care-app/
 ├── frontend/          # React + Vite (hostaa Vercelissä)
-├── backend/           # Node.js + Express (hostaa erillisessä palvelussa)
-└── database/          # PostgreSQL + PostGIS (hostaa pilvipalvelimessa)
+└── backend/           # Node.js + Express (hostaa erillisessä palvelussa)
 ```
+
+Tietokanta (PostgreSQL + PostGIS) hostataan pilvipalvelussa. Sen rakenne luodaan
+`backend/src/db/migrate.ts`:llä (`npm run migrate`), joka luo myös PostGIS-laajennuksen.
 
 ## Architecture
 
@@ -152,17 +154,10 @@ Frontend on käynnissä Vercelissä kun:
 
 ### Database Migration
 
-1. Aja migraatiot deployment-palvelussa:
+1. Aja migraatiot deployment-palvelussa (luo PostGIS-laajennuksen ja kaikki taulut, turvallinen ajaa uudelleen):
    ```bash
    npm run migrate
    ```
-   
-   Tai manuaalisti SQL:llä:
-   ```sql
-   CREATE EXTENSION IF NOT EXISTS postgis;
-   ```
-   
-   Ja lataa tietokannan rakenne [database/init.sql](../database/init.sql):stä
 
 2. Tarkista migraatiot onnistuivat:
    ```bash
@@ -341,8 +336,8 @@ NODE_ENV=production
 
 ### Database Migrations
 
-1. Luo uusi migraatiotiedosto: `database/migrations/NNN_description.sql`
-2. Testaa paikallisesti
+1. Lisää muutos tiedostoon `backend/src/db/migrate.ts` idempotenttina (`IF NOT EXISTS`, tarvittaessa backfill)
+2. Testaa paikallisesti: `npm run migrate` (myös käynnissä olevalle kehitystietokannalle)
 3. Aja productionissa: `npm run migrate` (tai deployment-palvelun kautta)
 
 ---

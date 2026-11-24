@@ -13,7 +13,10 @@
 import pool from '../../db/pool';
 import { clipStandsToParcel, planarAreaHa } from './clip';
 import { DEMO_PARCEL_WGS84 } from './demoParcel';
+import { fetchFieldsInBbox, fieldDataEnabled, separateFields, type RegisterField } from './fields';
+import { HISTORY_PERIODS, computeValueHistory } from './history';
 import { fallbackPrices, fetchLukePrices, priceRegionForMunicipality } from './lukePriceClient';
+import { getPriceHistory } from './priceHistory';
 import { fetchStandsInBbox, type MetsakeskusStand } from './metsakeskusClient';
 import { manualStand } from './manualStand';
 import { generateMockStands } from './mockStands';
@@ -21,6 +24,7 @@ import { recommendOperations } from './recommendations';
 import type {
   ForestDataProvider,
   ForestStand,
+  ForestValueHistoryResponse,
   ForestValueResponse,
   ForestValueResult,
   ManualStandInput,
@@ -112,18 +116,28 @@ async function wgs84ToTm35(geometry: unknown): Promise<PolygonGeometry> {
   return result.rows[0].g;
 }
 
-/** Convert stand geometries of a result from EPSG:3067 to WGS84 for the map. */
-async function standGeometriesToWgs84(result: ForestValueResult): Promise<void> {
-  const geometries = result.stands.map((s) => (s.geometry ? JSON.stringify(s.geometry) : null));
-  if (geometries.every((g) => g === null)) return;
+/** Convert EPSG:3067 geometries to WGS84 for the map, in order. */
+async function geometriesToWgs84(geometries: (PolygonGeometry | null)[]): Promise<(PolygonGeometry | null)[]> {
+  const texts = geometries.map((g) => (g ? JSON.stringify(g) : null));
+  if (texts.every((g) => g === null)) return geometries.map(() => null);
   const converted = await pool.query<{ ord: string; g: PolygonGeometry | null }>(
     `SELECT ord, CASE WHEN g IS NULL THEN NULL
               ELSE ST_AsGeoJSON(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(g), 3067), 4326), 6)::json END AS g
      FROM unnest($1::text[]) WITH ORDINALITY AS t(g, ord)`,
-    [geometries]
+    [texts]
   );
-  for (const row of converted.rows) {
-    result.stands[Number(row.ord) - 1].geometry = row.g;
+  const out: (PolygonGeometry | null)[] = geometries.map(() => null);
+  for (const row of converted.rows) out[Number(row.ord) - 1] = row.g;
+  return out;
+}
+
+/** Convert stand and field geometries of a result from EPSG:3067 to WGS84 for the map. */
+async function resultGeometriesToWgs84(result: ForestValueResult): Promise<void> {
+  const stands = await geometriesToWgs84(result.stands.map((s) => s.geometry));
+  stands.forEach((g, i) => (result.stands[i].geometry = g));
+  if (result.fields?.length) {
+    const fields = await geometriesToWgs84(result.fields.map((f) => f.geometry));
+    result.fields = result.fields.flatMap((f, i) => (fields[i] ? [{ ...f, geometry: fields[i] as PolygonGeometry }] : []));
   }
 }
 
@@ -150,12 +164,24 @@ interface BuildInput {
   stands: ForestStand[];
   provider: ForestDataProvider;
   municipality: string | null;
+  /** Register fields around the parcel; null when the register could not be checked. */
+  registerFields?: RegisterField[] | null;
+  /** Stands the owner marked as field */
+  userFieldStandIds?: ReadonlySet<string>;
 }
 
 /** Clip, price and value stands. Returns null when no stand overlaps the parcel. */
 export async function buildForestValue(input: BuildInput): Promise<ForestValueResult | null> {
-  const clipped = clipStandsToParcel(input.parcel, input.stands);
-  if (clipped.length === 0) return null;
+  const allClipped = clipStandsToParcel(input.parcel, input.stands);
+  if (allClipped.length === 0) return null;
+  // Fields get no timber value and no forest recommendations
+  const { stands: clipped, fields } = separateFields(
+    input.parcel,
+    allClipped,
+    input.registerFields ?? [],
+    input.userFieldStandIds ?? new Set()
+  );
+  const fieldAreaHa = fields.reduce((sum, f) => sum + f.areaHa, 0);
 
   // Price area from the municipality covering most of the parcel
   let municipality = input.municipality;
@@ -178,9 +204,46 @@ export async function buildForestValue(input: BuildInput): Promise<ForestValueRe
     provider: input.provider,
     operations: recommendOperations(clipped, prices, currentYear),
     currentYear,
+    fieldAreaHa,
   });
-  await standGeometriesToWgs84(result);
+  result.fields = fields;
+  if (fieldAreaHa >= 0.01) {
+    const registerHa = fields.filter((f) => f.source === 'register').reduce((sum, f) => sum + f.areaHa, 0);
+    result.warnings.push({
+      code: 'field_area',
+      message:
+        `Palstalla on peltoa noin ${fieldAreaHa.toLocaleString('fi-FI', { maximumFractionDigits: 1 })} ha` +
+        (registerHa >= 0.01 ? ' (osin Ruokaviraston peltolohkorekisterin mukaan)' : '') +
+        '. Pelloille ei lasketa puuston arvoa eikä anneta metsänhoitosuosituksia.',
+    });
+  }
+  if (input.registerFields === null) {
+    result.warnings.push({
+      code: 'fields_unavailable',
+      message: 'Peltolohkorekisteriä ei saatu tarkistettua, joten mahdolliset pellot voivat näkyä metsänä.',
+    });
+  }
+  await resultGeometriesToWgs84(result);
   return result;
+}
+
+/** Register fields around a parcel; null when the register does not answer (the value is still computed). */
+async function loadRegisterFields(parcel: PolygonGeometry): Promise<RegisterField[] | null> {
+  if (!fieldDataEnabled()) return [];
+  try {
+    return await fetchFieldsInBbox(bboxOf(parcel));
+  } catch (error) {
+    console.warn('Field register fetch failed:', error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
+async function loadUserFieldStandIds(propertyId: number): Promise<Set<string>> {
+  const result = await pool.query<{ stand_id: string }>(
+    'SELECT stand_id FROM forest_field_marks WHERE property_id = $1',
+    [propertyId]
+  );
+  return new Set(result.rows.map((r) => r.stand_id));
 }
 
 async function readCache(propertyId: number) {
@@ -200,6 +263,71 @@ async function writeCache(propertyId: number, geometryHash: string, result: Fore
            result = EXCLUDED.result, computed_at = EXCLUDED.computed_at`,
     [propertyId, geometryHash, result.data.provider, JSON.stringify(result)]
   );
+  await recordValueHistory(propertyId, result);
+}
+
+/** Keep the month's latest computed value for the return history. Never fails the request. */
+async function recordValueHistory(propertyId: number, result: ForestValueResult): Promise<void> {
+  // Unrounded sum of the stands, the same figure the history estimate ends in
+  const valueEur = result.stands.reduce((sum, s) => sum + (s.isForestLand ? s.valueEur : 0), 0);
+  try {
+    await pool.query(
+      `INSERT INTO forest_value_history (property_id, recorded_on, volume_m3, value_eur, provider, price_period)
+       VALUES ($1, date_trunc('month', NOW())::date, $2, $3, $4, $5)
+       ON CONFLICT (property_id, recorded_on) DO UPDATE
+         SET volume_m3 = EXCLUDED.volume_m3, value_eur = EXCLUDED.value_eur,
+             provider = EXCLUDED.provider, price_period = EXCLUDED.price_period`,
+      [propertyId, result.totalVolumeM3, valueEur, result.data.provider, result.prices.period]
+    );
+  } catch (error) {
+    console.warn('Recording forest value history failed:', error instanceof Error ? error.message : error);
+  }
+}
+
+/**
+ * Return history of a user's property: estimated change over the given periods and the values
+ * stored so far. Null if the property does not exist or belongs to someone else.
+ */
+export async function getForestValueHistory(
+  propertyId: number,
+  userId: number,
+  periods: number[] = HISTORY_PERIODS
+): Promise<ForestValueHistoryResponse | null> {
+  let response = await getForestValue(propertyId, userId);
+  // Results cached before the history existed lack the per-assortment values it needs
+  if (response?.status === 'available' && response.result.stands.some((s) => !s.valueByAssortment)) {
+    response = await getForestValue(propertyId, userId, { refresh: true });
+  }
+  if (!response) return null;
+  if (response.status !== 'available') return response;
+
+  // Done works on the parcel: harvests add sold wood back, income and costs make the total return
+  const works = await pool.query<{ date: string; type: string; title: string; income_eur: string | null; cost_eur: string | null }>(
+    `SELECT to_char(operation_date, 'YYYY-MM-DD') AS date, type, title, income_eur, cost_eur
+     FROM markings
+     WHERE property_id = $1 AND user_id = $2 AND operation_date IS NOT NULL AND geometry_type <> 'note'`,
+    [propertyId, userId]
+  );
+  const events = works.rows.map((row) => ({
+    date: row.date,
+    type: row.type,
+    title: row.title,
+    incomeEur: row.income_eur === null ? null : Number(row.income_eur),
+    costEur: row.cost_eur === null ? null : Number(row.cost_eur),
+  }));
+
+  const history = computeValueHistory(response.result, await getPriceHistory(), periods, new Date(), events);
+  const recorded = await pool.query<{ date: string; volume_m3: string; value_eur: string }>(
+    `SELECT to_char(recorded_on, 'YYYY-MM-DD') AS date, volume_m3, value_eur
+     FROM forest_value_history WHERE property_id = $1 ORDER BY recorded_on`,
+    [propertyId]
+  );
+  history.recorded = recorded.rows.map((row) => ({
+    date: row.date,
+    volumeM3: Number(row.volume_m3),
+    valueEur: Number(row.value_eur),
+  }));
+  return { status: 'available', history };
 }
 
 function staleResponse(result: ForestValueResult): ForestValueResponse {
@@ -237,7 +365,9 @@ export async function getForestValue(
   const provider: ForestDataProvider = mode === 'mock' ? 'mock' : 'metsakeskus';
   const cached = await readCache(propertyId);
   const sameParcel = cached?.geometry_hash === parcel.geometryHash;
-  const usableCache = sameParcel && cached?.provider === provider ? cached : null;
+  // Results cached before fields were checked have no "fields" and are recomputed
+  const usableCache =
+    sameParcel && cached?.provider === provider && Array.isArray(cached.result.fields) ? cached : null;
 
   if (
     usableCache &&
@@ -266,6 +396,8 @@ export async function getForestValue(
     stands,
     provider,
     municipality: municipalityFromPropertyCode(parcel.propertyCode),
+    registerFields: await loadRegisterFields(parcel.geometry3067),
+    userFieldStandIds: await loadUserFieldStandIds(propertyId),
   });
   if (!result) {
     // Owner-entered basics for this parcel, if given earlier
@@ -294,10 +426,36 @@ export async function getManualForestValue(
     stands: [manualStand(parcel.geometry3067, parcel.areaHa, input, new Date().getFullYear())],
     provider: 'manual',
     municipality: municipalityFromPropertyCode(parcel.propertyCode),
+    registerFields: await loadRegisterFields(parcel.geometry3067),
   });
   if (!result) return { status: 'no_data', message: NO_DATA_MESSAGE };
   await writeCache(propertyId, parcel.geometryHash, result);
   return { status: 'available', stale: false, result };
+}
+
+/**
+ * The owner marks a stand as field ("Tämä on pelto") or undoes the mark. The mark lives only in
+ * Metsuri; official registers are not changed. Returns the recomputed value, or null if the
+ * property does not exist or belongs to someone else.
+ */
+export async function setFieldMark(
+  propertyId: number,
+  userId: number,
+  standId: string,
+  isField: boolean
+): Promise<ForestValueResponse | null> {
+  const owned = await pool.query('SELECT 1 FROM properties WHERE id = $1 AND user_id = $2', [propertyId, userId]);
+  if (owned.rows.length === 0) return null;
+  if (isField) {
+    await pool.query(
+      `INSERT INTO forest_field_marks (property_id, stand_id) VALUES ($1, $2)
+       ON CONFLICT (property_id, stand_id) DO NOTHING`,
+      [propertyId, standId]
+    );
+  } else {
+    await pool.query('DELETE FROM forest_field_marks WHERE property_id = $1 AND stand_id = $2', [propertyId, standId]);
+  }
+  return getForestValue(propertyId, userId, { refresh: true });
 }
 
 // Guest demo: mock stands on the fixed demo parcel, cached in memory
@@ -308,6 +466,7 @@ export async function getDemoForestValue(): Promise<ForestValueResponse> {
     return { status: 'available', stale: false, result: demoCache.result };
   }
   const parcel = await wgs84ToTm35(DEMO_PARCEL_WGS84);
+  const registerFields = await loadRegisterFields(parcel);
   const result = await buildForestValue({
     propertyId: -1,
     parcel,
@@ -315,9 +474,11 @@ export async function getDemoForestValue(): Promise<ForestValueResponse> {
     stands: generateMockStands(parcel, 0),
     provider: 'mock',
     municipality: null,
+    registerFields,
   });
   if (!result) return { status: 'no_data', message: NO_DATA_MESSAGE };
-  demoCache = { result, at: Date.now() };
+  // Without the field check the result is shown but not kept, so the next visit tries again
+  if (registerFields !== null) demoCache = { result, at: Date.now() };
   return { status: 'available', stale: false, result };
 }
 
@@ -362,6 +523,8 @@ export async function getGuestForestValue(
     stands: generateMockStands(parcel, seedFromGeometry(geometryWgs84)),
     provider: 'mock',
     municipality: municipalityFromPropertyCode(propertyCode),
+    // Fields are left out in the demo too
+    registerFields: await loadRegisterFields(parcel),
   });
   if (!result) return { status: 'no_data', message: NO_DATA_MESSAGE };
   return { status: 'available', stale: false, result };
