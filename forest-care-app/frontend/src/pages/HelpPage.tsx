@@ -12,87 +12,124 @@ type HelpSection = {
 
 const HELP_SECTIONS: HelpSection[] = [
   {
+    id: 'account',
+    title: 'Käyttäjätili ja kirjautuminen',
+    intro: 'Kirjaudu sisään, kun haluat tallentaa tietoja.',
+    steps: [
+      'Luo tili tai kirjaudu sisään.',
+      'Unohtuneen salasanan voi vaihtaa kirjautumissivun palautuslinkillä.',
+      'Kirjaudu ulos yläpalkista.',
+    ],
+  },
+  {
     id: 'map',
     title: 'Karttanäkymä',
-    intro: 'Kartalla voit tarkastella kiinteistöjä, tehtyjä töitä ja suunniteltuja työpyyntöjä.',
+    intro: 'Kartalla näet palstat, työt ja työpyynnöt.',
     steps: [
-      'Valitse karttataso oikean reunan valikosta: maastokartta tai ortokuva.',
-      'Avaa piste- ja viivatyökalut alareunan valikosta, kun haluat merkitä alueen tai mitata kartalla.',
-      'Valitse kiinteistö klikkaamalla sen rajaa. Valittu kiinteistö näkyy myös sivupalkissa.',
-      'Klikkaa kiinteistön sisällä olevaa aluetta nähdäksesi sen tiedot ja alueelle tehdyt työt.',
+      'Valitse karttataso kartan valikosta.',
+      'Valitse palsta kartalta tai sivupalkista.',
+      'Käytä piirtämis- ja mittaustyökaluja kartan alareunasta.',
     ],
   },
   {
     id: 'properties',
     title: 'Kiinteistöt',
-    intro: 'Lisää omat metsäkiinteistösi ja valitse tarkasteltava palsta karttaa varten.',
+    intro: 'Lisää palstat ja valitse niistä tarkasteltava palsta.',
     steps: [
-      'Avaa sivupalkista Omat kiinteistöt.',
-      'Valitse Valitse kiinteistö ja klikkaa listasta haluamaasi palstaa.',
-      'Voit lisätä kiinteistön valitsemalla kartalta Kiinteistörajat ja klikkaamalla haluamaasi kiinteistöä.',
-      'Kun kiinteistö on valittu, sen rajat, tiedot ja siihen liittyvät työt tulevat näkyviin.',
-      'Poista valinta painamalla valittua kiinteistöä uudelleen.',
+      'Avaa Omat kiinteistöt.',
+      'Lisää palsta kartalta tai kiinteistötunnuksella.',
+      'Valitse palsta nähdäksesi sen tiedot.',
     ],
   },
   {
     id: 'markings',
     title: 'Tehdyt työt',
-    intro: 'Kirjaa kartalle metsässä tehdyt työt, jotta niiden sijainti ja tiedot säilyvät yhdessä paikassa.',
+    intro: 'Tallenna tehdyt työt palstan kartalle.',
     steps: [
-      'Valitse ensin kiinteistö.',
-      'Avaa piste- ja viivatyökalut kartan alareunasta.',
-      'Piirrä työn alue kartalle ja valitse työn tyyppi.',
-      'Anna työlle tarvittaessa lisätietoja ja tallenna merkintä.',
-      'Avaa Tehdyt työt -osio sivupalkista nähdäksesi kiinteistöön liittyvät merkinnät.',
+      'Valitse palsta.',
+      'Piirrä työn sijainti kartalle.',
+      'Valitse työn tyyppi, lisää tiedot ja tallenna.',
     ],
   },
   {
     id: 'activity',
     title: 'GPS-aktiviteetti',
-    intro: 'GPS-aktiviteetilla voit tallentaa liikkumisesi kartalle esimerkiksi maastokäynnin aikana.',
+    intro: 'GPS-aktiviteetti tallentaa kulkemasi reitin kartalle.',
     steps: [
-      'Valitse kiinteistö, jolla haluat liikkua.',
-      'Paina Aloita aktiviteetti -painiketta.',
-      'Salli selaimelle sijainnin käyttö, jos selain kysyy lupaa.',
-      'Liiku maastossa normaalisti. Sijaintisi piirtyy kartalle aktiviteetin aikana.',
-      'Lopeta aktiviteetti, tarkista yhteenveto ja tallenna se halutessasi.',
+      'Valitse palsta ja paina Aloita aktiviteetti.',
+      'Salli sijainnin käyttö.',
+      'Lopeta aktiviteetti ja tallenna se.',
     ],
     note: 'Sijainnin tarkkuus riippuu puhelimen GPS-yhteydestä, säästä ja ympäristöstä.',
   },
   {
     id: 'requests',
     title: 'Työpyynnöt',
-    intro: 'Julkaise työpyyntö, kun haluat löytää tekijän metsätyölle.',
+    intro: 'Julkaise työpyyntö, kun tarvitset tekijän metsätyölle.',
     steps: [
-      'Valitse kiinteistö ja avaa sivupalkista Työpyynnöt.',
-      'Luo uusi työpyyntö ja piirrä kartalle suunniteltavan työn alue.',
-      'Valitse työn tyyppi, kirjoita tarvittavat lisätiedot ja määritä hinnoittelutapa.',
-      'Julkaise työpyyntö, jolloin työn tarjoajat voivat tarkastella sitä ja tehdä tarjouksen.',
-      'Tarkastele saapuneita tarjouksia Työpyynnöt-osiossa.',
+      'Avaa Työpyynnöt ja valitse uusi työpyyntö.',
+      'Täytä työn tiedot ja sijainti.',
+      'Julkaise pyyntö ja seuraa tarjouksia.',
+    ],
+  },
+  {
+    id: 'bids',
+    title: 'Tarjoukset ja tarjousketju',
+    intro: 'Tarjouksia voi tarkastella ja käsitellä työpyynnön yhteydessä.',
+    steps: [
+      'Avaa työpyynnön tarjoukset.',
+      'Hyväksy, hylkää tai tee vastatarjous.',
+      'Tarjouksen voi myös perua.',
+    ],
+  },
+  {
+    id: 'chat',
+    title: 'Chatit ja viestit',
+    intro: 'Tarjouskohtaisessa chatissa voit keskustella työn yksityiskohdista.',
+    steps: [
+      'Avaa chat puhekuvakkeesta.',
+      'Valitse keskustelu ja kirjoita viesti.',
+      'Voit lähettää myös kuvan.',
+    ],
+  },
+  {
+    id: 'notifications',
+    title: 'Ilmoitukset',
+    intro: 'Ilmoitukset kertovat uusista viesteistä ja tarjouksista.',
+    steps: [
+      'Avaa ilmoitukset kellokuvakkeesta.',
+      'Valitse ilmoitus siirtyäksesi sen kohteeseen.',
+      'Merkitse kaikki ilmoitukset luetuiksi tarvittaessa.',
     ],
   },
   {
     id: 'provider',
     title: 'Työn tarjoajalle',
-    intro: 'Työn tarjoajana voit selata avoimia työpyyntöjä ja jättää niihin tarjouksia.',
+    intro: 'Työn tarjoaja voi etsiä työpyyntöjä ja tehdä tarjouksia.',
     steps: [
-      'Valitse aloitussivulta Selaa työpyyntöjä.',
-      'Suodata työpyyntöjä työtyypin, sijainnin tai etäisyyden perusteella.',
-      'Avaa työpyynnön tiedot kartalta tai listasta.',
-      'Anna oma tarjouksesi ja lähetä se työpyynnön yhteydessä.',
-      'Näet oman tarjouksesi työpyynnön tiedoissa.',
+      'Selaa avoimia työpyyntöjä.',
+      'Avaa työpyyntö ja tee tarjous.',
+      'Keskustele omistajan kanssa tarjouskohtaisessa chatissa.',
     ],
+  },
+  {
+    id: 'forest-value',
+    title: 'Metsän arviolaskenta',
+    intro: 'Metsäarvio näyttää palstan puustoon perustuvan suuntaa-antavan arvion.',
+    steps: [
+      'Avaa palstan metsäarvio.',
+      'Tarkastele yhteenvetoa ja kuviotietoja.',
+    ],
+    note: 'Arvio on suuntaa-antava, ei koko kiinteistön markkina-arvo.',
   },
   {
     id: 'demo',
     title: 'Demotila',
-    intro: 'Demotilassa voit tutustua karttaan ja toimintoihin ilman käyttäjätiliä.',
+    intro: 'Demossa voit kokeilla sovellusta ilman käyttäjätiliä.',
     steps: [
-      'Valitse kirjautumissivulta Jatka kirjautumatta tai avaa demo aloitussivulta.',
-      'Demossa näkyy valmiiksi esimerkkikiinteistö ja esimerkkimerkintöjä.',
-      'Voit kokeilla kartan valintoja ja GPS-aktiviteettia turvallisesti.',
-      'Demotilan muutoksia ei tallenneta palveluun.',
-      'Kirjaudu sisään, kun haluat tallentaa omat kiinteistösi ja työsi.',
+      'Valitse Jatka kirjautumatta.',
+      'Kokeile karttaa ja toimintoja.',
+      'Kirjaudu sisään, kun haluat tallentaa tietoja.',
     ],
   },
 ];
@@ -134,7 +171,8 @@ export default function HelpPage() {
           <p className="help-eyebrow">Metsurin käyttöohje</p>
           <h1>Kuinka voimme auttaa?</h1>
           <p>
-            Löydät täältä ohjeet kartan, kiinteistöjen, tehtyjen töiden ja työpyyntöjen käyttöön.
+            Löydät täältä ohjeet kirjautumiseen, kartan, kiinteistöjen, tehtyjen töiden,
+            aktiviteettien, työpyyntöjen, tarjousten, chatien ja ilmoitusten käyttöön.
           </p>
           <label className="help-search">
             <span>Hae käyttöohjeesta</span>
@@ -142,7 +180,7 @@ export default function HelpPage() {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Esimerkiksi GPS tai työpyyntö"
+              placeholder="Esimerkiksi GPS, tarjous tai chat"
             />
           </label>
         </header>

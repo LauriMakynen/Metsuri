@@ -191,10 +191,11 @@ html, body, #root {
 .notifications { position: relative; z-index: 1250; }
 .notifications-bell {
   position: relative; width: 42px; height: 42px; padding: 0; border: 1px solid rgba(255,255,255,0.35);
-  border-radius: 50%; background: rgba(255,255,255,0.14); color: var(--white); font-size: 1.25rem;
-  cursor: pointer;
+  border-radius: 50%; background: rgba(255,255,255,0.14); color: var(--white); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .notifications-bell:hover { background: rgba(255,255,255,0.26); }
+.notifications-bell svg { width: 21px; height: 21px; }
 .notifications-badge {
   position: absolute; top: -4px; right: -5px; min-width: 20px; height: 20px; padding: 0 4px;
   display: inline-flex; align-items: center; justify-content: center; border-radius: 999px;
@@ -304,7 +305,8 @@ html, body, #root {
 .chats-icon {
   position: relative; width: 42px; height: 42px; padding: 0;
   border: 1px solid rgba(255,255,255,0.35); border-radius: 50%;
-  color: var(--white); background: rgba(255,255,255,0.14); cursor: pointer; font-size: 1.25rem;
+  color: var(--white); background: rgba(255,255,255,0.14); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .chats-icon:hover { background: rgba(255,255,255,0.26); }
 .chats-icon svg { width: 21px; height: 21px; }
