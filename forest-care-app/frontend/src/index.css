@@ -73,7 +73,7 @@ html, body, #root {
   .video-backdrop video { display: none; }
 }
 
-.auth-logo { font-size: 3rem; text-align: center; margin-bottom: 0.25rem; }
+.auth-logo { font-size: 3rem; text-align: center; margin-bottom: 0.25rem; color: var(--forest-green); }
 .auth-logo-image {
   display: block; width: min(100%, 170px); height: auto; margin: 0 auto 1rem;
 }
@@ -242,32 +242,32 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   .notifications-panel { position: fixed; top: 56px; left: 0; right: 0; width: 100%; max-height: calc(100vh - 56px); border-radius: 0; }
   .notifications-list { max-height: 294px; }
 }
+/* Floating help button (bottom right) and its menu: user guide + forest care guide */
+.nav-help { position: fixed; right: 1rem; bottom: 1rem; z-index: 1200; }
 .nav-help-link {
-  position: fixed; right: 1rem; bottom: 1rem; z-index: 1200;
   display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px;
+  width: 44px; height: 44px; padding: 0; cursor: pointer;
   color: var(--white); background: var(--forest-green);
   border: 2px solid var(--white); border-radius: 50%;
-  font-size: 1.35rem; font-weight: 800; line-height: 1;
-  text-decoration: none; box-shadow: 0 4px 12px rgba(5,46,22,0.35);
-}
-.nav-guide-link {
-  position: fixed; right: 4.5rem; bottom: 1rem; z-index: 1200;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px;
-  color: var(--white); background: var(--forest-green);
-  border: 2px solid var(--white); border-radius: 50%;
-  font-size: 1.25rem; line-height: 1;
-  text-decoration: none; box-shadow: 0 4px 12px rgba(5,46,22,0.35);
+  box-shadow: 0 4px 12px rgba(5,46,22,0.35);
 }
 .nav-help-link:hover { background: var(--forest-green-light); }
-.nav-guide-link:hover { background: var(--forest-green-light); }
 .nav-help-link:focus-visible {
   outline: 3px solid #bfdbfe; outline-offset: 2px;
 }
-.nav-guide-link:focus-visible {
-  outline: 3px solid #bfdbfe; outline-offset: 2px;
+.nav-help-menu {
+  position: absolute; right: 0; bottom: calc(100% + 0.5rem);
+  min-width: 230px; margin: 0; padding: 0.35rem; list-style: none;
+  background: var(--white); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(5,46,22,0.22);
 }
+.nav-help-menu a {
+  display: flex; align-items: center; gap: 0.6rem; min-height: 44px; padding: 0.55rem 0.75rem;
+  border-radius: 8px; color: var(--text); font-weight: 600; text-decoration: none; white-space: nowrap;
+}
+.nav-help-menu a svg { color: var(--forest-green); }
+.nav-help-menu a:hover, .nav-help-menu a:focus-visible { background: var(--forest-green-bg); }
+.nav-help-menu a[aria-current='page'] { color: var(--forest-green); background: var(--forest-green-bg); }
 .nav-help-tooltip {
   position: absolute; right: 0; bottom: calc(100% + 0.6rem);
   display: inline-flex; align-items: center; gap: 0.5rem;
@@ -295,8 +295,6 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   0%, 65% { opacity: 1; visibility: visible; }
   100% { opacity: 0; visibility: hidden; }
 }
-.help-page:not(.guide-page) .nav-help-link { display: none; }
-.guide-page .nav-guide-link { display: none; }
 .sidebar-toggle {
   background: none; border: none; color: var(--white); font-size: 1.4rem; cursor: pointer;
   padding: 0.25rem; min-width: 40px; min-height: 40px; display: flex; align-items: center; justify-content: center;
@@ -332,7 +330,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 .chat-sidebar-toggle { position: absolute; top: 0.75rem; left: 300px; z-index: 3; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 42px; padding: 0.45rem; border: 1px solid var(--border); border-left: 0; border-radius: 0 var(--radius-sm) var(--radius-sm) 0; color: var(--forest-green); background: var(--white); cursor: pointer; box-shadow: 2px 2px 5px rgba(0,0,0,0.12); }
 .chat-sidebar-toggle svg { width: 19px; height: 19px; }
 .chat-list-closed .chat-sidebar-toggle { left: 0; }
-.chat-route .nav-help-link, .chat-route .nav-guide-link { bottom: 4.5rem; }
+.chat-route .nav-help { bottom: 4.5rem; }
 @media (min-width: 601px) {
   .chat-list { position: absolute; top: 0; bottom: 0; left: 0; z-index: 2; }
   .chat-conversation { width: 100%; max-width: none; margin: 0; }
@@ -475,8 +473,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   box-shadow: var(--shadow); margin-bottom: 1rem;
 }
 .help-eyebrow {
-  color: var(--forest-green); font-size: 0.8rem; font-weight: 700;
-  letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 0.45rem;
+  color: var(--forest-green); font-size: 0.9rem; font-weight: 700; margin-bottom: 0.45rem;
 }
 .help-header h1 { font-size: clamp(1.7rem, 4vw, 2.4rem); margin-bottom: 0.55rem; }
 .help-header > p { color: var(--text-light); line-height: 1.5; }
@@ -524,8 +521,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 @media (max-width: 480px) {
   .map-nav { padding-left: 0.65rem; padding-right: 0.65rem; }
   .map-nav-right { gap: 0.45rem; }
-  .nav-help-link { right: 0.75rem; bottom: 0.75rem; }
-  .nav-guide-link { right: 4.5rem; bottom: 0.75rem; }
+  .nav-help { right: 0.75rem; bottom: 0.75rem; }
   .help-content { width: min(100% - 1rem, 860px); padding-top: 1rem; }
   .help-header { padding: 1.35rem 1rem; border-radius: 14px; }
   .help-section-toggle { padding: 0.9rem; }
@@ -615,7 +611,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   font: inherit; color: var(--text); text-align: left; transition: border-color 0.15s, background 0.15s;
 }
 .care-picker-item:hover, .care-picker-item:focus-visible { border-color: #d97706; background: #fffbeb; }
-.care-picker-icon { font-size: 1.3rem; }
+.care-picker-icon { display: inline-flex; color: var(--forest-green); }
 .care-picker-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
 .care-picker-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .care-picker-text small { color: var(--text-light); }
@@ -910,7 +906,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 .forum-post { padding: 0.8rem 0.9rem; border-radius: 12px; background: var(--white); border: 1px solid #e3e9e5; }
 .forum-post.first { border-left: 4px solid var(--forest-green); }
 .forum-post-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.6rem; margin-bottom: 0.35rem; }
-.forum-own { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #075985; background: #e0f2fe; padding: 0.05rem 0.45rem; border-radius: 999px; }
+.forum-own { font-size: 0.75rem; font-weight: 700; color: #075985; background: #e0f2fe; padding: 0.05rem 0.45rem; border-radius: 999px; }
 .forum-post .forum-delete { margin-left: auto; padding: 0; font-size: 0.8rem; color: #b91c1c; }
 .forum-post .forum-report-link { margin-left: auto; padding: 0; font-size: 0.8rem; color: #8a4b08; }
 .forum-reported-label, .forum-hidden-label { margin-left: auto; font-size: 0.78rem; color: #6b7280; }
@@ -1034,7 +1030,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 .add-forest-footer { display: flex; flex-direction: column; align-items: flex-start; gap: 0.6rem; }
 .add-forest-footer .btn { width: auto; }
 .forest-eyebrow {
-  display: inline-block; font-size: 0.8rem !important; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  display: inline-block; font-size: 0.9rem !important; font-weight: 700;
   background: rgba(255,255,255,0.7); color: #14532d !important; padding: 0.3rem 0.75rem; border-radius: 999px; margin-bottom: 0.75rem;
 }
 .glass-panel {
@@ -1053,6 +1049,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 .forest-name { display: flex; align-items: center; gap: 0.25rem; }
 .forest-name-edit {
   flex: none; width: 36px; height: 36px; border: none; border-radius: 50%; background: none;
+  display: inline-flex; align-items: center; justify-content: center; color: inherit;
   font-size: 0.95rem; cursor: pointer; opacity: 0.65; transition: opacity 0.15s, background 0.15s;
 }
 .forest-name-edit:hover, .forest-name-edit:focus-visible { opacity: 1; background: #ecfdf3; }
@@ -1181,7 +1178,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 .return-footnote { font-size: 0.8rem !important; color: var(--text-light) !important; line-height: 1.5; }
 .return-badge {
   display: inline-block; margin-right: 0.4rem; padding: 0.05rem 0.5rem; border-radius: 999px;
-  background: #fef3c7; color: #92400e; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  background: #fef3c7; color: #92400e; font-size: 0.78rem; font-weight: 700;
 }
 @media (min-width: 560px) { .return-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
@@ -1231,7 +1228,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   .chat-list h1 { font-size: 1.4rem; }
   .chat-conversation { min-height: 0; }
 }
-.panel-title { font-size: 0.82rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #14532d; margin-bottom: 0.7rem; }
+.panel-title { font-size: 1rem; font-weight: 700; color: #14532d; margin-bottom: 0.7rem; }
 .forest-page .filter-panel { margin-bottom: 1rem; }
 .forest-page .filter-panel .type-filter { margin-bottom: 0; }
 /* The map panel stays put: no sticky positioning (it moved while wheel-zooming) and no
@@ -1284,7 +1281,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 .request-property-text { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.35rem; }
 .request-property-text strong { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
 .request-property-label {
-  font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-light);
+  font-size: 0.78rem; font-weight: 700; color: var(--text-light);
 }
 .request-property .btn-link { font-size: 0.82rem; padding: 0; }
 .request-property-locked { color: var(--text-light); font-size: 0.8rem; justify-content: flex-start; }
@@ -1299,7 +1296,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   display: flex; flex-direction: column; gap: 0.15rem; padding: 0.6rem 0.7rem;
   background: var(--white); border: 1px solid #e3e9e5; border-radius: 10px;
 }
-.bid-stat-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-light); line-height: 1.3; }
+.bid-stat-label { font-size: 0.78rem; font-weight: 700; color: var(--text-light); line-height: 1.3; }
 .bid-stat-value { font-size: 1.35rem; font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; line-height: 1.15; }
 .bid-stat-meta { font-size: 0.78rem; color: var(--text-light); }
 .bid-stat-best { border-color: #bbe5c8; background: #f0fbf3; }
@@ -1343,7 +1340,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 .pricing-usual { font-weight: 500; font-style: normal; color: var(--forest-green); font-size: 0.75rem; }
 .sidebar-item .work-request-bids { font-size: 0.8rem; color: var(--text); font-weight: 600; }
 .request-card.selected { outline: 2px solid var(--forest-green); }
-.request-type { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.request-type { font-size: 0.82rem; font-weight: 700; }
 .request-title { font-size: 1rem; overflow-wrap: anywhere; }
 .request-meta { font-size: 0.8rem; color: var(--text-light); }
 .request-note { font-size: 0.85rem; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 0.2rem; }
@@ -1761,8 +1758,13 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 .activity-fab:hover { background: #b91c1c; }
 
 @media (max-width: 899px) {
-  .map-page:has(.activity-fab) .nav-help-link {
+  .map-page:has(.activity-fab) .nav-help {
     top: var(--activity-help-top);
+    bottom: auto;
+  }
+  /* The button sits near the top here, so its menu opens downwards */
+  .map-page:has(.activity-fab) .nav-help-menu {
+    top: calc(100% + 0.5rem);
     bottom: auto;
   }
 
@@ -2161,7 +2163,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   color: var(--white);
   flex-shrink: 0;
 }
-.fv-panel-kicker { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.85; }
+.fv-panel-kicker { font-size: 0.8rem; opacity: 0.85; }
 .fv-panel-header h2 { font-size: 1.15rem; line-height: 1.25; margin-top: 0.1rem; }
 .fv-panel-actions { display: flex; gap: 0.4rem; }
 .fv-icon-btn {

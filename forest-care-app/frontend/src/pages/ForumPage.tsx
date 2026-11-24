@@ -88,7 +88,7 @@ function ThreadList({
   return (
     <>
       <div className="forum-toolbar">
-        <h2 className="panel-title">💬 Keskustelut{threads ? ` (${threads.length})` : ''}</h2>
+        <h2 className="panel-title">Keskustelut{threads ? ` (${threads.length})` : ''}</h2>
         {canWrite && !formOpen && (
           <button type="button" className="btn btn-primary btn-compact" onClick={() => setFormOpen(true)}>
             + Aloita keskustelu
@@ -426,7 +426,7 @@ export default function ForumPage() {
       <TopNav />
       <main className="start-content forest-content forum-content">
         <header className="forest-hero">
-          <p className="forest-eyebrow">💬 Foorumi</p>
+          <p className="forest-eyebrow">Foorumi</p>
           <h1>Keskustele metsästä</h1>
           <p>Kysy neuvoa, jaa kokemuksia ja vaihda vinkkejä muiden metsänomistajien ja tekijöiden kanssa.</p>
           <div className="forum-header-actions">

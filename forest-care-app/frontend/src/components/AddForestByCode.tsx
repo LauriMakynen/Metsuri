@@ -128,7 +128,7 @@ export default function AddForestByCode({ onAdded }: AddForestByCodeProps) {
               Peruuta
             </button>
             <button type="button" className="btn btn-primary btn-compact" onClick={save} disabled={saving}>
-              {saving ? 'Tallennetaan...' : '✓ Lisää omiin metsiin'}
+              {saving ? 'Tallennetaan...' : 'Lisää omiin metsiin'}
             </button>
           </div>
         </div>

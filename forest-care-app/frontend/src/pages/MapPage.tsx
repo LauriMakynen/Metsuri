@@ -18,7 +18,7 @@ import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { getFollowUpRecommendation } from '../utils/followUpRecommendation';
 import { isNote, MARKING_COLORS, MARKING_TYPE_LABELS, NOTE_COLOR, NOTE_LABEL } from '../utils/markingTypes';
 import { DEMO_MARKINGS, DEMO_PROPERTY } from '../utils/demoData';
-import { shouldShowHelpTooltip } from '../utils/helpTooltip';
+import HelpMenu from '../components/HelpMenu';
 import type {
   Property,
   Marking,
@@ -196,7 +196,6 @@ export default function MapPage() {
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
   const [layerMenuOpen, setLayerMenuOpen] = useState(true);
   const [drawMenuOpen, setDrawMenuOpen] = useState(true);
-  const [showHelpTooltip, setShowHelpTooltip] = useState(() => shouldShowHelpTooltip());
   // Guests start on an example parcel so the demo has something to try right away
   const [properties, setProperties] = useState<Property[]>(() => (isGuest ? [DEMO_PROPERTY] : []));
   const [markings, setMarkings] = useState<Marking[]>(() => (isGuest ? DEMO_MARKINGS : []));
@@ -1587,24 +1586,7 @@ export default function MapPage() {
         <div className="map-nav-right">
         {!isGuest && <NotificationsBell />}
         {!isGuest && <ChatsIcon />}
-        <Link to="/ohje" className="nav-help-link" aria-label="Avaa käyttöohje" title="Käyttöohje">
-          ?
-          {showHelpTooltip && <span className="nav-help-tooltip">
-            Tarvitsetko apua?
-            <button
-              type="button"
-              className="nav-help-tooltip-close"
-              aria-label="Sulje ohjeteksti"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setShowHelpTooltip(false);
-              }}
-            >
-              ×
-            </button>
-          </span>}
-        </Link>
+        <HelpMenu />
         {isGuest ? (
             <>
               <span className="user-email guest-label">Vierailija</span>

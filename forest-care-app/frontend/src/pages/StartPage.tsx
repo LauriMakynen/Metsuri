@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { TreePine, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import TopNav from '../components/TopNav';
 import { propertiesService, workRequestsService } from '../services/forestService';
@@ -122,13 +123,13 @@ export default function StartPage() {
 
           <div className="hero-actions">
             <button className="hero-btn hero-btn-care" onClick={startForestCare} disabled={careLoading}>
-              🪓 {careLoading ? 'Haetaan metsiä...' : 'Hoida omaa metsää'}
+              {careLoading ? 'Haetaan metsiä...' : 'Hoida omaa metsää'}
             </button>
             <button className="hero-btn hero-btn-primary" onClick={openOwnForest}>
-              🌲 {isGuest ? 'Kirjaudu omalle palstalle' : 'Minun metsäni'}
+              {isGuest ? 'Kirjaudu omalle palstalle' : 'Minun metsäni'}
             </button>
             <button className="hero-btn hero-btn-secondary" onClick={() => navigate('/tyontarjoajat')}>
-              🤝 Selaa työpyyntöjä
+              Selaa työpyyntöjä
             </button>
           </div>
 
@@ -159,7 +160,6 @@ export default function StartPage() {
         <div className="start-grid">
           {/* Photo card: a forest owner felling a spruce; the text sits on the dark lower part */}
           <section className="choice-card choice-card-photo choice-card-owner">
-            <div className="choice-icon">🌲</div>
             <h2>Metsänomistajille</h2>
             <ul className="feature-list">
               {OWNER_FEATURES.map((feature) => (
@@ -168,7 +168,7 @@ export default function StartPage() {
             </ul>
             <div className="choice-actions">
               <button className="btn btn-care" onClick={startForestCare} disabled={careLoading}>
-                🪓 Hoida omaa metsää
+                Hoida omaa metsää
               </button>
               <button className="btn btn-primary" onClick={openOwnForest}>
                 {isGuest ? 'Kirjaudu omalle palstalle' : 'Minun metsäni'}
@@ -183,7 +183,6 @@ export default function StartPage() {
 
           {/* Photo card: a forwarder collecting timber after a felling */}
           <section className="choice-card choice-card-alt choice-card-photo choice-card-provider">
-            <div className="choice-icon">🤝</div>
             <h2>Työn tarjoajille</h2>
             <ul className="feature-list">
               {PROVIDER_FEATURES.map((feature) => (
@@ -199,7 +198,6 @@ export default function StartPage() {
 
           {/* Photo card: two woodsmen talking on a log pile */}
           <section className="choice-card choice-card-photo choice-card-forum">
-            <div className="choice-icon">💬</div>
             <h2>Foorumi</h2>
             <ul className="feature-list">
               {FORUM_FEATURES.map((feature) => (
@@ -227,7 +225,7 @@ export default function StartPage() {
             <div className="modal-header">
               <h2 id="care-picker-title">Valitse metsä</h2>
               <button className="modal-close" onClick={() => setCareChoices(null)} aria-label="Sulje">
-                ✕
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
             <p className="care-picker-lead">Mitä metsää aloitat hoitamaan?</p>
@@ -235,7 +233,7 @@ export default function StartPage() {
               {careChoices.map((property) => (
                 <li key={property.id}>
                   <button className="care-picker-item" onClick={() => openCare(property)}>
-                    <span className="care-picker-icon" aria-hidden="true">🌲</span>
+                    <span className="care-picker-icon" aria-hidden="true"><TreePine size={22} /></span>
                     <span className="care-picker-text">
                       <strong>{property.name}</strong>
                       <small>

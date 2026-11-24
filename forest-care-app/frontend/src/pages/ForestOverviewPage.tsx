@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Pencil } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
@@ -107,7 +108,7 @@ function PropertyName({ property, onRenamed }: { property: Property; onRenamed: 
           aria-label={`Muokkaa metsän ${property.name} nimeä`}
           title="Muokkaa nimeä"
         >
-          ✏️
+          <Pencil size={16} aria-hidden="true" />
         </button>
       </div>
     );
@@ -622,7 +623,7 @@ export default function ForestOverviewPage() {
 
       <main className="start-content forest-content">
         <header className="forest-hero">
-          <p className="forest-eyebrow">🌲 Metsänomistajalle</p>
+          <p className="forest-eyebrow">Metsänomistajalle</p>
           <h1>Minun metsäni</h1>
           <p>Katso omien metsäpalstojesi tilanne ja siirry valitsemasi palstan karttanäkymään.</p>
           {/* The map works without a parcel too: browse it or add a new parcel there */}
@@ -632,7 +633,7 @@ export default function ForestOverviewPage() {
                 + Lisää metsä
               </button>
               <button className="btn btn-secondary btn-compact" onClick={() => navigate('/map')}>
-                🗺️ Avaa kartta
+                Avaa kartta
               </button>
             </div>
           )}

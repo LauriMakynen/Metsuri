@@ -1,9 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { BookOpen } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import BackButton from './BackButton';
-import { shouldShowHelpTooltip } from '../utils/helpTooltip';
+import HelpMenu from './HelpMenu';
 import NotificationsBell from './NotificationsBell';
 import ChatsIcon from './ChatsIcon';
 
@@ -12,7 +11,6 @@ export default function TopNav() {
   const { user, logout, isGuest } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [showHelpTooltip, setShowHelpTooltip] = useState(() => shouldShowHelpTooltip());
 
   // Start each page from the top instead of keeping the previous page's scroll position
   useEffect(() => {
@@ -36,32 +34,7 @@ export default function TopNav() {
       <div className="map-nav-right">
         {!isGuest && <NotificationsBell />}
         {!isGuest && !pathname.startsWith('/chat') && <ChatsIcon />}
-        <Link to="/ohje" className="nav-help-link" aria-label="Avaa käyttöohje" title="Käyttöohje">
-          ?
-          {showHelpTooltip && <span className="nav-help-tooltip">
-            Tarvitsetko apua?
-            <button
-              type="button"
-              className="nav-help-tooltip-close"
-              aria-label="Sulje ohjeteksti"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setShowHelpTooltip(false);
-              }}
-            >
-              ×
-            </button>
-          </span>}
-        </Link>
-        <Link
-          to="/metsanhoito"
-          className="nav-guide-link"
-          aria-label="Tietoa metsänhoidosta"
-          title="Tietoa metsänhoidosta"
-        >
-          <BookOpen size={20} aria-hidden="true" />
-        </Link>
+        <HelpMenu />
         {isGuest ? (
           <>
             <span className="user-email guest-label">Vierailija</span>
