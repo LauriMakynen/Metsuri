@@ -5,6 +5,7 @@ import TopNav from '../components/TopNav';
 import { chatsService, workRequestsService } from '../services/forestService';
 import { useAuth } from '../hooks/useAuth';
 import type { ChatMessage, ChatSummary } from '../types';
+import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
@@ -323,8 +324,9 @@ export default function ChatPage() {
   };
 
   return (
-    <>
-      <TopNav />
+      <div className="start-page forest-page chat-page-wrapper">
+    <SpruceForestBackdrop />
+    <TopNav />
       <main className={`chat-page ${isChatListOpen ? 'chat-list-open' : 'chat-list-closed'}`}>
         {chats.length > 0 &&(!isNarrowScreen || !isChatListOpen) && <button
           type="button"
@@ -524,6 +526,6 @@ export default function ChatPage() {
           {error && <p className="chat-error">{error}</p>}
         </section>
       </main>
-    </>
+      </div>
   );
 }
