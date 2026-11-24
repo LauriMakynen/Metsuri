@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import type { MarkingType, GeometryType } from '../types';
 
@@ -62,7 +63,9 @@ export default function MarkingForm({
   const [cost, setCost] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const isHarvest = HARVEST_TYPES.includes(type);
+  // A note ("Muistio") is a reminder, not done work: no work type or money
+  const isNoteForm = geometryType === 'note';
+  const isHarvest = !isNoteForm && HARVEST_TYPES.includes(type);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -71,7 +74,7 @@ export default function MarkingForm({
       return;
     }
     const incomeEur = isHarvest ? parseEur(income) : null;
-    const costEur = parseEur(cost);
+    const costEur = isNoteForm ? null : parseEur(cost);
     if (incomeEur === undefined || costEur === undefined) {
       setError('Anna tulo ja kulu euroina, esim. 1500');
       return;
@@ -82,7 +85,7 @@ export default function MarkingForm({
     try {
       const normalizedOperationDate = operationDate || getLocalIsoDate();
       await onSaveMarking({
-        type,
+        type: isNoteForm ? 'muu_tyo' : type,
         title: title.trim(),
         description: description.trim(),
         operation_date: normalizedOperationDate,
@@ -99,8 +102,8 @@ export default function MarkingForm({
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onCancel()}>
       <div className="modal-card">
         <div className="modal-header">
-          <h2>📍 Uusi {GEOMETRY_TYPE_LABELS[geometryType]}</h2>
-          <button className="modal-close" onClick={onCancel}>✕</button>
+          <h2>Uusi {GEOMETRY_TYPE_LABELS[geometryType].toLowerCase()}</h2>
+          <button className="modal-close" onClick={onCancel} aria-label="Sulje"><X size={20} aria-hidden="true" /></button>
         </div>
 
         {error && <div className="error-message">{error}</div>}
@@ -113,13 +116,13 @@ export default function MarkingForm({
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="esim. Harvennettu alue"
+              placeholder={isNoteForm ? 'esim. Kaatunut kuusi tiellä' : 'esim. Harvennettu alue'}
               required
               autoFocus
             />
           </div>
 
-          <div className="form-group">
+          {!isNoteForm && <div className="form-group">
             <label htmlFor="type">Tyyppi</label>
             <select
               id="type"
@@ -132,10 +135,10 @@ export default function MarkingForm({
                 </option>
               ))}
             </select>
-          </div>
+          </div>}
 
           <div className="form-group">
-            <label htmlFor="description">Kuvaus</label>
+            <label htmlFor="description">{isNoteForm ? 'Muistiinpano' : 'Kuvaus'}</label>
             <textarea
               id="description"
               value={description}
@@ -146,7 +149,7 @@ export default function MarkingForm({
           </div>
 
           <div className="form-group">
-            <label htmlFor="operationDate">Toimenpiteen päivämäärä</label>
+            <label htmlFor="operationDate">{isNoteForm ? 'Päivämäärä' : 'Toimenpiteen päivämäärä'}</label>
             <input
               id="operationDate"
               type="date"
@@ -157,6 +160,7 @@ export default function MarkingForm({
           </div>
 
           {/* Optional money: makes the return history a total return (income − costs) */}
+          {!isNoteForm && <>
           <div className="marking-money">
             {isHarvest && (
               <div className="form-group">
@@ -186,6 +190,7 @@ export default function MarkingForm({
           <small className="request-form-hint">
             Vapaaehtoinen. Tulot ja kulut lasketaan mukaan metsän tuottohistoriaan.
           </small>
+          </>}
 
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={onCancel}>

@@ -32,7 +32,7 @@ const BID_SUMMARY_JOIN = `
            CASE WHEN wr.pricing = 'owner_receives' THEN MAX(amount_eur) ELSE MIN(amount_eur) END AS best_bid_eur,
            MAX(created_at) AS latest_bid_at
     FROM work_request_bids
-    WHERE work_request_id = wr.id
+    WHERE work_request_id = wr.id AND status = 'pending'
   ) b ON true`;
 
 // Columns describing the requested work itself
@@ -97,6 +97,7 @@ async function fetchPublicRequests(
             ST_X(ST_PointOnSurface(wr.geometry)) AS lng,
             COALESCE(wr.user_id = $1, false) AS is_own,
             mine.my_bid_eur,
+            mine.my_bid_chat_id,
             region.code AS region_code,
             region.name AS region_name,
             CASE WHEN $1::int IS NOT NULL THEN prop.property_code END AS property_code,
@@ -116,10 +117,11 @@ async function fetchPublicRequests(
        LIMIT 1
      ) region ON true
      LEFT JOIN LATERAL (
-       SELECT amount_eur AS my_bid_eur
-       FROM work_request_bids
-       WHERE work_request_id = wr.id AND user_id = $1
-       ORDER BY created_at DESC
+       SELECT b.amount_eur AS my_bid_eur, c.id AS my_bid_chat_id
+       FROM work_request_bids b
+       LEFT JOIN work_request_chats c ON c.bid_id = b.id
+       WHERE b.work_request_id = wr.id AND b.user_id = $1 AND b.status = 'pending'
+       ORDER BY b.created_at DESC
        LIMIT 1
      ) mine ON true
      WHERE ${where}
@@ -310,19 +312,26 @@ router.post('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response)
       const previousBest = await client.query(
         `SELECT b.user_id, b.amount_eur
          FROM work_request_bids b
-         WHERE b.work_request_id = $1
+         WHERE b.work_request_id = $1 AND b.status = 'pending'
          ORDER BY ${bestOrder}, b.created_at ASC, b.id ASC
          LIMIT 1`,
         [id]
       );
-      await client.query(
-        'INSERT INTO work_request_bids (work_request_id, user_id, amount_eur) VALUES ($1, $2, $3)',
+      const bid = await client.query(
+        `INSERT INTO work_request_bids (work_request_id, user_id, amount_eur)
+         VALUES ($1, $2, $3)
+         RETURNING id`,
         [id, req.userId, Math.round(amount * 100) / 100]
+      );
+      await client.query(
+        `INSERT INTO work_request_chats (work_request_id, owner_id, provider_id, bid_id)
+         VALUES ($1, $2, $3, $4)`,
+        [id, request.rows[0].user_id, req.userId, bid.rows[0].id]
       );
       const currentBest = await client.query(
         `SELECT b.user_id, b.amount_eur
          FROM work_request_bids b
-         WHERE b.work_request_id = $1
+         WHERE b.work_request_id = $1 AND b.status = 'pending'
          ORDER BY ${bestOrder}, b.created_at ASC, b.id ASC
          LIMIT 1`,
         [id]
@@ -399,7 +408,10 @@ router.delete('/:id/bids', authMiddleware, async (req: AuthRequest, res: Respons
       }
 
       const result = await client.query(
-        'DELETE FROM work_request_bids WHERE work_request_id = $1 AND user_id = $2 RETURNING id',
+        `UPDATE work_request_bids
+         SET status = 'withdrawn', created_at = NOW()
+         WHERE work_request_id = $1 AND user_id = $2 AND status = 'pending'
+         RETURNING id`,
         [id, req.userId]
       );
       if (result.rows.length === 0) {
@@ -407,6 +419,18 @@ router.delete('/:id/bids', authMiddleware, async (req: AuthRequest, res: Respons
         res.status(404).json({ error: 'Tarjousta ei löytynyt' });
         return;
       }
+      await client.query(
+        `UPDATE chat_messages
+         SET counter_offer_status = 'withdrawn', body = NULL
+         WHERE chat_id IN (
+           SELECT id FROM work_request_chats
+           WHERE work_request_id = $1 AND provider_id = $2
+             AND bid_id = ANY($3::int[])
+         )
+           AND sender_id = $2
+           AND counter_offer_status = 'pending'`,
+        [id, req.userId, result.rows.map((row) => row.id)]
+      );
 
       await createNotification(client, {
         userId: request.rows[0].user_id,
@@ -415,6 +439,7 @@ router.delete('/:id/bids', authMiddleware, async (req: AuthRequest, res: Respons
         body: 'Työpyyntöösi tehty tarjous poistettiin.',
         link: `/map?workRequest=${id}`,
       });
+
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
@@ -432,6 +457,37 @@ router.delete('/:id/bids', authMiddleware, async (req: AuthRequest, res: Respons
   } catch (error) {
     console.error('Delete bid error:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/work-requests/:id/bids - Update the authenticated user's pending bid
+router.put('/:id/bids', authMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const amount = Number(req.body?.amount_eur);
+  if (!/^\d+$/.test(id) || !isValidEur(amount)) {
+    res.status(400).json({ error: `Tarjouksen pitää olla 0–${MAX_EUR} €` });
+    return;
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE work_request_bids b
+       SET amount_eur = $1, created_at = NOW()
+       FROM work_requests wr
+       WHERE b.work_request_id = wr.id AND b.work_request_id = $2 AND b.user_id = $3
+         AND wr.status = 'open' AND b.status = 'pending'
+       RETURNING b.id`,
+      [Math.round(amount * 100) / 100, id, req.userId]
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Muokattavaa tarjousta ei löytynyt' });
+      return;
+    }
+    const [updated] = await fetchPublicRequests(req.userId ?? null, { id: Number(id) });
+    res.json(updated);
+  } catch (error) {
+    console.error('Update bid error:', error);
+    res.status(500).json({ error: 'Tarjouksen muokkaus epäonnistui' });
   }
 });
 

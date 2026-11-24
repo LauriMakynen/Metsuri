@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cleanName, cleanText } from '../forum';
+import {
+  cleanName,
+  cleanText,
+  isForumCategory,
+  isForumReportReason,
+  searchPattern,
+  shouldHideReportedPost,
+  threadSort,
+} from '../forum';
+import { isForumAdmin } from '../../middleware/forum';
 
 // The validators do not touch the database; stub the pool so importing needs no DATABASE_URL
 vi.mock('../../db/pool', () => ({ default: { query: vi.fn(), connect: vi.fn() } }));
@@ -22,6 +31,31 @@ describe('cleanText', () => {
   });
 });
 
+describe('forum list options', () => {
+  it('accepts only the known categories', () => {
+    expect(isForumCategory('puukauppa')).toBe(true);
+    expect(isForumCategory('yleinen')).toBe(true);
+    expect(isForumCategory('Puukauppa')).toBe(false);
+    expect(isForumCategory(undefined)).toBe(false);
+  });
+
+  it('falls back to latest activity for an unknown sort', () => {
+    expect(threadSort('replies')).toBe('replies');
+    expect(threadSort('new')).toBe('new');
+    expect(threadSort('drop table')).toBe('active');
+    expect(threadSort(undefined)).toBe('active');
+    expect(threadSort('toString')).toBe('active');
+  });
+
+  it('builds an escaped ILIKE pattern from the search words', () => {
+    expect(searchPattern('  hirvi   tuhot ')).toBe('%hirvi tuhot%');
+    expect(searchPattern('100%_')).toBe('%100\\%\\_%');
+    expect(searchPattern('   ')).toBeNull();
+    expect(searchPattern(['a'])).toBeNull();
+    expect(searchPattern('x'.repeat(150))).toHaveLength(102);
+  });
+});
+
 describe('cleanName', () => {
   it('keeps a nickname on one line with single spaces', () => {
     expect(cleanName('  Metsä\n  Matti ')).toBe('Metsä Matti');
@@ -31,5 +65,28 @@ describe('cleanName', () => {
     expect(cleanName('M')).toBeNull();
     expect(cleanName('x'.repeat(41))).toBeNull();
     expect(cleanName(null)).toBeNull();
+  });
+});
+
+describe('forum report moderation rules', () => {
+  it('hides a post at the threshold of three distinct open reports', () => {
+    expect(shouldHideReportedPost(2)).toBe(false);
+    expect(shouldHideReportedPost(3)).toBe(true);
+    expect(shouldHideReportedPost(4)).toBe(true);
+  });
+
+  it('accepts only supported report reasons', () => {
+    expect(isForumReportReason('abusive_language')).toBe(true);
+    expect(isForumReportReason('personal_information')).toBe(true);
+    expect(isForumReportReason('invalid')).toBe(false);
+    expect(isForumReportReason(null)).toBe(false);
+  });
+});
+
+describe('forum role checks', () => {
+  it('allows only the admin role to moderate', () => {
+    expect(isForumAdmin('admin')).toBe(true);
+    expect(isForumAdmin('user')).toBe(false);
+    expect(isForumAdmin(undefined)).toBe(false);
   });
 });

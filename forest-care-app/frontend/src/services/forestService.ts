@@ -15,6 +15,8 @@ import type {
   NewWorkRequest,
   Region,
   Notification,
+  ChatSummary,
+  ChatMessage,
 } from '../types';
 
 function normalizeDate(value: unknown): string | null {
@@ -117,6 +119,53 @@ export const notificationsService = {
   },
   markAllRead: async (): Promise<void> => {
     await api.post('/api/notifications/read-all');
+  },
+};
+
+export const chatsService = {
+  getAll: async (): Promise<ChatSummary[]> => {
+    const response = await api.get<ChatSummary[]>('/api/chats');
+    return response.data;
+  },
+  getMessages: async (id: number): Promise<{ chat: ChatSummary; messages: ChatMessage[] }> => {
+    const response = await api.get<{ chat: ChatSummary; messages: ChatMessage[] }>(`/api/chats/${id}/messages`);
+    return response.data;
+  },
+  delete: async (id: number): Promise<void> => {
+    await api.delete(`/api/chats/${id}`);
+  },
+  updatePresence: async (id: number): Promise<void> => {
+    await api.post(`/api/chats/${id}/presence`);
+  },
+  clearPresence: async (id: number): Promise<void> => {
+    await api.delete(`/api/chats/${id}/presence`);
+  },
+  sendMessage: async (id: number, data: {
+    body?: string;
+    image_base64?: string;
+    image_type?: string;
+    counter_offer_eur?: number;
+  }): Promise<ChatMessage> => {
+    const response = await api.post<ChatMessage>(`/api/chats/${id}/messages`, data);
+    return response.data;
+  },
+  acceptCounterOffer: async (chatId: number, messageId: number): Promise<void> => {
+    await api.post(`/api/chats/${chatId}/messages/${messageId}/accept`);
+  },
+  rejectCounterOffer: async (chatId: number, messageId: number): Promise<void> => {
+    await api.post(`/api/chats/${chatId}/messages/${messageId}/reject`);
+  },
+  acceptOffer: async (chatId: number): Promise<void> => {
+    await api.post(`/api/chats/${chatId}/offer/accept`);
+  },
+  cancelOffer: async (chatId: number): Promise<void> => {
+    await api.post(`/api/chats/${chatId}/offer/cancel`);
+  },
+  createNewOffer: async (chatId: number, amountEur: number): Promise<ChatMessage> => {
+    const response = await api.post<ChatMessage>(`/api/chats/${chatId}/offer/new`, {
+      amount_eur: amountEur,
+    });
+    return response.data;
   },
 };
 
@@ -256,6 +305,7 @@ function normalizePublicRequest(r: PublicWorkRequest): PublicWorkRequest {
     target_price_eur: normalizeNumber(r.target_price_eur),
     best_bid_eur: normalizeNumber(r.best_bid_eur),
     my_bid_eur: normalizeNumber(r.my_bid_eur),
+    my_bid_chat_id: r.my_bid_chat_id ?? null,
     property_code: r.property_code ?? null,
     property_area_ha: normalizeNumber(r.property_area_ha),
     property_geometry: r.property_geometry ? normalizeGeometry(r.property_geometry) : null,
@@ -296,6 +346,12 @@ export const workRequestsService = {
   // Offer a total price in euros; returns the request with its updated bid summary
   placeBid: async (requestId: number, amountEur: number): Promise<PublicWorkRequest> => {
     const response = await api.post<PublicWorkRequest>(`/api/work-requests/${requestId}/bids`, {
+      amount_eur: amountEur,
+    });
+    return normalizePublicRequest(response.data);
+  },
+  updateBid: async (requestId: number, amountEur: number): Promise<PublicWorkRequest> => {
+    const response = await api.put<PublicWorkRequest>(`/api/work-requests/${requestId}/bids`, {
       amount_eur: amountEur,
     });
     return normalizePublicRequest(response.data);

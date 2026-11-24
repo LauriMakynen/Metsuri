@@ -21,7 +21,13 @@ function hasUnsavedChanges() {
 }
 
 // Back button for the left end of the top bar; shown on every page except the start page
-export default function BackButton({ fallbackPath = '/start' }: { fallbackPath?: string }) {
+export default function BackButton({
+  fallbackPath = '/start',
+  alwaysNavigateToFallback = false,
+}: {
+  fallbackPath?: string;
+  alwaysNavigateToFallback?: boolean;
+}) {
   const navigate = useNavigate();
 
   const handleBack = () => {
@@ -29,6 +35,11 @@ export default function BackButton({ fallbackPath = '/start' }: { fallbackPath?:
       hasUnsavedChanges() &&
       !window.confirm('Sivulla on tallentamattomia muutoksia. Haluatko varmasti poistua?')
     ) {
+      return;
+    }
+
+    if (alwaysNavigateToFallback) {
+      navigate(fallbackPath);
       return;
     }
 
@@ -41,10 +52,11 @@ export default function BackButton({ fallbackPath = '/start' }: { fallbackPath?:
     }
   };
 
+  const label = alwaysNavigateToFallback ? 'Etusivulle' : 'Takaisin';
   return (
-    <button type="button" className="nav-back-btn" onClick={handleBack} aria-label="Takaisin" title="Takaisin edelliseen näkymään">
+    <button type="button" className="nav-back-btn" onClick={handleBack} aria-label={label} title={label}>
       <span className="nav-back-arrow" aria-hidden="true">←</span>
-      <span className="nav-back-label">Takaisin</span>
+      <span className="nav-back-label">{label}</span>
     </button>
   );
 }

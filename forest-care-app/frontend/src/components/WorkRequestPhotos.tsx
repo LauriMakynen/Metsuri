@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { ChangeEvent } from 'react';
+import { Camera, Images, Trash, X } from 'lucide-react';
 import { workRequestsService } from '../services/forestService';
 import {
   MAX_PHOTOS_PER_REQUEST,
@@ -55,10 +56,10 @@ export function PhotoPickButtons({ remaining, disabled, onPicked, onError }: Pho
   return (
     <div className="photo-pick">
       <button type="button" className="btn btn-secondary btn-compact" disabled={blocked} onClick={() => cameraRef.current?.click()}>
-        📷 Ota kuva
+        <Camera size={16} aria-hidden="true" /> Ota kuva
       </button>
       <button type="button" className="btn btn-secondary btn-compact" disabled={blocked} onClick={() => galleryRef.current?.click()}>
-        🖼️ Valitse kuvia
+        <Images size={16} aria-hidden="true" /> Valitse kuvia
       </button>
       {preparing && <small className="photo-pick-status">Käsitellään kuvia...</small>}
       <input
@@ -89,7 +90,7 @@ export function PendingPhotoGrid({ photos, onRemove }: PendingPhotoGridProps) {
           <img src={photo.previewUrl} alt="Liitettävä kuva" title={formatTakenAt(photo.takenAt)} />
           {onRemove && (
             <button type="button" className="photo-thumb-remove" onClick={() => onRemove(photo.key)} aria-label="Poista kuva">
-              ✕
+              <X size={14} aria-hidden="true" />
             </button>
           )}
         </li>
@@ -169,7 +170,7 @@ function PhotoLightbox({ photos, index, onIndexChange, onClose, onDelete }: Phot
                 </>
               ) : (
                 <button type="button" className="btn btn-danger btn-compact" onClick={() => setConfirming(true)}>
-                  🗑️ Poista kuva
+                  <Trash size={16} aria-hidden="true" /> Poista kuva
                 </button>
               ))}
             <button type="button" className="btn btn-secondary btn-compact" onClick={onClose} disabled={deleting}>

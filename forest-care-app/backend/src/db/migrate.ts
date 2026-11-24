@@ -210,8 +210,13 @@ async function migrate() {
         work_request_id INTEGER NOT NULL REFERENCES work_requests(id) ON DELETE CASCADE,
         user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         amount_eur NUMERIC(12,2) NOT NULL CHECK (amount_eur > 0),
+        status VARCHAR(20) NOT NULL DEFAULT 'pending'
+          CHECK (status IN ('pending', 'accepted', 'withdrawn')),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
+    `);
+    await client.query(`
+      ALTER TABLE work_request_bids ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'pending'
     `);
     await client.query(
       'CREATE INDEX IF NOT EXISTS work_request_bids_request_idx ON work_request_bids(work_request_id)'
@@ -232,6 +237,65 @@ async function migrate() {
     await client.query(
       'CREATE INDEX IF NOT EXISTS notifications_user_created_idx ON notifications(user_id, created_at DESC)'
     );
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS work_request_chats (
+        id SERIAL PRIMARY KEY,
+        work_request_id INTEGER NOT NULL REFERENCES work_requests(id) ON DELETE CASCADE,
+        owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        provider_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        bid_id INTEGER REFERENCES work_request_bids(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CHECK (owner_id <> provider_id)
+      )
+    `);
+    await client.query('ALTER TABLE work_request_chats ADD COLUMN IF NOT EXISTS bid_id INTEGER REFERENCES work_request_bids(id) ON DELETE SET NULL');
+    await client.query('ALTER TABLE work_request_chats DROP CONSTRAINT IF EXISTS work_request_chats_work_request_id_owner_id_provider_id_key');
+    await client.query(`
+      UPDATE work_request_chats c
+      SET bid_id = (
+        SELECT b.id
+        FROM work_request_bids b
+        WHERE b.work_request_id = c.work_request_id AND b.user_id = c.provider_id
+        ORDER BY b.created_at DESC, b.id DESC
+        LIMIT 1
+      )
+      WHERE c.bid_id IS NULL
+    `);
+    await client.query('ALTER TABLE work_request_chats ADD COLUMN IF NOT EXISTS owner_deleted_at TIMESTAMP WITH TIME ZONE');
+    await client.query('ALTER TABLE work_request_chats ADD COLUMN IF NOT EXISTS provider_deleted_at TIMESTAMP WITH TIME ZONE');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id SERIAL PRIMARY KEY,
+        chat_id INTEGER NOT NULL REFERENCES work_request_chats(id) ON DELETE CASCADE,
+        sender_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        body TEXT,
+        image_data BYTEA,
+        image_type VARCHAR(50),
+        counter_offer_eur NUMERIC(12,2),
+        counter_offer_status VARCHAR(20) CHECK (counter_offer_status IN ('pending', 'accepted', 'declined', 'withdrawn')),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CHECK (body IS NOT NULL OR image_data IS NOT NULL OR counter_offer_eur IS NOT NULL)
+      )
+    `);
+    await client.query('ALTER TABLE chat_messages DROP CONSTRAINT IF EXISTS chat_messages_counter_offer_status_check');
+    await client.query(`
+      ALTER TABLE chat_messages
+      ADD CONSTRAINT chat_messages_counter_offer_status_check
+      CHECK (counter_offer_status IN ('pending', 'accepted', 'declined', 'withdrawn'))
+    `);
+    await client.query('ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS read_at TIMESTAMP WITH TIME ZONE');
+    await client.query('CREATE INDEX IF NOT EXISTS work_request_chats_owner_idx ON work_request_chats(owner_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS work_request_chats_provider_idx ON work_request_chats(provider_id)');
+    await client.query('CREATE INDEX IF NOT EXISTS chat_messages_chat_created_idx ON chat_messages(chat_id, created_at)');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS chat_presence (
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        chat_id INTEGER NOT NULL REFERENCES work_request_chats(id) ON DELETE CASCADE,
+        last_seen_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, chat_id)
+      )
+    `);
 
     // Photos the owner attaches to a work request (resized JPEGs, stored in the database).
     // taken_at is the capture time when the device provided one.
@@ -295,6 +359,20 @@ async function migrate() {
 
     // Forum ("Foorumi"): threads and their posts. Authors are shown by a nickname only, never
     // by email; the nickname is remembered on the user for the next post.
+    await client.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'user'");
+    await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS forum_banned BOOLEAN NOT NULL DEFAULT false');
+    await client.query(`
+      DO $migration$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'users_role_check' AND conrelid = 'users'::regclass
+        ) THEN
+          ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('user', 'admin'));
+        END IF;
+      END;
+      $migration$
+    `);
     await client.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS display_name VARCHAR(40)');
     await client.query(`
       CREATE TABLE IF NOT EXISTS forum_threads (
@@ -305,6 +383,24 @@ async function migrate() {
         last_post_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    // Forum category (sidebar filter); existing threads become "yleinen"
+    await client.query(
+      "ALTER TABLE forum_threads ADD COLUMN IF NOT EXISTS category VARCHAR(30) NOT NULL DEFAULT 'yleinen'"
+    );
+    await client.query(`
+      DO $migration$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'forum_threads_category_check' AND conrelid = 'forum_threads'::regclass
+        ) THEN
+          ALTER TABLE forum_threads ADD CONSTRAINT forum_threads_category_check
+            CHECK (category IN ('metsanhoito', 'puukauppa', 'urakointi', 'tuhot', 'yleinen'));
+        END IF;
+      END;
+      $migration$
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS forum_threads_category_idx ON forum_threads(category, last_post_at DESC)');
     await client.query(`
       CREATE TABLE IF NOT EXISTS forum_posts (
         id SERIAL PRIMARY KEY,
@@ -312,11 +408,29 @@ async function migrate() {
         user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
         author_name VARCHAR(40) NOT NULL,
         body TEXT NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        hidden_at TIMESTAMP WITH TIME ZONE,
+        moderator_deleted_at TIMESTAMP WITH TIME ZONE
+      )
+    `);
+    await client.query('ALTER TABLE forum_posts ADD COLUMN IF NOT EXISTS hidden_at TIMESTAMP WITH TIME ZONE');
+    await client.query('ALTER TABLE forum_posts ADD COLUMN IF NOT EXISTS moderator_deleted_at TIMESTAMP WITH TIME ZONE');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS forum_reports (
+        id SERIAL PRIMARY KEY,
+        post_id INTEGER NOT NULL REFERENCES forum_posts(id) ON DELETE CASCADE,
+        reporter_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        reason VARCHAR(40) NOT NULL CHECK (reason IN ('abusive_language', 'harassment', 'spam', 'personal_information', 'other')),
+        note VARCHAR(1000),
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        resolved_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        UNIQUE (post_id, reporter_id)
       )
     `);
     await client.query('CREATE INDEX IF NOT EXISTS forum_posts_thread_idx ON forum_posts(thread_id, created_at)');
     await client.query('CREATE INDEX IF NOT EXISTS forum_threads_last_post_idx ON forum_threads(last_post_at DESC)');
+    await client.query('CREATE INDEX IF NOT EXISTS forum_reports_open_post_idx ON forum_reports(post_id) WHERE resolved_at IS NULL');
 
     // Return history: the parcel's computed value, one row per month. Unlike the estimate
     // backwards in time, this is what the app actually computed at the time.

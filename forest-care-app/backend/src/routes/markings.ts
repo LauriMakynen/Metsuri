@@ -15,6 +15,9 @@ router.use(authMiddleware);
 const VALID_TYPES = ['vesakonhoito', 'istutus', 'harvennus', 'avohakkuu', 'muu_tyo'];
 const VALID_GEOMETRY_TYPES = ['point', 'line', 'area', 'note'];
 
+// Notes ("Muistio") are the owner's reminders, not done work, so no follow-up check is suggested
+const NO_FOLLOW_UP = { followUpDateStart: null, followUpDateEnd: null, followUpNote: null };
+
 function isValidIsoDate(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -122,7 +125,10 @@ router.post('/', async (req: AuthRequest, res: Response): Promise<void> => {
     ? operation_date
     : getLocalIsoDate();
 
-  const recommendation = getFollowUpRecommendation(type as BackendMarkingType, normalizedOperationDate);
+  const recommendation =
+    geometry_type === 'note'
+      ? NO_FOLLOW_UP
+      : getFollowUpRecommendation(type as BackendMarkingType, normalizedOperationDate);
 
   try {
     // If property_id is given, verify the user owns it
@@ -223,7 +229,7 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
 
   try {
     const currentResult = await pool.query(
-      'SELECT type, operation_date FROM markings WHERE id = $1 AND user_id = $2',
+      'SELECT type, geometry_type, operation_date FROM markings WHERE id = $1 AND user_id = $2',
       [id, req.userId]
     );
 
@@ -305,7 +311,9 @@ router.put('/:id', async (req: AuthRequest, res: Response): Promise<void> => {
         values.push(follow_up_note || null);
       }
     } else if (nextOperationDate) {
-      const recommendation = getFollowUpRecommendation(nextType, nextOperationDate);
+      const nextGeometryType = geometry_type ?? currentResult.rows[0].geometry_type;
+      const recommendation =
+        nextGeometryType === 'note' ? NO_FOLLOW_UP : getFollowUpRecommendation(nextType, nextOperationDate);
       updates.push(`follow_up_date_start = $${paramCount++}`);
       values.push(recommendation.followUpDateStart);
       updates.push(`follow_up_date_end = $${paramCount++}`);

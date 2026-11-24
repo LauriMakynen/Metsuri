@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Check, X } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { MARKING_COLORS, MARKING_TYPE_LABELS, MARKING_TYPES } from '../utils/markingTypes';
 import { formatArea } from '../utils/measurement';
@@ -131,8 +132,8 @@ export default function WorkRequestForm({
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && !sending && close()}>
       <div className="modal-card">
         <div className="modal-header">
-          <h2>📢 Uusi työpyyntö</h2>
-          <button className="modal-close" onClick={close} aria-label="Sulje" disabled={sending}>✕</button>
+          <h2>Uusi työpyyntö</h2>
+          <button className="modal-close" onClick={close} aria-label="Sulje" disabled={sending}><X size={20} aria-hidden="true" /></button>
         </div>
         <p className="request-form-sub">
           {parcelName}
@@ -143,7 +144,7 @@ export default function WorkRequestForm({
 
         {landWarning && (
           <div className="land-warning" role="alert">
-            <strong>⚠️ Alue ei näytä metsältä</strong>
+            <strong>Alue ei näytä metsältä</strong>
             <p>{landWarning}</p>
             <div className="land-warning-actions">
               <button type="button" className="btn btn-secondary btn-compact" onClick={onCancel} disabled={sending}>
@@ -158,7 +159,7 @@ export default function WorkRequestForm({
 
         {created ? (
           <form onSubmit={handleSubmit} className="modal-form">
-            <div className="success-message">✓ Työpyyntö julkaistu.</div>
+            <div className="success-message"><Check size={16} aria-hidden="true" /> Työpyyntö julkaistu.</div>
             {photoError && (
               <div className="error-message">
                 {photos.length === 1 ? 'Yksi kuva jäi tallentamatta' : `${photos.length} kuvaa jäi tallentamatta`}: {photoError}
