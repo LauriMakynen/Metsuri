@@ -573,6 +573,22 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   .chat-page.chat-list-open .chat-sidebar-toggle { left: calc(1rem + 320px + 0.6rem); }
   .chat-head { padding-left: 4.25rem; }
 }
+
+/* Spruce forest behind the chat (Reetta): the cards float over the same backdrop as the forum */
+.chat-page-wrapper { position: relative; min-height: 100dvh; background: transparent; }
+.chat-page-wrapper .chat-page { position: relative; z-index: 1; background: transparent; }
+/* No conversations yet: no list, just a glass card explaining how a chat starts */
+.chat-conversation.chat-conversation-empty { background: transparent; box-shadow: none; }
+.chat-empty-state.chat-empty-card {
+  flex: none; flex-direction: column; gap: 8px; width: min(90%, 560px); max-height: 50vh; overflow-y: auto;
+  margin: auto; padding: 1.1rem 1.4rem; color: var(--chat-ink); font-size: 1rem;
+  background: rgba(255,255,255,0.82); border: 1px solid rgba(255,255,255,0.4); border-radius: 18px;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  box-shadow: 0 1px 2px rgba(6,40,26,0.08), 0 24px 48px -24px rgba(6,40,26,0.5);
+}
+.chat-empty-card h2 { margin: 0; font-family: var(--font-display); font-size: 1.35rem; color: var(--forest-deep); }
+.chat-empty-card p { margin: 0; }
+.chat-empty-card ul { margin: 0; padding-left: 1.25rem; text-align: left; line-height: 1.45; }
 .user-email { font-size: 0.85rem; opacity: 0.85; display: none; }
 .guest-label { font-size: 0.85rem; opacity: 0.85; font-style: italic; display: none; }
 @media (min-width: 480px) { .user-email { display: block; } .guest-label { display: block; } }

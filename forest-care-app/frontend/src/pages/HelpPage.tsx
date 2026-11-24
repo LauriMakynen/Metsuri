@@ -72,24 +72,17 @@ const HELP_SECTIONS: HelpSection[] = [
       'Julkaise pyyntö ja seuraa tarjouksia.',
     ],
   },
-  {
-    id: 'bids',
-    title: 'Tarjoukset ja tarjousketju',
-    intro: 'Tarjouksia voi tarkastella ja käsitellä työpyynnön yhteydessä.',
-    steps: [
-      'Avaa työpyynnön tarjoukset.',
-      'Hyväksy, hylkää tai tee vastatarjous.',
-      'Tarjouksen voi myös perua.',
-    ],
-  },
+  
   {
     id: 'chat',
-    title: 'Chatit ja viestit',
-    intro: 'Tarjouskohtaisessa chatissa voit keskustella työn yksityiskohdista.',
+    title: 'Chatit ja tarjousketjut',
+    intro: 'Tarjouskohtaisessa chatissa voit keskustella työn yksityiskohdista ja tarjouksista.',
     steps: [
       'Avaa chat puhekuvakkeesta.',
       'Valitse keskustelu ja kirjoita viesti.',
       'Voit lähettää myös kuvan.',
+      'Hyväksy, hylkää tai tee vastatarjous.',
+      'Tarjouksen voi myös perua.',
     ],
   },
   {
