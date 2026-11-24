@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import TopNav from '../components/TopNav';
+import Avatar from '../components/Avatar';
 import { chatsService, workRequestsService } from '../services/forestService';
 import { useAuth } from '../hooks/useAuth';
 import type { ChatMessage, ChatSummary } from '../types';
+import { TreePine } from 'lucide-react';
+import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
+import { TARGET_PRICE_LABEL } from '../utils/bids';
+import { formatArea } from '../utils/measurement';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
@@ -67,6 +72,60 @@ function readImage(file: File): Promise<{ image_base64: string; image_type: stri
   });
 }
 
+/** Nickname if the other party has one, else the part of the email before @ (like a username) */
+function chatName(chat: Pick<ChatSummary, 'other_name' | 'other_email'>): string {
+  return chat.other_name?.trim() || chat.other_email.split('@')[0];
+}
+
+/** The work request's first photo, or a tile in the work type's colour */
+function RequestThumb({ chat, size = 'md' }: { chat: ChatSummary; size?: 'md' | 'lg' }) {
+  const type = chat.request_type ?? 'muu_tyo';
+  return chat.request_photo_id ? (
+    <img className={`chat-thumb chat-thumb-${size}`} src={workRequestsService.photoUrl(chat.request_photo_id)} alt="" loading="lazy" />
+  ) : (
+    <span className={`chat-thumb chat-thumb-${size} chat-thumb-tile`} style={{ ['--thumb-tone' as string]: MARKING_COLORS[type] }} aria-hidden="true">
+      <TreePine size={size === 'lg' ? 30 : 20} strokeWidth={1.75} />
+    </span>
+  );
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+function dayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+/** "Tänään", "Eilen" or a date: separates the messages by day */
+function dayLabel(iso: string): string {
+  const date = new Date(iso);
+  const today = new Date();
+  if (dayKey(date) === dayKey(today)) return 'Tänään';
+  if (dayKey(date) === dayKey(new Date(today.getTime() - DAY_MS))) return 'Eilen';
+  return date.toLocaleDateString('fi-FI', { weekday: 'long', day: 'numeric', month: 'numeric' });
+}
+/** List time: "nyt", "15 min" or "3 t" today, weekday this week, otherwise the date */
+function listTime(iso: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  const age = Date.now() - date.getTime();
+  if (age < 60_000) return 'nyt';
+  if (age < 60 * 60_000) return `${Math.floor(age / 60_000)} min`;
+  if (dayKey(date) === dayKey(new Date())) return `${Math.floor(age / (60 * 60_000))} t`;
+  if (age < 6 * DAY_MS) return date.toLocaleDateString('fi-FI', { weekday: 'short' });
+  return date.toLocaleDateString('fi-FI', { day: 'numeric', month: 'numeric' });
+}
+/** Preview line in the list: the text, or what kind of message it was */
+function lastMessagePreview(chat: ChatSummary): string {
+  if (chat.last_message) return chat.last_message;
+  if (chat.last_counter_offer_eur != null) return `Vastatarjous ${formatEuro(chat.last_counter_offer_eur)}`;
+  if (chat.last_has_image) return 'Kuva';
+  return 'Tarjous tehty, ei vielä viestejä';
+}
+function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('fi-FI', { hour: '2-digit', minute: '2-digit' });
+}
+function formatEuro(value: number | string | null | undefined): string {
+  return `${Number(value ?? 0).toLocaleString('fi-FI')} €`;
+}
+
 function isOfferAcceptedMessage(message: ChatMessage): boolean {
   return Boolean(message.body?.match(/^Tarjous .+ € (hyväksytty|peruttu)\.$/));
 }
@@ -124,19 +183,18 @@ export default function ChatPage() {
 
   const loadChats = useCallback(async () => {
     try {
-    const list = await chatsService.getAll();
-    setChats(list);
-
-    if (list.length === 0) {
-      setIsChatListOpen(false);
-    } else if (!id && list[0]) {
-      setIsChatListOpen(true);
-      navigate(`/chat/${list[0].id}`, { replace: true });
+      const list = await chatsService.getAll();
+      setChats(list);
+      if (list.length === 0) {
+        setIsChatListOpen(false);
+      } else if (!id && list[0]) {
+        setIsChatListOpen(true);
+        navigate(`/chat/${list[0].id}`, { replace: true });
+      }
+    } catch {
+      setError('Chatien lataaminen epäonnistui.');
     }
-  } catch {
-    setError('Chatien lataaminen epäonnistui.');
-  }
-}, [id, navigate]);
+  }, [id, navigate]);
 
   const loadMessages = useCallback(async (chatId: number) => {
     try {
@@ -324,11 +382,11 @@ export default function ChatPage() {
   };
 
   return (
-      <div className="start-page forest-page chat-page-wrapper">
-    <SpruceForestBackdrop />
-    <TopNav />
+    <div className="start-page forest-page chat-page-wrapper">
+      <SpruceForestBackdrop />
+      <TopNav />
       <main className={`chat-page ${isChatListOpen ? 'chat-list-open' : 'chat-list-closed'}`}>
-        {chats.length > 0 &&(!isNarrowScreen || !isChatListOpen) && <button
+        {chats.length > 0 && (!isNarrowScreen || !isChatListOpen) && <button
           type="button"
           className="chat-sidebar-toggle"
           onClick={() => setIsChatListOpen((open) => !open)}
@@ -343,22 +401,39 @@ export default function ChatPage() {
                 : <path d="M4 6h16M4 12h16M4 18h16" />}
           </svg>
         </button>}
-        {chats.length > 0&& (
+        {chats.length > 0 && (
         <aside ref={chatListRef} className="chat-list">
-          <h1>Chatit</h1>
-          {chats.map((chat) => (
-            <div key={chat.id} className={`chat-list-item ${chat.id === Number(id) ? 'active' : ''} ${chat.unread_count > 0 && chat.id !== Number(id) ? 'unread' : ''}`}>
+          <h1>Viestit</h1>
+          {chats.map((chat) => {
+            const unread = chat.unread_count > 0 && chat.id !== Number(id);
+            return (
+            <div key={chat.id} className={`chat-list-item ${chat.id === Number(id) ? 'active' : ''} ${unread ? 'unread' : ''}`}>
               <Link to={`/chat/${chat.id}`} onClick={() => { if (isNarrowScreen) setIsChatListOpen(false); }}>
-                <strong>{chat.other_email}</strong>
-                <span>{chat.title}</span>
-                {chat.last_message && <small>{chat.last_message}</small>}
-                {chat.unread_count > 0 && chat.id !== Number(id) && <em>{chat.unread_count > 9 ? '9+' : chat.unread_count} lukematonta</em>}
+                <span className="chat-list-visual">
+                  <Avatar name={chatName(chat)} size="xl" />
+                  <RequestThumb chat={chat} />
+                </span>
+                <span className="chat-list-text">
+                  <span className="chat-list-top">
+                    <strong>{chatName(chat)}</strong>
+                    <time>{listTime(chat.last_message_at ?? chat.created_at)}</time>
+                  </span>
+                  <span className="chat-list-title">{chat.title}</span>
+                  <span className="chat-list-bottom">
+                    <small>{lastMessagePreview(chat)}</small>
+                    {unread && (
+                      <em aria-label={`${chat.unread_count} lukematonta viestiä`}>
+                        {chat.unread_count > 9 ? '9+' : chat.unread_count}
+                      </em>
+                    )}
+                  </span>
+                </span>
               </Link>
               <div className="chat-list-menu">
                 <button
                   type="button"
                   className="chat-list-menu-toggle"
-                  aria-label={`Chatin ${chat.other_email} valikko`}
+                  aria-label={`Keskustelun ${chatName(chat)} valikko`}
                   aria-expanded={openChatMenuId === chat.id}
                   onClick={() => setOpenChatMenuId((current) => current === chat.id ? null : chat.id)}
                 >
@@ -377,19 +452,44 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
-          ))}
-          {!chats.length && <p>Chat avautuu, kun työpyyntöön on tehty tarjous.</p>}
+            );
+          })}
         </aside>)}
-        <section
-  className={`chat-conversation ${
-    !selected && chats.length === 0 ? 'chat-conversation-empty' : ''
-  }`}>
-          {selected ? <><header><h2>{selected.other_email}</h2><p>{selected.title}</p></header>
-            {selected.bid_id && <div className="chat-offer-card">
+        {/* With no conversations the list is hidden and the explanation card is shown alone */}
+        <section className={`chat-conversation ${!selected && chats.length === 0 ? 'chat-conversation-empty' : ''}`}>
+          {selected ? <><header className="chat-head">
+              <Avatar name={chatName(selected)} size="lg" />
               <div>
-                <span className="chat-offer-label">Tehty tarjous</span>
-                <strong>{Number(selected.bid_amount_eur).toLocaleString('fi-FI')} €</strong>
-                <span className={`chat-offer-status ${selected.bid_status}`}>{selected.bid_status === 'accepted' ? 'Hyväksytty' : selected.bid_status === 'withdrawn' ? 'Peruttu' : 'Odottaa käsittelyä'}</span>
+                <h2>{chatName(selected)}</h2>
+                <p>{selected.owner_id === user?.id ? 'Työn tarjoaja' : 'Metsänomistaja'}</p>
+              </div>
+            </header>
+            {/* The work request as the conversation's item, like a product card */}
+            <div className="chat-item-card">
+            <Link
+              className="chat-item"
+              to={selected.owner_id === user?.id
+                ? `/map?workRequest=${selected.work_request_id}`
+                : `/tyontarjoajat?workRequest=${selected.work_request_id}`}
+            >
+              <RequestThumb chat={selected} size="lg" />
+              <span className="chat-item-text">
+                <strong>{selected.title}</strong>
+                <small>
+                  {MARKING_TYPE_LABELS[selected.request_type ?? 'muu_tyo']}
+                  {selected.request_area_ha ? `, ${formatArea(Number(selected.request_area_ha))}` : ''}
+                  {selected.request_status === 'closed' ? ', suljettu' : ''}
+                </small>
+                {selected.request_target_price_eur != null && selected.pricing && (
+                  <small>{TARGET_PRICE_LABEL[selected.pricing]}: {formatEuro(selected.request_target_price_eur)}</small>
+                )}
+              </span>
+            </Link>
+            {selected.bid_id && <div className="chat-offer-card">
+              <div className="chat-offer-summary">
+                <span className="chat-offer-label">Tarjous</span>
+                <strong>{formatEuro(selected.bid_amount_eur)}</strong>
+                <span className={`chat-offer-status ${selected.bid_status}`}>{selected.bid_status === 'accepted' ? 'Hyväksytty' : selected.bid_status === 'withdrawn' ? 'Peruttu' : 'Odottaa vastausta'}</span>
               </div>
               {selected.bid_status === 'pending' && selected.owner_id === user?.id && offerAction === null && <div className="chat-offer-actions">
                 <button type="button" onClick={() => void acceptOffer()}>Hyväksy tarjous</button>
@@ -430,8 +530,14 @@ export default function ChatPage() {
                 <button type="button" className="secondary" onClick={() => { setNewOfferAmount(''); setOfferAction(null); }}>Ei</button>
               </div>}
             </div>}
+            </div>
             <div ref={messagesRef} className="chat-messages">
-              {messages.map((message) => <article key={message.id} className={isOfferAcceptedMessage(message) ? `chat-system-message${isOfferCancelledMessage(message) ? ' chat-system-message-cancelled' : ''}` : message.sender_id === user?.id ? 'mine' : ''}>
+              {messages.map((message, index) => {
+                const newDay = index === 0 || dayKey(new Date(messages[index - 1].created_at)) !== dayKey(new Date(message.created_at));
+                return (
+                <Fragment key={message.id}>
+                {newDay && <div className="chat-day" role="separator"><span>{dayLabel(message.created_at)}</span></div>}
+                <article className={isOfferAcceptedMessage(message) ? `chat-system-message${isOfferCancelledMessage(message) ? ' chat-system-message-cancelled' : ''}` : message.sender_id === user?.id ? 'mine' : ''}>
                 {message.body && <p>{message.body}</p>}
                 {message.image_base64 && <img src={`data:${message.image_type};base64,${message.image_base64}`} alt="Chatissa lähetetty kuva" />}
                 {message.counter_offer_eur !== null && <div className={`counter-offer ${message.counter_offer_status !== 'pending' ? 'inactive' : ''}`}>
@@ -466,8 +572,13 @@ export default function ChatPage() {
                     </div>
                   )}
                 </div>}
-                <time>{new Date(message.created_at).toLocaleString('fi-FI')}</time>
-              </article>)}
+                <time dateTime={message.created_at} title={new Date(message.created_at).toLocaleString('fi-FI')}>
+                  {clockTime(message.created_at)}
+                </time>
+              </article>
+                </Fragment>
+                );
+              })}
             </div>
             <form className="chat-compose" onSubmit={(event) => void submit(event)}>
               <div className="chat-compose-row">
@@ -512,20 +623,20 @@ export default function ChatPage() {
               </div>
             </form>
           </> : chats.length === 0
-  ? (
-    <div className="chat-empty-state">
-      <h2>Ei vielä keskusteluita</h2>
-      <p>Keskustelu avautuu automaattisesti, kun</p>
-      <ul>
-        <li>teet tarjouksen jonkun toisen julkaisemaan työpyyntöön.</li>
-        <li>joku tekee tarjouksen sinun julkaisemaasi työpyyntöön.</li>
-      </ul>
-    </div>
-  )
-  : <p className="chat-empty-state">Valitse keskustelu.</p>}
+            ? (
+              <div className="chat-empty-state chat-empty-card">
+                <h2>Ei vielä keskusteluja</h2>
+                <p>Keskustelu avautuu automaattisesti, kun</p>
+                <ul>
+                  <li>teet tarjouksen jonkun toisen julkaisemaan työpyyntöön.</li>
+                  <li>joku tekee tarjouksen sinun julkaisemaasi työpyyntöön.</li>
+                </ul>
+              </div>
+            )
+            : <p className="chat-empty-state">Valitse keskustelu vasemmalta.</p>}
           {error && <p className="chat-error">{error}</p>}
         </section>
       </main>
-      </div>
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import { formatArea } from '../utils/measurement';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { TARGET_PRICE_LABEL, bidSummaryText, formatEur } from '../utils/bids';
@@ -56,7 +57,7 @@ export default function WorkRequestList({
   return (
     <>
       <button className="sidebar-section-header" onClick={onToggle} aria-expanded={isOpen}>
-        <h3>📢 Työpyynnöt ({requestCount})</h3>
+        <h3>Työpyynnöt ({requestCount})</h3>
         <span className={`sidebar-chevron ${isOpen ? 'open' : ''}`} aria-hidden="true">⌄</span>
       </button>
       {isOpen && selectedPropertyId && (
@@ -122,7 +123,7 @@ export default function WorkRequestList({
                     {TARGET_PRICE_LABEL[r.pricing]}: <strong>{formatEur(r.target_price_eur)}</strong>
                   </small>
                 )}
-                <small className="work-request-bids">💶 {bidSummaryText(r)}</small>
+                <small className="work-request-bids">{bidSummaryText(r)}</small>
                 {r.note && <small className="work-request-note">{r.note}</small>}
                 <WorkRequestPhotoGallery requestId={r.id} photos={r.photos} editable onUpdated={onUpdated} />
                 <button className="btn-link" disabled={busyId === r.id} onClick={() => setRequestToWithdraw(r)}>
@@ -144,7 +145,7 @@ export default function WorkRequestList({
                 aria-label="Sulje"
                 disabled={busyId !== null}
               >
-                ✕
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
             <div className="work-request-confirm-details">

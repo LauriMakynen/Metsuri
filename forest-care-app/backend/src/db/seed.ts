@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import pool from './pool';
+import { seedExtras } from './seedExtras';
 
 // Local test accounts with parcels, done work (markings) and open work requests with bids.
 // Password for every account comes from SEED_PASSWORD in backend/.env (start.sh generates
@@ -327,6 +328,14 @@ async function seedOwner(owner: SeedOwner, ownerId: number, providerIds: Record<
       continue;
     }
 
+    // The account may have its own forest instead of the seed parcel: skip requests that would
+    // land outside it (seedExtras adds requests inside whatever parcel the owner has)
+    const fits = await pool.query(
+      'SELECT ST_Intersects(geometry, ST_GeomFromGeoJSON($2)) AS ok FROM properties WHERE id = $1',
+      [propertyId, JSON.stringify(r.geometry)]
+    );
+    if (!fits.rows[0]?.ok) continue;
+
     const request = await pool.query(
       `INSERT INTO work_requests (user_id, property_id, type, title, geometry, area_ha, note, pricing, target_price_eur)
        VALUES ($1, $2, $3, $4, ST_GeomFromGeoJSON($5),
@@ -359,6 +368,7 @@ async function seed() {
     const ownerId = await upsertUser(owner.email, passwordHash);
     await seedOwner(owner, ownerId, providerIds);
   }
+  await seedExtras();
 
   const emails = [...OWNERS.map((o) => o.email), ...PROVIDERS];
   console.log(`Testitunnukset valmiina: ${emails.join(', ')} (salasana: SEED_PASSWORD backend/.env)`);

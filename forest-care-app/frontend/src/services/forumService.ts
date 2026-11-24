@@ -2,9 +2,25 @@ import api from './api';
 
 // Forum ("Foorumi"): authors are nicknames only, the API never returns emails
 
+export type ForumCategory = 'metsanhoito' | 'puukauppa' | 'urakointi' | 'tuhot' | 'yleinen';
+export type ForumSort = 'active' | 'new' | 'replies';
+
+export interface ForumThreadQuery {
+  category?: ForumCategory | null;
+  q?: string;
+  sort?: ForumSort;
+  own?: boolean;
+}
+
+export interface ForumStats {
+  categories: Partial<Record<ForumCategory, number>>;
+  top_writers: { author_name: string; post_count: number }[];
+}
+
 export interface ForumThreadSummary {
   id: number;
   title: string;
+  category: ForumCategory;
   author_name: string;
   preview: string;
   reply_count: number;
@@ -27,6 +43,7 @@ export interface ForumPost {
 export interface ForumThread {
   id: number;
   title: string;
+  category: ForumCategory;
   created_at: string;
   posts: ForumPost[];
 }
@@ -62,9 +79,20 @@ export interface ForumModerationReport {
 }
 
 export const forumService = {
-  getThreads: async (): Promise<ForumThreadSummary[]> => (await api.get<ForumThreadSummary[]>('/api/forum/threads')).data,
+  getThreads: async (query: ForumThreadQuery = {}): Promise<ForumThreadSummary[]> =>
+    (
+      await api.get<ForumThreadSummary[]>('/api/forum/threads', {
+        params: {
+          category: query.category ?? undefined,
+          q: query.q?.trim() || undefined,
+          sort: query.sort && query.sort !== 'active' ? query.sort : undefined,
+          own: query.own ? '1' : undefined,
+        },
+      })
+    ).data,
+  getStats: async (): Promise<ForumStats> => (await api.get<ForumStats>('/api/forum/stats')).data,
   getThread: async (id: number): Promise<ForumThread> => (await api.get<ForumThread>(`/api/forum/threads/${id}`)).data,
-  createThread: async (data: { title: string; body: string; author_name: string }): Promise<number> =>
+  createThread: async (data: { title: string; body: string; author_name: string; category: ForumCategory }): Promise<number> =>
     (await api.post<{ id: number }>('/api/forum/threads', data)).data.id,
   reply: async (threadId: number, data: { body: string; author_name: string }): Promise<ForumPost> =>
     (await api.post<ForumPost>(`/api/forum/threads/${threadId}/posts`, data)).data,

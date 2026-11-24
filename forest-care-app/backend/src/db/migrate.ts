@@ -383,6 +383,24 @@ async function migrate() {
         last_post_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    // Forum category (sidebar filter); existing threads become "yleinen"
+    await client.query(
+      "ALTER TABLE forum_threads ADD COLUMN IF NOT EXISTS category VARCHAR(30) NOT NULL DEFAULT 'yleinen'"
+    );
+    await client.query(`
+      DO $migration$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint
+          WHERE conname = 'forum_threads_category_check' AND conrelid = 'forum_threads'::regclass
+        ) THEN
+          ALTER TABLE forum_threads ADD CONSTRAINT forum_threads_category_check
+            CHECK (category IN ('metsanhoito', 'puukauppa', 'urakointi', 'tuhot', 'yleinen'));
+        END IF;
+      END;
+      $migration$
+    `);
+    await client.query('CREATE INDEX IF NOT EXISTS forum_threads_category_idx ON forum_threads(category, last_post_at DESC)');
     await client.query(`
       CREATE TABLE IF NOT EXISTS forum_posts (
         id SERIAL PRIMARY KEY,

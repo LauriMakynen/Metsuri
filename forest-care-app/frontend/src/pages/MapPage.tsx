@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { MapPin, Megaphone, Menu, Pentagon, Ruler, Spline, StickyNote, X } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
@@ -15,9 +16,9 @@ import {
 import { calculateAreaHa, formatArea, calculateDistance, formatDistance } from '../utils/measurement';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { getFollowUpRecommendation } from '../utils/followUpRecommendation';
-import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
+import { isNote, MARKING_COLORS, MARKING_TYPE_LABELS, NOTE_COLOR, NOTE_LABEL } from '../utils/markingTypes';
 import { DEMO_MARKINGS, DEMO_PROPERTY } from '../utils/demoData';
-import { shouldShowHelpTooltip } from '../utils/helpTooltip';
+import HelpMenu from '../components/HelpMenu';
 import type {
   Property,
   Marking,
@@ -42,10 +43,8 @@ import { OPERATION_LABEL, OPERATION_WORK_TYPE, isCareOperation, standTitle } fro
 import type { WorkRequestFormData, WorkRequestDraft } from '../components/WorkRequestForm';
 import { bidSummaryText, suggestedPricing } from '../utils/bids';
 import type { ActivityResult } from '../components/ActivityTracker';
-import type { CareLocation, CareNeededOperations } from '../components/ForestCarePanel';
 import { parcelProximity } from '../utils/distance';
 import { parcelAreas } from '../utils/parcelAreas';
-import type { ParcelArea } from '../utils/parcelAreas';
 
 delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -137,6 +136,27 @@ function toBounds(geometry: GeoJSONGeometry): L.LatLngBounds | null {
 
 // The open sidebar lies on top of the map: keep fitted areas clear of it, unless it covers
 // most of a narrow screen (then the area would get squeezed into a sliver)
+/** Care mode popup on a stand: its recommended operations, soonest first */
+function careStandPopup(title: string, ops: RecommendedOperation[]): HTMLElement {
+  const root = document.createElement('div');
+  root.className = 'care-stand-popup';
+  const heading = document.createElement('strong');
+  heading.textContent = title;
+  root.append(heading);
+  [...ops].sort((a, b) => a.year - b.year).forEach((op) => {
+    const item = document.createElement('div');
+    item.className = 'care-stand-popup-op';
+    const name = document.createElement('span');
+    name.className = 'care-stand-popup-name';
+    name.textContent = `${OPERATION_LABEL[op.type]}, ${op.source === 'metsakeskus' ? `Metsäkeskus ${op.year}` : `n. ${op.year}`}`;
+    const reason = document.createElement('small');
+    reason.textContent = op.reason;
+    item.append(name, reason);
+    root.append(item);
+  });
+  return root;
+}
+
 function fitPadding(): L.FitBoundsOptions {
   const sidebarWidth = document.querySelector('.map-sidebar.open')?.clientWidth ?? 0;
   const left = sidebarWidth > 0 && window.innerWidth - sidebarWidth >= 320 ? sidebarWidth + 40 : 40;
@@ -168,7 +188,6 @@ export default function MapPage() {
   const requestedFitDoneRef = useRef(false);
   const requestsLayerRef = useRef<L.FeatureGroup | null>(null);
   const careLocationLayerRef = useRef<L.LayerGroup | null>(null);
-  const carePositionRef = useRef<L.LatLng | null>(null);
   const careFittedRef = useRef(false);
 
   const { user, logout, isGuest } = useAuth();
@@ -178,11 +197,6 @@ export default function MapPage() {
   const careMode = searchParams.has('hoida');
   // Read once: later the URL follows the selected parcel (below) without reloading the data
   const [carePropertyId] = useState(() => Number(searchParams.get('hoida')) || null);
-  const [careLocation, setCareLocation] = useState<CareLocation>(() =>
-    'geolocation' in navigator
-      ? { status: 'locating' }
-      : { status: 'unavailable', message: 'Selaimesi ei tue sijainnin käyttöä.' }
-  );
   // "Omat metsät" opens /map?propertyId=<id> (optionally &standId=… from the value view)
   const requestedPropertyId = Number(searchParams.get('propertyId'));
   const requestedWorkRequestId = Number(searchParams.get('workRequest'));
@@ -195,7 +209,6 @@ export default function MapPage() {
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
   const [layerMenuOpen, setLayerMenuOpen] = useState(true);
   const [drawMenuOpen, setDrawMenuOpen] = useState(true);
-  const [showHelpTooltip, setShowHelpTooltip] = useState(() => shouldShowHelpTooltip());
   // Guests start on an example parcel so the demo has something to try right away
   const [properties, setProperties] = useState<Property[]>(() => (isGuest ? [DEMO_PROPERTY] : []));
   const [markings, setMarkings] = useState<Marking[]>(() => (isGuest ? DEMO_MARKINGS : []));
@@ -715,6 +728,8 @@ export default function MapPage() {
     }
     const group = requestsLayerRef.current;
     group.clearLayers();
+    // Care mode leaves planned work off the map, like the sidebar does
+    if (careMode) return;
     workRequests
       .filter((r) => r.property_id === selectedPropertyId && r.geometry)
       .forEach((r) => {
@@ -727,14 +742,14 @@ export default function MapPage() {
         // textContent: titles are user input
         const popup = document.createElement('div');
         const title = document.createElement('strong');
-        title.textContent = `📢 ${r.title}`;
+        title.textContent = r.title;
         const info = document.createElement('div');
-        info.textContent = `Työpyyntö · ${bidSummaryText(r)}`;
+        info.textContent = `Työpyyntö. ${bidSummaryText(r)}`;
         popup.append(title, info);
         layer.bindPopup(popup);
         group.addLayer(layer);
       });
-  }, [workRequests, selectedPropertyId]);
+  }, [workRequests, selectedPropertyId, careMode]);
 
   const renderSelectedHighlight = useCallback((geometry: GeoJSONGeometry, color: string) => {
     if (!mapRef.current || !geometry) return;
@@ -776,7 +791,7 @@ export default function MapPage() {
           fillOpacity: isSelected ? 0.25 : 0.15,
         },
       });
-      layer.bindPopup(`<strong>🌳 ${prop.name}</strong><br/>Metsäkiinteistö`);
+      layer.bindPopup(`<strong>${prop.name}</strong><br/>Metsäkiinteistö`);
       layer.on('click', () => {
         setSelectedPropertyId(prop.id);
         setSelectedPropertyGeometry(prop.geometry);
@@ -792,8 +807,9 @@ export default function MapPage() {
     markings.forEach((marking) => {
       if (!marking.geometry) return;
 
-      const color = MARKING_COLORS[marking.type] || '#666';
-      const label = MARKING_TYPE_LABELS[marking.type] || marking.type;
+      const note = isNote(marking);
+      const color = note ? NOTE_COLOR : MARKING_COLORS[marking.type] || '#666';
+      const label = note ? NOTE_LABEL : MARKING_TYPE_LABELS[marking.type] || marking.type;
       let popupContent = `
         <strong>${marking.title}</strong><br/>
         <span style="color:${color}">● ${label}</span>
@@ -802,11 +818,11 @@ export default function MapPage() {
       
       // Add area for polygon markings
       if ((marking.geometry.type === 'Polygon' || marking.geometry.type === 'MultiPolygon') && marking.area_ha != null) {
-        popupContent += `<br/><span style="font-weight:500">📐 ${formatArea(marking.area_ha)}</span>`;
+        popupContent += `<br/><span style="font-weight:500">${formatArea(marking.area_ha)}</span>`;
       }
 
       if (marking.operation_date) {
-        popupContent += `<br/><span>Toimenpide tehty: ${formatDate(marking.operation_date)}</span>`;
+        popupContent += `<br/><span>${note ? '' : 'Toimenpide tehty: '}${formatDate(marking.operation_date)}</span>`;
       }
 
       if (marking.follow_up_note) {
@@ -1098,7 +1114,11 @@ export default function MapPage() {
       areaHa = calculateAreaHa(pendingGeometry);
     }
 
-    const followUp = getFollowUpRecommendation(data.type, data.operation_date);
+    // Notes are reminders, not done work: no follow-up check
+    const followUp =
+      pendingGeometryType === 'note'
+        ? { followUpDateStart: null, followUpDateEnd: null, followUpNote: null }
+        : getFollowUpRecommendation(data.type, data.operation_date);
 
     try {
       let marking: Marking;
@@ -1169,7 +1189,6 @@ export default function MapPage() {
     const watchId = navigator.geolocation.watchPosition(
       ({ coords }) => {
         const latLng = L.latLng(coords.latitude, coords.longitude);
-        carePositionRef.current = latLng;
         layer.clearLayers();
         L.circle(latLng, {
           radius: coords.accuracy, color: '#2563eb', weight: 1, fillOpacity: 0.08, interactive: false,
@@ -1178,11 +1197,6 @@ export default function MapPage() {
           .bindTooltip('Olet tässä')
           .addTo(layer);
         const proximity = parcelProximity(selectedPropertyGeometry, { lat: coords.latitude, lng: coords.longitude });
-        setCareLocation({
-          status: 'ok',
-          onParcel: proximity?.onParcel ?? false,
-          distanceKm: proximity?.distanceKm ?? null,
-        });
         // Show the user and the parcel together once, when they are near each other
         const parcelBounds = selectedPropertyGeometry ? toBounds(selectedPropertyGeometry) : null;
         if (!careFittedRef.current && parcelBounds?.isValid() && proximity && proximity.distanceKm <= 30) {
@@ -1190,15 +1204,8 @@ export default function MapPage() {
           map.fitBounds(parcelBounds.extend(latLng), { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
         }
       },
-      (err) => {
-        setCareLocation({
-          status: 'unavailable',
-          message:
-            err.code === err.PERMISSION_DENIED
-              ? 'Sijainnin käyttö estettiin. Salli sijainti selaimen asetuksista.'
-              : 'Sijaintia ei saatu juuri nyt.',
-        });
-      },
+      // Without a position the map simply shows no dot; the activity explains GPS problems itself
+      undefined,
       { enableHighAccuracy: true, maximumAge: 10_000, timeout: 20_000 }
     );
     return () => {
@@ -1228,40 +1235,6 @@ export default function MapPage() {
       map.removeLayer(layer);
     };
   }, [careMode, selectedPropertyGeometry]);
-
-  const showCareArea = (area: ParcelArea) => {
-    const bounds = toBounds(area.geometry);
-    if (!bounds?.isValid() || !mapRef.current) return;
-    // On a narrow screen the sidebar closes to show the area, so no room is left for it
-    const narrow = window.innerWidth < 900;
-    mapRef.current.fitBounds(bounds, { ...(narrow ? { padding: [40, 40] } : fitPadding()), maxZoom: FIT_MAX_ZOOM });
-    if (narrow) setSidebarOpen(false);
-  };
-
-  const showCarePosition = () => {
-    const position = carePositionRef.current;
-    if (!position || !mapRef.current) return;
-    mapRef.current.setView(position, Math.max(mapRef.current.getZoom(), 15));
-    if (window.innerWidth < 900) setSidebarOpen(false);
-  };
-
-  // "Toimenpiteitä tarvitaan" in care mode: the value calculation's recommended operations
-  const careNeeded: CareNeededOperations = forestValueResult
-    ? {
-        status: 'ready',
-        operations: forestValueResult.operations,
-        fields: forestValueResult.fields ?? [],
-        fieldsUnavailable: forestValueResult.warnings.some((w) => w.code === 'fields_unavailable'),
-      }
-    : forestValue.entry?.status === 'failed' ||
-        (forestValue.entry?.status === 'ready' && forestValue.entry.response?.status !== 'available')
-      ? { status: 'unavailable' }
-      : { status: 'loading' };
-
-  const showCareStand = (standId: string) => {
-    handleSelectStand(standId);
-    if (window.innerWidth < 900) setSidebarOpen(false);
-  };
 
   const openActivity = () => {
     if (!selectedPropertyId) {
@@ -1441,7 +1414,7 @@ export default function MapPage() {
           bubblingMouseEvents: false,
         });
         layer.bindTooltip(
-          `🌾 Pelto · ${formatArea(field.areaHa)}` +
+          `Pelto, ${formatArea(field.areaHa)}` +
             (field.source === 'owner' ? ` (${standTitle(field.standNumber).toLowerCase()} merkitty pelloksi)` : ' (peltolohkorekisteri)'),
           { sticky: true }
         );
@@ -1449,7 +1422,7 @@ export default function MapPage() {
       });
     };
 
-    // Care mode: stands that need work are clickable and highlight their recommendations in the sidebar
+    // Care mode: stands that need work are clickable and show their recommendations in a popup
     if (careMode && !forestValueOpen) {
       addFieldLayers();
       const careOps = forestValueResult.operations.filter(isCareOperation);
@@ -1468,12 +1441,17 @@ export default function MapPage() {
           },
           bubblingMouseEvents: false,
         });
-        layer.bindTooltip(`${standTitle(stand.standNumber)} · ${OPERATION_LABEL[op.type]}`, { sticky: true });
-        layer.on('click', (e) => {
-          L.DomEvent.stopPropagation(e);
-          setHighlightedStand({ propertyId: forestValueResult.propertyId, standId: stand.standId });
-          setSidebarOpen(true);
+        layer.bindTooltip(`${standTitle(stand.standNumber)}: ${OPERATION_LABEL[op.type]}`, { sticky: true });
+        // Highlight while the popup is open; styled on the layer itself, since redrawing the
+        // layers (a React state change) would close the popup right away
+        const baseStyle = { color, weight: 2, dashArray: '6 4', fillColor: color, fillOpacity: 0.18 };
+        layer.bindPopup(careStandPopup(standTitle(stand.standNumber), careOps.filter((o) => o.standId === stand.standId)));
+        layer.on('popupopen', () => {
+          layer.setStyle({ color: '#1d4ed8', weight: 3.5, dashArray: '', fillColor: '#3b82f6', fillOpacity: 0.4 });
+          layer.bringToFront();
         });
+        layer.on('popupclose', () => layer.setStyle(baseStyle));
+        layer.on('click', (e) => L.DomEvent.stopPropagation(e));
         group.addLayer(layer);
         if (selected) layer.bringToFront();
       });
@@ -1559,15 +1537,19 @@ export default function MapPage() {
     <div className={`map-page ${activityOpen ? 'activity-mode' : ''}`}>
       <nav className="map-nav">
         <div className="map-nav-left">
-          <button
-            className="sidebar-toggle"
-            onClick={() => setSidebarOpen((isOpen) => !isOpen)}
-            aria-expanded={sidebarOpen}
-            aria-controls="map-sidebar"
-            title="Valikko"
-          >
-            ☰
-          </button>
+          {/* Care mode is the map alone: the same details are on "Minun metsäni" */}
+          {!careMode && (
+            <button
+              className="sidebar-toggle"
+              onClick={() => setSidebarOpen((isOpen) => !isOpen)}
+              aria-expanded={sidebarOpen}
+              aria-controls="map-sidebar"
+              title="Valikko"
+              aria-label="Valikko"
+            >
+              <Menu size={22} aria-hidden="true" />
+            </button>
+          )}
           {/* Opened from "Omat metsät" without in-app history: back leads there */}
           <BackButton fallbackPath={fromForestOverview ? '/omat-metsat' : '/start'} />
           <Link to="/start" className="map-nav-title nav-home-link" title="Aloitusnäkymä" aria-label="Metsuri – aloitusnäkymä">
@@ -1578,24 +1560,7 @@ export default function MapPage() {
         <div className="map-nav-right">
         {!isGuest && <NotificationsBell />}
         {!isGuest && <ChatsIcon />}
-        <Link to="/ohje" className="nav-help-link" aria-label="Avaa käyttöohje" title="Käyttöohje">
-          ?
-          {showHelpTooltip && <span className="nav-help-tooltip">
-            Tarvitsetko apua?
-            <button
-              type="button"
-              className="nav-help-tooltip-close"
-              aria-label="Sulje ohjeteksti"
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                setShowHelpTooltip(false);
-              }}
-            >
-              ×
-            </button>
-          </span>}
-        </Link>
+        <HelpMenu />
         {isGuest ? (
             <>
               <span className="user-email guest-label">Vierailija</span>
@@ -1619,7 +1584,7 @@ export default function MapPage() {
         </div>
       </nav>
 
-      <div className={`map-content ${isGuest ? 'has-guest-banner' : ''} ${sidebarOpen ? 'sidebar-open' : ''}`}>
+      <div className={`map-content ${isGuest ? 'has-guest-banner' : ''} ${sidebarOpen && !careMode ? 'sidebar-open' : ''}`}>
         {isGuest && (
           <div className="guest-banner">
             <span>Demotila – mitään ei tallenneta</span>
@@ -1628,7 +1593,7 @@ export default function MapPage() {
             </button>
           </div>
         )}
-        <Sidebar
+        {!careMode && <Sidebar
           isOpen={sidebarOpen}
           properties={properties}
           markings={markings}
@@ -1653,23 +1618,7 @@ export default function MapPage() {
               requestedWorkRequestId > 0)
           }
           showAllWorkRequests={showAllWorkRequests && !isGuest}
-          care={
-            careMode
-              ? {
-                  location: careLocation,
-                  onStartActivity: openActivity,
-                  onShowLocation: showCarePosition,
-                  needed: careNeeded,
-                  onSelectStand: showCareStand,
-                  activeStandId: highlightedStandId,
-                  onClearStand: () => setHighlightedStand(null),
-                  onShowArea: showCareArea,
-                  onMarkField: isGuest ? undefined : forestValue.setFieldMark,
-                  onRequestOffers: isGuest ? undefined : handleRequestOffers,
-                }
-              : null
-          }
-        />
+        />}
 
         <div className="map-wrapper">
           <div ref={mapContainerRef} className="leaflet-map" />
@@ -1728,7 +1677,7 @@ export default function MapPage() {
           {mmlMapUnavailable && !mapNoticeDismissed && (
             <div className="map-fallback-notice" role="status">
               <span>Maanmittauslaitoksen kartta ei ole juuri nyt saatavilla, joten näytetään OpenStreetMap.</span>
-              <button onClick={() => setMapNoticeDismissed(true)} aria-label="Sulje ilmoitus">✕</button>
+              <button onClick={() => setMapNoticeDismissed(true)} aria-label="Sulje ilmoitus"><X size={16} aria-hidden="true" /></button>
             </div>
           )}
 
@@ -1775,13 +1724,14 @@ export default function MapPage() {
                       className="btn-icon"
                       onClick={() => { setClickedCadastre(null); setClickedCadastreCustomName(''); }}
                       title="Sulje"
+                      aria-label="Sulje"
                     >
-                      ✕
+                      <X size={18} aria-hidden="true" />
                     </button>
                   </div>
                 </>
               ) : cadastreClickError ? (
-                <span className="cadastre-click-error" role="alert">⚠️ {cadastreClickError}</span>
+                <span className="cadastre-click-error" role="alert">{cadastreClickError}</span>
               ) : (
                 <span className="cadastre-click-hint">
                   Valitse kiinteistö klikkaamalla sitä kartalla. Zoomaa lähemmäs, jos rajoja ei näy.
@@ -1799,9 +1749,9 @@ export default function MapPage() {
                 title="Sulje"
                 aria-label="Sulje"
               >
-                ✕
+                <X size={18} aria-hidden="true" />
               </button>
-              <strong>🌲 Sinulla ei ole vielä lisättyä palstaa</strong>
+              <strong>Sinulla ei ole vielä lisättyä palstaa</strong>
               <p>Lisää oma metsäpalstasi, niin voit tehdä merkintöjä ja aloittaa aktiviteetin. Karttaa voit selata jo nyt.</p>
               {layerConfig.overlays?.kiinteistorajat && (
                 <div className="empty-parcel-actions">
@@ -1809,7 +1759,7 @@ export default function MapPage() {
                     className="btn btn-secondary btn-compact"
                     onClick={() => { setEmptyNoticeDismissed(true); setShowCadastreOverlay(true); }}
                   >
-                    🗺️ Valitse kartalta
+                    Valitse kartalta
                   </button>
                 </div>
               )}
@@ -1852,7 +1802,7 @@ export default function MapPage() {
                 onClick={cancelDraw}
                 title="Peruuta piirto"
               >
-                ✕<span>Peruuta</span>
+                <X aria-hidden="true" /><span>Peruuta</span>
               </button>
             )}
             <button
@@ -1860,42 +1810,44 @@ export default function MapPage() {
               onClick={() => (activeTool === 'point' ? startDraw(null) : startDraw('point'))}
               title="Lisää piste"
             >
-              📍<span>Piste</span>
+              <MapPin aria-hidden="true" /><span>Piste</span>
             </button>
             <button
               className={`tool-btn ${activeTool === 'line' ? 'active' : ''}`}
               onClick={() => (activeTool === 'line' ? startDraw(null) : startDraw('line'))}
               title="Lisää viiva"
             >
-              📏<span>Viiva</span>
+              <Spline aria-hidden="true" /><span>Viiva</span>
             </button>
             <button
               className={`tool-btn ${activeTool === 'area' ? 'active' : ''}`}
               onClick={() => (activeTool === 'area' ? startDraw(null) : startDraw('area'))}
               title="Lisää alue"
             >
-              🗺️<span>Alue</span>
+              <Pentagon aria-hidden="true" /><span>Alue</span>
             </button>
+            {!careMode && (
             <button
               className={`tool-btn tool-btn-request ${activeTool === 'request' ? 'active' : ''}`}
               onClick={() => (activeTool === 'request' ? startDraw(null) : openNewWorkRequest())}
               title="Tee työpyyntö: piirrä alue ja pyydä hintatarjouksia"
             >
-              📢<span>Työpyyntö</span>
+              <Megaphone aria-hidden="true" /><span>Työpyyntö</span>
             </button>
+            )}
             <button
               className={`tool-btn ${activeTool === 'note' ? 'active' : ''}`}
               onClick={() => (activeTool === 'note' ? startDraw(null) : startDraw('note'))}
               title="Lisää muistiinpano"
             >
-              📝<span>Muistio</span>
+              <StickyNote aria-hidden="true" /><span>Muistio</span>
             </button>
             <button
               className={`tool-btn ${activeTool === 'measure' ? 'active' : ''}`}
               onClick={() => (activeTool === 'measure' ? startDraw(null) : startDraw('measure'))}
               title="Mittaa etäisyys"
             >
-              📐<span>Mittaa</span>
+              <Ruler aria-hidden="true" /><span>Mittaa</span>
             </button>
               </>
             )}
@@ -1903,7 +1855,7 @@ export default function MapPage() {
 
           {activeTool === 'request' && !showForm && (
             <div className="draw-hint" role="status">
-              📢 Piirrä kartalle alue, jolle työ tehdään. Napauta kulmapisteet ja lopuksi ensimmäistä pistettä.
+              Piirrä kartalle alue, jolle työ tehdään. Napauta kulmapisteet ja lopuksi ensimmäistä pistettä.
             </div>
           )}
 
@@ -1959,7 +1911,7 @@ export default function MapPage() {
 
           {error && (
             <div className="map-error" onClick={() => setError('')}>
-              ⚠️ {error}
+              {error}
             </div>
           )}
         </div>

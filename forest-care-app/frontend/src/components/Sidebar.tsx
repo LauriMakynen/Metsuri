@@ -2,29 +2,12 @@ import type {
   Property,
   Marking,
   WorkRequest,
-  RecommendedOperation,
 } from '../types';
 import PropertyList from './PropertyList';
 import MarkingList from './MarkingList';
 import WorkRequestList from './WorkRequestList';
-import ForestCarePanel from './ForestCarePanel';
-import type { CareLocation, CareNeededOperations } from './ForestCarePanel';
-import type { ParcelArea } from '../utils/parcelAreas';
+import { isNote } from '../utils/markingTypes';
 import { useEffect, useState } from 'react';
-
-// Forest care mode ("Hoida omaa metsää") adds a care summary on top of the usual sections
-export interface SidebarCareMode {
-  location: CareLocation;
-  onStartActivity: () => void;
-  onShowLocation: () => void;
-  needed: CareNeededOperations;
-  onSelectStand: (standId: string) => void;
-  activeStandId: string | null;
-  onClearStand: () => void;
-  onShowArea: (area: ParcelArea) => void;
-  onMarkField?: (standId: string, isField: boolean) => Promise<void>;
-  onRequestOffers?: (operation: RecommendedOperation) => void;
-}
 
 interface SidebarProps {
   isOpen: boolean;
@@ -43,9 +26,9 @@ interface SidebarProps {
   onWorkRequestUpdated: (updated: WorkRequest) => void;
   focusWorkRequests?: boolean;
   showAllWorkRequests?: boolean;
-  care?: SidebarCareMode | null;
 }
 
+// Map sidebar: parcels, work requests, done work and notes. Forest care mode has no sidebar.
 export default function Sidebar({
   isOpen,
   properties,
@@ -63,13 +46,12 @@ export default function Sidebar({
   onWorkRequestUpdated,
   focusWorkRequests = false,
   showAllWorkRequests = false,
-  care = null,
 }: SidebarProps) {
   const [openSections, setOpenSections] = useState({
-    // In care mode the parcel is already chosen, so the parcel list starts collapsed
-    properties: !care,
+    properties: true,
     requests: false,
     markings: false,
+    notes: false,
   });
 
   useEffect(() => {
@@ -79,36 +61,23 @@ export default function Sidebar({
         properties: false,
         requests: true,
         markings: false,
+        notes: false,
       });
     }, 0);
     return () => window.clearTimeout(focus);
   }, [focusWorkRequests]);
 
-  const toggleSection = (section: 'properties' | 'requests' | 'markings') => {
+  const toggleSection = (section: keyof typeof openSections) => {
     setOpenSections((current) => ({ ...current, [section]: !current[section] }));
   };
+
+  // Notes made with the "Muistio" tool are listed apart from done work
+  const doneWork = markings.filter((m) => !isNote(m));
+  const notes = markings.filter(isNote);
 
   return (
     <aside id="map-sidebar" className={`map-sidebar ${isOpen ? 'open' : ''}`}>
       <div style={{ flex: 1, overflowY: 'auto' }}>
-        {care && (
-          <ForestCarePanel
-            property={selectedProperty}
-            markings={selectedPropertyId ? markings : []}
-            location={care.location}
-            onStartActivity={care.onStartActivity}
-            onShowLocation={care.onShowLocation}
-            onDeleteMarking={onDeleteMarking}
-            needed={care.needed}
-            onSelectStand={care.onSelectStand}
-            activeStandId={care.activeStandId}
-            onClearStand={care.onClearStand}
-            onShowArea={care.onShowArea}
-            onMarkField={care.onMarkField}
-            onRequestOffers={care.onRequestOffers}
-          />
-        )}
-
         <PropertyList
           properties={properties}
           selectedId={selectedPropertyId}
@@ -118,7 +87,6 @@ export default function Sidebar({
           onOpenForestValue={onOpenForestValue}
           isOpen={openSections.properties}
           onToggle={() => toggleSection('properties')}
-          title={care ? 'Tietoa valitusta metsästä' : undefined}
         />
 
         <WorkRequestList
@@ -133,16 +101,22 @@ export default function Sidebar({
           showAllProperties={showAllWorkRequests}
         />
 
-        {/* In care mode done work is listed under "Viimeisimmät toimenpiteet" instead */}
-        {!care && (
-          <MarkingList
-            markings={markings}
-            selectedPropertyId={selectedPropertyId}
-            onDelete={onDeleteMarking}
-            isOpen={openSections.markings}
-            onToggle={() => toggleSection('markings')}
-          />
-        )}
+        <MarkingList
+          markings={doneWork}
+          selectedPropertyId={selectedPropertyId}
+          onDelete={onDeleteMarking}
+          isOpen={openSections.markings}
+          onToggle={() => toggleSection('markings')}
+        />
+
+        <MarkingList
+          variant="notes"
+          markings={notes}
+          selectedPropertyId={selectedPropertyId}
+          onDelete={onDeleteMarking}
+          isOpen={openSections.notes}
+          onToggle={() => toggleSection('notes')}
+        />
       </div>
     </aside>
   );

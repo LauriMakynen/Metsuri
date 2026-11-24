@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Pencil } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
@@ -10,7 +11,7 @@ import { markingsService, propertiesService, workRequestsService } from '../serv
 import { useForestValue } from '../hooks/useForestValue';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
 import { formatArea } from '../utils/measurement';
-import { MARKING_TYPE_LABELS } from '../utils/markingTypes';
+import { isNote, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import {
   OPERATION_LABEL,
   TIMING_LABEL,
@@ -107,7 +108,7 @@ function PropertyName({ property, onRenamed }: { property: Property; onRenamed: 
           aria-label={`Muokkaa metsän ${property.name} nimeä`}
           title="Muokkaa nimeä"
         >
-          ✏️
+          <Pencil size={16} aria-hidden="true" />
         </button>
       </div>
     );
@@ -263,7 +264,8 @@ function MarkingMoney({ marking, onUpdated }: { marking: Marking; onUpdated: (up
 
 function sortByOperationDate(markings: Marking[]): Marking[] {
   return [...markings]
-    .filter((marking) => marking.operation_date)
+    // Notes ("Muistio") are reminders, not done work
+    .filter((marking) => marking.operation_date && !isNote(marking))
     .sort((a, b) => (b.operation_date ?? '').localeCompare(a.operation_date ?? ''));
 }
 
@@ -466,6 +468,7 @@ function ForestCard({
   const today = new Date().toISOString().slice(0, 10);
   const nextFollowUp = markings
     .filter((marking) => {
+      if (isNote(marking)) return false;
       const lastFollowUpDay = marking.follow_up_date_end ?? marking.follow_up_date_start;
       return lastFollowUpDay && lastFollowUpDay >= today;
     })
@@ -620,7 +623,7 @@ export default function ForestOverviewPage() {
 
       <main className="start-content forest-content">
         <header className="forest-hero">
-          <p className="forest-eyebrow">🌲 Metsänomistajalle</p>
+          <p className="forest-eyebrow">Metsänomistajalle</p>
           <h1>Minun metsäni</h1>
           <p>Katso omien metsäpalstojesi tilanne ja siirry valitsemasi palstan karttanäkymään.</p>
           {/* The map works without a parcel too: browse it or add a new parcel there */}
@@ -630,7 +633,7 @@ export default function ForestOverviewPage() {
                 + Lisää metsä
               </button>
               <button className="btn btn-secondary btn-compact" onClick={() => navigate('/map')}>
-                🗺️ Avaa kartta
+                Avaa kartta
               </button>
             </div>
           )}

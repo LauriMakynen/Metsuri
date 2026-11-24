@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { X } from 'lucide-react';
 import type { ForestValueEntry } from '../../hooks/useForestValue';
 import type { ForestValueResult, ForestValueWarning, ManualStandInput, Property, RecommendedOperation } from '../../types';
 import { dataSourceLabel } from '../../utils/forestValueFormat';
@@ -47,7 +48,6 @@ function Warnings({ warnings }: { warnings: ForestValueWarning[] }) {
     <ul className="fv-warnings">
       {warnings.map((w) => (
         <li key={w.code} className="fv-warning">
-          <span aria-hidden="true">⚠️</span>
           <span>{w.message}</span>
         </li>
       ))}
@@ -214,7 +214,7 @@ export default function ForestValuePanel({
             </button>
           )}
           <button ref={closeRef} type="button" className="fv-icon-btn" onClick={onClose} aria-label="Sulje">
-            <span aria-hidden="true">✕</span>
+            <X size={20} aria-hidden="true" />
           </button>
         </div>
       </header>
