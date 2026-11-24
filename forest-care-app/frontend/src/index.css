@@ -392,24 +392,28 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
 .chat-list-menu-panel button { width: 100%; padding: 0.55rem 0.7rem; border: 0; border-radius: 8px; color: #b91c1c; background: transparent; text-align: left; cursor: pointer; font: inherit; font-weight: 600; }
 .chat-list-menu-panel button:hover { background: #fef2f2; }
 
-/* Avatars and item thumbnails: rounded, softly lit so they read as small objects */
+/* Avatars and item thumbnails: flat and crisp. A light tint of the person's tone with the
+   initial in the deep tone and a hairline ring; no gloss, no inner or drop shadow. */
 .avatar {
   display: inline-flex; align-items: center; justify-content: center; flex: none; border-radius: 50%;
-  color: #fff; font-weight: 800; border: 2px solid #fff; line-height: 1;
-  background: radial-gradient(circle at 32% 28%, rgba(255,255,255,0.35), transparent 55%), var(--avatar-tone);
-  box-shadow: 0 2px 6px rgba(10,40,22,0.25), inset 0 -2px 4px rgba(0,0,0,0.18);
+  font-weight: 650; line-height: 1; letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--avatar-tone) 88%, black);
+  background: color-mix(in srgb, var(--avatar-tone) 16%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--avatar-tone) 22%, transparent);
 }
-.avatar-sm { width: 26px; height: 26px; font-size: 0.72rem; }
-.avatar-md { width: 36px; height: 36px; font-size: 0.9rem; }
-.avatar-lg { width: 46px; height: 46px; font-size: 1.15rem; }
-.chat-thumb { display: block; flex: none; object-fit: cover; border-radius: 14px; box-shadow: 0 1px 2px rgba(10,40,22,0.12), 0 8px 16px -10px rgba(10,40,22,0.45); }
+.avatar-sm { width: 24px; height: 24px; font-size: 0.7rem; }
+.avatar-md { width: 36px; height: 36px; font-size: 0.88rem; }
+.avatar-lg { width: 44px; height: 44px; font-size: 1.05rem; }
+/* On top of a thumbnail it needs a cut-out ring to separate from the image */
+.chat-list-visual .avatar { box-shadow: 0 0 0 2px var(--chat-card), inset 0 0 0 1px color-mix(in srgb, var(--avatar-tone) 22%, transparent); }
+.chat-thumb { display: block; flex: none; object-fit: cover; border-radius: 12px; box-shadow: inset 0 0 0 1px rgba(10,40,22,0.08); }
 .chat-thumb-md { width: 56px; height: 56px; }
-.chat-thumb-lg { width: 72px; height: 72px; border-radius: 16px; }
+.chat-thumb-lg { width: 72px; height: 72px; border-radius: 14px; }
 .chat-thumb-tile {
-  display: inline-flex; align-items: center; justify-content: center; color: rgba(255,255,255,0.95);
-  background:
-    radial-gradient(circle at 30% 25%, rgba(255,255,255,0.4), transparent 60%),
-    linear-gradient(160deg, var(--thumb-tone), color-mix(in srgb, var(--thumb-tone) 60%, #0b2a17));
+  display: inline-flex; align-items: center; justify-content: center;
+  color: color-mix(in srgb, var(--thumb-tone) 85%, black);
+  background: color-mix(in srgb, var(--thumb-tone) 14%, white);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--thumb-tone) 20%, transparent);
 }
 
 /* Conversation */
