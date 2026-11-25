@@ -4,12 +4,12 @@ import type { BidSummary, MarkingType, Pricing } from '../types';
 export const PRICING_OPTIONS: { value: Pricing; title: string; description: string }[] = [
   {
     value: 'owner_receives',
-    title: '💰 Puukauppa',
+    title: 'Puukauppa',
     description: 'Ostaja maksaa minulle puusta – korkein tarjous on paras',
   },
   {
     value: 'owner_pays',
-    title: '🧾 Palvelutyö',
+    title: 'Palvelutyö',
     description: 'Minä maksan tekijälle – edullisin tarjous on paras',
   },
 ];

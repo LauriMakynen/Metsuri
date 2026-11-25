@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { LocateFixed, X } from 'lucide-react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import TopNav from '../components/TopNav';
@@ -11,6 +12,7 @@ import { MARKING_COLORS, MARKING_TYPE_LABELS, MARKING_TYPES } from '../utils/mar
 import { formatArea } from '../utils/measurement';
 import { bidSummaryText } from '../utils/bids';
 import { distanceKm, formatDistance } from '../utils/distance';
+import { AREA_RANGES, PRICE_RANGES, matchesRequestFilters, rangeLabel } from '../utils/requestFilters';
 import type { MarkingType, PublicWorkRequest, Region } from '../types';
 
 type LatLng = { lat: number; lng: number };
@@ -57,7 +59,7 @@ function buildPopup(request: PublicWorkRequest, distance: number | null): HTMLEl
     .filter(Boolean)
     .join(' · ');
   const bids = document.createElement('div');
-  bids.textContent = `💶 ${bidSummaryText(request)}`;
+  bids.textContent = bidSummaryText(request);
   el.append(title, meta, bids);
   return el;
 }
@@ -84,6 +86,9 @@ export default function EmployersPage() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [regions, setRegions] = useState<Region[]>([]);
   const [regionFilter, setRegionFilter] = useState<string | null>(null);
+  // Owner's price and work area: filtered here from the loaded requests, so changes are instant
+  const [priceRange, setPriceRange] = useState<string | null>(null);
+  const [areaRange, setAreaRange] = useState<string | null>(null);
   // The viewer's location stays in the browser; distances are computed here, not on the server
   const [position, setPosition] = useState<LatLng | null>(null);
   const [radiusKm, setRadiusKm] = useState(DEFAULT_RADIUS_KM);
@@ -144,6 +149,7 @@ export default function EmployersPage() {
   const visibleRequests = useMemo(() => {
     const withDistance = requests
       .filter((request) => !ownOnly || request.is_own)
+      .filter((request) => matchesRequestFilters(request, priceRange, areaRange))
       .map((request) => ({
       request,
       distance: position ? distanceKm(position, request) : null,
@@ -152,7 +158,7 @@ export default function EmployersPage() {
     return withDistance
       .filter(({ distance }) => (distance as number) <= radiusKm)
       .sort((a, b) => (a.distance as number) - (b.distance as number));
-  }, [requests, ownOnly, position, radiusKm]);
+  }, [requests, ownOnly, priceRange, areaRange, position, radiusKm]);
 
   // Draw requests on the map
   useEffect(() => {
@@ -279,7 +285,7 @@ export default function EmployersPage() {
 
       <main className="start-content forest-content">
         <header className="forest-hero">
-          <p className="forest-eyebrow">🌲 Työn tarjoajille</p>
+          <p className="forest-eyebrow">Työn tarjoajille</p>
           <h1>Metsätyöt odottavat tekijäänsä</h1>
           <p>
             Selaa metsäpalstoja, joille metsänomistajat ovat jättäneet työpyynnön, ja tarjoa hintaa.
@@ -322,6 +328,32 @@ export default function EmployersPage() {
                 ))}
               </select>
             </label>
+            <label className="region-filter range-filter">
+              <span className="panel-title">Hinta</span>
+              <select
+                value={priceRange ?? ''}
+                onChange={(e) => setPriceRange(e.target.value || null)}
+                aria-label="Suodata omistajan hinnan mukaan"
+              >
+                <option value="">Kaikki hinnat</option>
+                {PRICE_RANGES.map((range) => (
+                  <option key={range.value} value={range.value}>{range.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="region-filter range-filter">
+              <span className="panel-title">Työalueen koko</span>
+              <select
+                value={areaRange ?? ''}
+                onChange={(e) => setAreaRange(e.target.value || null)}
+                aria-label="Suodata työalueen koon mukaan"
+              >
+                <option value="">Kaikki koot</option>
+                {AREA_RANGES.map((range) => (
+                  <option key={range.value} value={range.value}>{range.label}</option>
+                ))}
+              </select>
+            </label>
             {isAuthenticated && (
               <label className="own-requests-filter">
                 <input
@@ -339,7 +371,7 @@ export default function EmployersPage() {
 
         <div className="requests-layout">
           <section className="glass-panel map-panel">
-            <h2 className="panel-title">🗺️ Kartta</h2>
+            <h2 className="panel-title">Kartta</h2>
             <div className="nearby-bar">
               <button
                 className={`filter-chip nearby-toggle ${position ? 'active' : ''}`}
@@ -347,7 +379,9 @@ export default function EmployersPage() {
                 disabled={locating}
                 aria-pressed={position !== null}
               >
-                📍 {locating ? 'Haetaan sijaintia...' : position ? 'Lähellä minua ✕' : 'Lähellä minua'}
+                <LocateFixed size={16} aria-hidden="true" />{' '}
+                {locating ? 'Haetaan sijaintia...' : 'Lähellä minua'}
+                {position && !locating && <X size={14} aria-hidden="true" />}
               </button>
               {position && (
                 <label className="nearby-range">
@@ -368,7 +402,7 @@ export default function EmployersPage() {
             {locationError && <p className="nearby-notice error">{locationError}</p>}
             {position && !loading && (
               <p className="nearby-notice" role="status">
-                📍 {nearbyNoticeText(visibleRequests.length, radiusKm, visibleRequests[0]?.distance ?? null, ownOnly)}
+                {nearbyNoticeText(visibleRequests.length, radiusKm, visibleRequests[0]?.distance ?? null, ownOnly)}
               </p>
             )}
             <div ref={mapContainerRef} className="requests-map" />
@@ -376,7 +410,7 @@ export default function EmployersPage() {
 
           <section className="glass-panel requests-list">
             <h2 className="panel-title">
-              📢 {loading
+              {loading
                 ? 'Ladataan työpyyntöjä...'
                 : `${ownOnly ? 'Omat avoimet työpyynnöt' : 'Avoimet työpyynnöt'} (${visibleRequests.length})`}
             </h2>
@@ -386,7 +420,29 @@ export default function EmployersPage() {
                 {ownOnly ? 'Ei omia avoimia työpyyntöjä' : 'Ei avoimia työpyyntöjä'}
                 {typeFilter ? ` tyypille ${MARKING_TYPE_LABELS[typeFilter].toLowerCase()}` : ''}
                 {regionFilter ? ` maakunnassa ${regions.find((r) => r.code === regionFilter)?.name ?? ''}` : ''}
+                {priceRange ? `, hinta ${rangeLabel(priceRange, PRICE_RANGES)?.toLowerCase()}` : ''}
+                {areaRange ? `, työalue ${rangeLabel(areaRange, AREA_RANGES)?.toLowerCase()}` : ''}
                 {position ? ` ${radiusKm} km säteellä` : ''}.
+                {(priceRange || areaRange) && (
+                  <>
+                    {' '}
+                    <button
+                      type="button"
+                      className="btn-link"
+                      onClick={() => {
+                        setPriceRange(null);
+                        setAreaRange(null);
+                      }}
+                    >
+                      Näytä kaikki hinnat ja koot
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
+            {areaRange && !loading && visibleRequests.length > 0 && (
+              <p className="range-filter-note">
+                Pistemäiset työt, kuten rummun vaihto, eivät näy, kun työalueen koko on rajattu.
               </p>
             )}
 

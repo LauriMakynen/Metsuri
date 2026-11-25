@@ -10,8 +10,10 @@ import ForestOverviewPage from './pages/ForestOverviewPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import HelpPage from './pages/HelpPage';
+import ForestryGuidePage from './pages/ForestryGuidePage';
 import AddForestPage from './pages/AddForestPage';
 import ForumPage from './pages/ForumPage';
+import ChatPage from './pages/ChatPage';
 
 function AppLayout() {
   return <Outlet />;
@@ -28,6 +30,7 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/ohje" element={<HelpPage />} />
+            <Route path="/metsanhoito" element={<ForestryGuidePage />} />
             <Route
               path="/start"
               element={
@@ -79,6 +82,10 @@ function App() {
                   <MapPage />
                 </PrivateRoute>
               }
+            />
+            <Route
+              path="/chat/:id?"
+              element={<PrivateRoute authenticatedOnly><ChatPage /></PrivateRoute>}
             />
             <Route path="/" element={<Navigate to="/start" replace />} />
             <Route path="*" element={<Navigate to="/start" replace />} />

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Calendar, Lock, MapPin, Navigation, X } from 'lucide-react';
 import { workRequestsService } from '../services/forestService';
 import { MARKING_COLORS, MARKING_TYPE_LABELS } from '../utils/markingTypes';
 import { formatArea } from '../utils/measurement';
@@ -30,11 +32,11 @@ export default function WorkRequestCard({
   onBidPlaced,
   onLoginToBid,
 }: WorkRequestCardProps) {
+  const navigate = useNavigate();
   const [formOpen, setFormOpen] = useState(false);
   const [amount, setAmount] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [sent, setSent] = useState(false);
   const [confirmationAmount, setConfirmationAmount] = useState<number | null>(null);
   const [deleteConfirmationOpen, setDeleteConfirmationOpen] = useState(false);
 
@@ -78,7 +80,6 @@ export default function WorkRequestCard({
       setFormOpen(false);
       setAmount('');
       setConfirmationAmount(null);
-      setSent(true);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
       setError(message || 'Tarjouksen lähetys epäonnistui');
@@ -94,7 +95,6 @@ export default function WorkRequestCard({
       const updated = await workRequestsService.deleteBid(request.id);
       onBidPlaced(updated);
       setDeleteConfirmationOpen(false);
-      setSent(false);
     } catch (err: unknown) {
       const message = (err as { response?: { data?: { error?: string } } }).response?.data?.error;
       setError(message || 'Tarjouksen poisto epäonnistui');
@@ -109,15 +109,15 @@ export default function WorkRequestCard({
         <span className="request-tags">
           <span className="request-type" style={{ color }}>{MARKING_TYPE_LABELS[request.type]}</span>
           <span className={`pricing-tag ${request.pricing}`}>
-            {request.pricing === 'owner_receives' ? '💰 Puukauppa' : '🧾 Palvelutyö'}
+            {request.pricing === 'owner_receives' ? 'Puukauppa' : 'Palvelutyö'}
           </span>
         </span>
         <strong className="request-title">{request.title}</strong>
         <span className="request-facts">
-          {request.area_ha ? <span>📐 {formatArea(request.area_ha)}</span> : null}
-          <span>📅 {formatDate(request.created_at.slice(0, 10))}</span>
-          {request.region_name && <span>📍 {request.region_name}</span>}
-          {distanceKm !== null && <span>🧭 {formatDistance(distanceKm)} sinusta</span>}
+          {request.area_ha ? <span>{formatArea(request.area_ha)}</span> : null}
+          <span><Calendar size={14} aria-hidden="true" /> {formatDate(request.created_at.slice(0, 10))}</span>
+          {request.region_name && <span><MapPin size={14} aria-hidden="true" /> {request.region_name}</span>}
+          {distanceKm !== null && <span><Navigation size={14} aria-hidden="true" /> {formatDistance(distanceKm)} sinusta</span>}
         </span>
         {request.note && <span className="request-note">{request.note}</span>}
       </button>
@@ -131,13 +131,13 @@ export default function WorkRequestCard({
             {request.property_area_ha ? <span> · {formatArea(request.property_area_ha)}</span> : null}
           </span>
           <button type="button" className="btn-link" onClick={onFocus}>
-            Näytä rajat kartalla →
+            Näytä rajat kartalla
           </button>
         </div>
       ) : (
         !canBid && (
           <div className="request-property request-property-locked">
-            🔒 Kiinteistötunnus ja rajat näkyvät kirjautuneille
+            <Lock size={14} aria-hidden="true" /> Kiinteistötunnus ja rajat näkyvät kirjautuneille
           </div>
         )
       )}
@@ -179,9 +179,18 @@ export default function WorkRequestCard({
         {request.my_bid_eur !== null && (
           <div className={`bid-mine ${myBidIsBest ? 'best' : ''}`}>
             <span>
-              {sent ? '✓ Tarjouksesi on jätetty' : 'Oma tarjouksesi'}: <strong>{formatEur(request.my_bid_eur)}</strong>
-              {myBidIsBest && <span className="bid-mine-badge">🏆 Paras tarjous</span>}
+              Oma tarjouksesi: <strong>{formatEur(request.my_bid_eur)}</strong>
+              {myBidIsBest && <span className="bid-mine-badge">Paras tarjous</span>}
             </span>
+            {request.my_bid_chat_id !== null && (
+              <button
+                type="button"
+                className="btn-link bid-chat-button"
+                onClick={() => navigate(`/chat/${request.my_bid_chat_id}`)}
+              >
+                Chat
+              </button>
+            )}
             <button
               type="button"
               className="btn-link bid-delete-link"
@@ -196,7 +205,7 @@ export default function WorkRequestCard({
         {request.is_own ? (
           <span className="bid-note">Tämä on oma työpyyntösi.</span>
         ) : !canBid ? (
-          <button className="btn-link" onClick={onLoginToBid}>Kirjaudu sisään tehdäksesi tarjouksen →</button>
+          <button className="btn-link" onClick={onLoginToBid}>Kirjaudu sisään tehdäksesi tarjouksen</button>
         ) : formOpen ? (
           <form className="bid-form" onSubmit={submit}>
             <p className="bid-note">{PRICING_HINT[request.pricing]} Tarjoajan nimeä ei näytetä muille.</p>
@@ -223,8 +232,8 @@ export default function WorkRequestCard({
             </button>
           </form>
         ) : (
-          <button className="btn btn-primary bid-open-btn" onClick={() => { setFormOpen(true); setSent(false); }}>
-            💶 {request.my_bid_eur !== null ? 'Päivitä tarjous' : hasBids ? 'Tee tarjous' : 'Tee ensimmäinen tarjous'}
+          <button className="btn btn-primary bid-open-btn" onClick={() => { setFormOpen(true); }}>
+            {request.my_bid_eur !== null ? 'Päivitä tarjous' : hasBids ? 'Tee tarjous' : 'Tee ensimmäinen tarjous'}
           </button>
         )}
       </div>
@@ -240,7 +249,7 @@ export default function WorkRequestCard({
                 aria-label="Sulje"
                 disabled={sending}
               >
-                ✕
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
             <p className="confirm-dialog-text">
@@ -275,7 +284,7 @@ export default function WorkRequestCard({
                 aria-label="Sulje"
                 disabled={sending}
               >
-                ✕
+                <X size={20} aria-hidden="true" />
               </button>
             </div>
             <p className="confirm-dialog-text">

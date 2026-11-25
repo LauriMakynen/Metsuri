@@ -7,11 +7,49 @@ export interface User {
 
 export interface Notification {
   id: number;
-  type: 'new_bid' | 'bid_no_longer_best' | 'bid_removed' | 'work_request_cancelled';
+  type: 'new_bid' | 'bid_no_longer_best' | 'bid_removed' | 'work_request_cancelled' | 'chat_message';
   title: string;
   body: string;
   link: string;
   read_at: string | null;
+  created_at: string;
+}
+
+export interface ChatSummary {
+  id: number;
+  work_request_id: number;
+  title: string;
+  other_user_id: number;
+  other_email: string;
+  /** The other party's forum nickname, if they have one */
+  other_name?: string | null;
+  pricing?: Pricing;
+  request_type?: MarkingType;
+  request_area_ha?: number | string | null;
+  request_target_price_eur?: number | string | null;
+  request_status?: 'open' | 'closed';
+  request_photo_id?: number | null;
+  last_message: string | null;
+  last_counter_offer_eur?: number | string | null;
+  last_has_image?: boolean | null;
+  last_message_at: string | null;
+  unread_count: number;
+  created_at: string;
+  owner_id: number;
+  provider_id: number;
+  bid_id?: number | null;
+  bid_amount_eur?: number | string | null;
+  bid_status?: 'pending' | 'accepted' | 'withdrawn' | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  sender_id: number;
+  body: string | null;
+  image_base64: string | null;
+  image_type: string | null;
+  counter_offer_eur: number | string | null;
+  counter_offer_status: 'pending' | 'accepted' | 'declined' | 'withdrawn' | null;
   created_at: string;
 }
 
@@ -125,6 +163,7 @@ export interface PublicWorkRequest extends WorkRequestBase {
   // Only meaningful for a logged-in viewer
   is_own: boolean;
   my_bid_eur: number | null;
+  my_bid_chat_id: number | null;
   // The property the work is on; only for logged-in viewers (null otherwise)
   property_code: string | null;
   property_area_ha: number | null;

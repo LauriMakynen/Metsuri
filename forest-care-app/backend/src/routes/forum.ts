@@ -43,6 +43,36 @@ export const REPORT_REASONS = [
 ] as const;
 export type ForumReportReason = (typeof REPORT_REASONS)[number];
 
+// Discussion categories (the forum sidebar); must match the check constraint in migrate.ts
+export const FORUM_CATEGORIES = ['metsanhoito', 'puukauppa', 'urakointi', 'tuhot', 'yleinen'] as const;
+export type ForumCategory = (typeof FORUM_CATEGORIES)[number];
+
+export function isForumCategory(value: unknown): value is ForumCategory {
+  return FORUM_CATEGORIES.some((category) => category === value);
+}
+
+// Thread list order: latest activity, newest threads, or most replies
+export const THREAD_SORTS = {
+  active: 't.last_post_at DESC',
+  new: 't.created_at DESC',
+  replies: 'reply_count DESC, t.last_post_at DESC',
+} as const;
+export type ThreadSort = keyof typeof THREAD_SORTS;
+
+export function threadSort(value: unknown): ThreadSort {
+  // Own keys only, not `in`: "toString" etc. must not reach the ORDER BY
+  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(THREAD_SORTS, value)
+    ? (value as ThreadSort)
+    : 'active';
+}
+
+/** Search words for ILIKE: trimmed, at most 100 characters, % and _ escaped. Exported for tests. */
+export function searchPattern(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const text = value.replace(/\s+/g, ' ').trim().slice(0, 100);
+  return text ? `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+}
+
 export function isForumReportReason(value: unknown): value is ForumReportReason {
   return REPORT_REASONS.some((reason) => reason === value);
 }
@@ -85,11 +115,15 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res: Response): Promi
   }
 });
 
-// GET /api/forum/threads - Latest discussions first
+// GET /api/forum/threads - Discussions, latest activity first
+// ?category=… filters, ?q=… searches titles and opening posts, ?sort=active|new|replies, ?own=1 own threads
 router.get('/threads', optionalAuthMiddleware, async (req: AuthRequest, res: Response): Promise<void> => {
+  const category = isForumCategory(req.query.category) ? req.query.category : null;
+  const search = searchPattern(req.query.q);
+  const own = req.query.own === '1' && req.userId !== undefined;
   try {
     const result = await pool.query(
-      `SELECT t.id, t.title, t.created_at, t.last_post_at,
+      `SELECT t.id, t.title, t.category, t.created_at, t.last_post_at,
               first.author_name,
               CASE WHEN first.hidden_at IS NOT NULL THEN $2 ELSE LEFT(first.body, 200) END AS preview,
               (SELECT COUNT(*)::int - 1 FROM forum_posts p WHERE p.thread_id = t.id) AS reply_count,
@@ -99,9 +133,12 @@ router.get('/threads', optionalAuthMiddleware, async (req: AuthRequest, res: Res
          SELECT author_name, body, hidden_at
          FROM forum_posts p WHERE p.thread_id = t.id ORDER BY created_at, id LIMIT 1
        ) first ON true
-       ORDER BY t.last_post_at DESC
+       WHERE ($3::text IS NULL OR t.category = $3)
+         AND ($4::text IS NULL OR t.title ILIKE $4 OR (first.hidden_at IS NULL AND first.body ILIKE $4))
+         AND (NOT $5 OR t.user_id = $1)
+       ORDER BY ${THREAD_SORTS[threadSort(req.query.sort)]}
        LIMIT 100`,
-      [req.userId ?? null, REPORTED_HIDDEN_MESSAGE]
+      [req.userId ?? null, REPORTED_HIDDEN_MESSAGE, category, search, own]
     );
     res.json(result.rows);
   } catch (error) {
@@ -110,11 +147,41 @@ router.get('/threads', optionalAuthMiddleware, async (req: AuthRequest, res: Res
   }
 });
 
-// POST /api/forum/threads - Start a discussion: { title, body, author_name }
+// GET /api/forum/stats - Thread counts per category and the most active writers of the last
+// 30 days (nicknames only, like everywhere on the forum)
+router.get('/stats', async (_req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const categories = await pool.query(
+      'SELECT category, COUNT(*)::int AS count FROM forum_threads GROUP BY category'
+    );
+    const writers = await pool.query(
+      `SELECT author_name, COUNT(*)::int AS post_count
+       FROM forum_posts
+       WHERE created_at > NOW() - INTERVAL '30 days' AND hidden_at IS NULL AND moderator_deleted_at IS NULL
+       GROUP BY author_name
+       ORDER BY post_count DESC, MAX(created_at) DESC
+       LIMIT 5`
+    );
+    res.json({
+      categories: Object.fromEntries(categories.rows.map((r) => [r.category, r.count])),
+      top_writers: writers.rows,
+    });
+  } catch (error) {
+    console.error('Get forum stats error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/forum/threads - Start a discussion: { title, body, author_name, category? }
 router.post('/threads', authMiddleware, forumWriteMiddleware, forumPostLimiter, async (req: AuthRequest, res: Response): Promise<void> => {
   const title = cleanText(req.body?.title, TITLE_MIN, TITLE_MAX);
   const body = cleanText(req.body?.body, 1, BODY_MAX);
   const name = cleanName(req.body?.author_name);
+  const category = req.body?.category === undefined ? 'yleinen' : req.body.category;
+  if (!isForumCategory(category)) {
+    res.status(400).json({ error: 'Valitse keskustelulle aihealue' });
+    return;
+  }
   if (!title) {
     res.status(400).json({ error: `Anna otsikko (${TITLE_MIN}–${TITLE_MAX} merkkiä)` });
     return;
@@ -132,8 +199,8 @@ router.post('/threads', authMiddleware, forumWriteMiddleware, forumPostLimiter, 
   try {
     await client.query('BEGIN');
     const thread = await client.query(
-      'INSERT INTO forum_threads (user_id, title) VALUES ($1, $2) RETURNING id',
-      [req.userId, title]
+      'INSERT INTO forum_threads (user_id, title, category) VALUES ($1, $2, $3) RETURNING id',
+      [req.userId, title, category]
     );
     await client.query(
       'INSERT INTO forum_posts (thread_id, user_id, author_name, body) VALUES ($1, $2, $3, $4)',
@@ -158,7 +225,7 @@ router.get('/threads/:id', optionalAuthMiddleware, async (req: AuthRequest, res:
     return;
   }
   try {
-    const thread = await pool.query('SELECT id, title, created_at FROM forum_threads WHERE id = $1', [req.params.id]);
+    const thread = await pool.query('SELECT id, title, category, created_at FROM forum_threads WHERE id = $1', [req.params.id]);
     if (thread.rows.length === 0) {
       res.status(404).json({ error: 'Keskustelua ei löytynyt' });
       return;

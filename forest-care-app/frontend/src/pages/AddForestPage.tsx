@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Check } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import AddForestByCode from '../components/AddForestByCode';
 import SpruceForestBackdrop from '../components/SpruceForestBackdrop';
@@ -23,7 +24,7 @@ export default function AddForestPage() {
       <SpruceForestBackdrop />
       <main className="start-content forest-content">
         <section className="glass-panel add-forest-card">
-          <p className="forest-eyebrow">🌲 Tervetuloa Metsuriin</p>
+          <p className="forest-eyebrow">Tervetuloa Metsuriin</p>
           <h1>Lisää metsäsi</h1>
           <p className="add-forest-lead">
             Syötä metsäkiinteistösi tunnus, niin näet sen rajat kartalla, puuston arvion ja hoitosuositukset.
@@ -34,7 +35,7 @@ export default function AddForestPage() {
             <ul className="add-forest-added" aria-label="Lisätyt metsät">
               {added.map((property) => (
                 <li key={property.id}>
-                  ✓ <strong>{property.name}</strong>
+                  <Check size={16} aria-hidden="true" /> <strong>{property.name}</strong>
                   {property.area_ha ? ` · ${formatArea(property.area_ha)}` : ''}
                 </li>
               ))}

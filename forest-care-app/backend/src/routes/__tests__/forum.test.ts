@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { cleanName, cleanText, isForumReportReason, shouldHideReportedPost } from '../forum';
+import {
+  cleanName,
+  cleanText,
+  isForumCategory,
+  isForumReportReason,
+  searchPattern,
+  shouldHideReportedPost,
+  threadSort,
+} from '../forum';
 import { isForumAdmin } from '../../middleware/forum';
 
 // The validators do not touch the database; stub the pool so importing needs no DATABASE_URL
@@ -20,6 +28,31 @@ describe('cleanText', () => {
     expect(cleanText('x'.repeat(101), 1, 100)).toBeNull();
     expect(cleanText(42, 1, 100)).toBeNull();
     expect(cleanText(undefined, 1, 100)).toBeNull();
+  });
+});
+
+describe('forum list options', () => {
+  it('accepts only the known categories', () => {
+    expect(isForumCategory('puukauppa')).toBe(true);
+    expect(isForumCategory('yleinen')).toBe(true);
+    expect(isForumCategory('Puukauppa')).toBe(false);
+    expect(isForumCategory(undefined)).toBe(false);
+  });
+
+  it('falls back to latest activity for an unknown sort', () => {
+    expect(threadSort('replies')).toBe('replies');
+    expect(threadSort('new')).toBe('new');
+    expect(threadSort('drop table')).toBe('active');
+    expect(threadSort(undefined)).toBe('active');
+    expect(threadSort('toString')).toBe('active');
+  });
+
+  it('builds an escaped ILIKE pattern from the search words', () => {
+    expect(searchPattern('  hirvi   tuhot ')).toBe('%hirvi tuhot%');
+    expect(searchPattern('100%_')).toBe('%100\\%\\_%');
+    expect(searchPattern('   ')).toBeNull();
+    expect(searchPattern(['a'])).toBeNull();
+    expect(searchPattern('x'.repeat(150))).toHaveLength(102);
   });
 });
 
