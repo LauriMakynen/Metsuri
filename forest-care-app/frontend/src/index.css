@@ -878,8 +878,15 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
       linear-gradient(0deg, rgba(6,40,26,0.6) 0%, transparent 35%),
       image-set(url('/media/start-hero.webp') type('image/webp'), url('/media/start-hero.jpg') type('image/jpeg'));
     background-size: cover; background-position: 50% 20%;
-    -webkit-mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.55) 22%, #000 48%);
-    mask-image: linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.55) 22%, #000 48%);
+    /* Second mask: the bottom edge dissolves into the green instead of ending at a line */
+    -webkit-mask-image:
+      linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.55) 22%, #000 48%),
+      linear-gradient(180deg, #000 62%, transparent 100%);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(90deg, transparent 0%, rgba(0,0,0,0.55) 22%, #000 48%),
+      linear-gradient(180deg, #000 62%, transparent 100%);
+    mask-composite: intersect;
   }
   .hero-photo .hero-inner { padding: 5rem 2rem; }
   .hero-photo .hero-actions { flex-wrap: wrap; max-width: 760px; }
@@ -900,7 +907,7 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   /* Measured from the bottom, so the brown band sits just below the cards on every screen;
      the top blends in from the hero's green */
   background:
-    linear-gradient(180deg, var(--forest-deep) 0, rgba(6,40,26,0) 14rem),
+    linear-gradient(180deg, var(--forest-deep) 0, var(--forest-deep) 3rem, rgba(6,40,26,0.55) 10rem, rgba(6,40,26,0) 20rem),
     linear-gradient(0deg, #040302 0, #160f08 5rem, #2e1f11 12rem, #3e2a15 22rem, #3a2814 36rem, #2c2110 100%);
 }
 .home-page .underground .start-cards { position: relative; z-index: 1; }
