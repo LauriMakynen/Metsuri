@@ -59,7 +59,12 @@ Koodi on kansiossa `forest-care-app/` (React + Vite + Leaflet / Express + TypeSc
   korkein tarjous paras; `owner_pays` = palvelutyö, edullisin paras) ja omistajan `target_price_eur`.
 - `work_request_bids`: tarjoukset. Julkiset rajapinnat **eivät koskaan paljasta omistajan tai
   tarjoajan henkilöllisyyttä** (vain paras tarjous, määrä, katsojan oma tarjous).
-- Vierailija = demotila: valmis demopalsta (`utils/demoData.ts`), ei tallenna backendiin.
+- Vierailija = demotila ("Kokeile demoa"): toimii kuin kirjautunut metsänomistaja esimerkkidatalla.
+  `frontend/src/demo/`: axios-adapteri (`demoAdapter.ts`) vastaa API-kutsuihin selaimen demodatasta
+  (`demoSeed.ts`, tila sessionStoragessa) samoilla muodoilla ja säännöillä kuin backend (`demoBackend.ts`).
+  Metsäarvo ja kiinteistöhaku menevät backendin julkisiin rajapintoihin (`/api/forest-value/guest(/history)`,
+  `/api/cadastre`). Ei tallenna backendiin. **Uusi tai muutettu API-reitti → päivitä myös `demoBackend.ts`**,
+  muuten demo ja kirjautunut käyttäjä eroavat.
 
 ## Metsäpalstan arvo
 - Laskenta `backend/src/services/forestValue/` (puhtaat moduulit + testit); säännöt `recommendationRules.ts`.

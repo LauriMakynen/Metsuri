@@ -27,6 +27,7 @@ import type {
   ForestValueHistoryResponse,
   ForestValueResponse,
   ForestValueResult,
+  HistoryEvent,
   ManualStandInput,
   PolygonGeometry,
   StumpagePrices,
@@ -496,9 +497,18 @@ function seedFromGeometry(geometry: unknown): number {
   return Math.abs(hash);
 }
 
+/** What the demo keeps in the browser for a guest parcel and sends along with its geometry */
+export interface GuestParcelOptions {
+  /** Stands the guest marked as field ("Tämä on pelto") */
+  fieldStandIds?: string[];
+  /** Guest-entered basics, used instead of example stands */
+  manual?: ManualStandInput | null;
+}
+
 export async function getGuestForestValue(
   geometryWgs84: unknown,
-  propertyCode: string | null
+  propertyCode: string | null,
+  options: GuestParcelOptions = {}
 ): Promise<ForestValueResponse> {
   const type = (geometryWgs84 as { type?: unknown } | null)?.type;
   if (type !== 'Polygon' && type !== 'MultiPolygon') {
@@ -520,12 +530,28 @@ export async function getGuestForestValue(
     parcel,
     parcelAreaHa: areaHa,
     // Same parcel → same example stands on every request
-    stands: generateMockStands(parcel, seedFromGeometry(geometryWgs84)),
-    provider: 'mock',
+    stands: options.manual
+      ? [manualStand(parcel, areaHa, options.manual, new Date().getFullYear())]
+      : generateMockStands(parcel, seedFromGeometry(geometryWgs84)),
+    provider: options.manual ? 'manual' : 'mock',
     municipality: municipalityFromPropertyCode(propertyCode),
-    // Fields are left out in the demo too
     registerFields: await loadRegisterFields(parcel),
+    userFieldStandIds: new Set(options.fieldStandIds ?? []),
   });
   if (!result) return { status: 'no_data', message: NO_DATA_MESSAGE };
   return { status: 'available', stale: false, result };
+}
+
+/** Return history of a guest parcel; its done works come from the browser like the parcel itself */
+export async function getGuestForestValueHistory(
+  geometryWgs84: unknown,
+  propertyCode: string | null,
+  options: GuestParcelOptions,
+  events: HistoryEvent[],
+  periods: number[] = HISTORY_PERIODS
+): Promise<ForestValueHistoryResponse> {
+  const response = await getGuestForestValue(geometryWgs84, propertyCode, options);
+  if (response.status !== 'available') return response;
+  const history = computeValueHistory(response.result, await getPriceHistory(), periods, new Date(), events);
+  return { status: 'available', history };
 }

@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { demoAwareAdapter } from '../demo/demoAdapter';
 
 // Backend URL. Empty = same origin: in development the Vite proxy forwards /api to the
 // backend, so the app also works when opened from a phone. Set VITE_API_URL in production.
@@ -7,6 +8,8 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || '';
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
+  // In the guest demo, requests are answered from the in-browser demo data
+  adapter: demoAwareAdapter,
 });
 
 // Attach JWT token to every request automatically

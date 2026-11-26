@@ -50,12 +50,11 @@ function App() {
             <Route
               path="/omat-metsat"
               element={
-                <PrivateRoute authenticatedOnly>
+                <PrivateRoute>
                   <ForestOverviewPage />
                 </PrivateRoute>
               }
             />
-            {/* Guests may read the forum; writing needs an account */}
             {['/foorumi', '/foorumi/:id'].map((path) => (
               <Route
                 key={path}
@@ -70,7 +69,7 @@ function App() {
             <Route
               path="/lisaa-metsa"
               element={
-                <PrivateRoute authenticatedOnly>
+                <PrivateRoute>
                   <AddForestPage />
                 </PrivateRoute>
               }
@@ -85,7 +84,7 @@ function App() {
             />
             <Route
               path="/chat/:id?"
-              element={<PrivateRoute authenticatedOnly><ChatPage /></PrivateRoute>}
+              element={<PrivateRoute><ChatPage /></PrivateRoute>}
             />
             <Route path="/" element={<Navigate to="/start" replace />} />
             <Route path="*" element={<Navigate to="/start" replace />} />

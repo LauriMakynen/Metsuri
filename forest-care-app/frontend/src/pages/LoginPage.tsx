@@ -96,7 +96,7 @@ export default function LoginPage() {
           className="btn btn-ghost"
           onClick={() => { loginAsGuest(); navigate('/start'); }}
         >
-          Jatka kirjautumatta
+          Kokeile demoa
         </button>
       </div>
     </div>
