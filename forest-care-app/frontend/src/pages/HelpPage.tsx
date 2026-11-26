@@ -120,7 +120,7 @@ const HELP_SECTIONS: HelpSection[] = [
     title: 'Demotila',
     intro: 'Demossa voit kokeilla kaikkia sovelluksen toimintoja ilman käyttäjätiliä valmiilla esimerkkidatalla.',
     steps: [
-      'Valitse kirjautumissivulla Jatka kirjautumatta.',
+      'Valitse kirjautumissivulla Kokeile demoa.',
       'Demossa on valmiina kaksi metsäpalstaa, tehtyjä töitä, työpyyntöjä tarjouksineen, viestejä ja foorumi.',
       'Voit lisätä merkintöjä, julkaista työpyyntöjä, tarjota muiden työpyyntöihin ja keskustella – esimerkkikäyttäjät vastaavat automaattisesti.',
       'Muutokset säilyvät vain tämän selainvälilehden ajan. Luo tili, kun haluat tallentaa omat tietosi.',
