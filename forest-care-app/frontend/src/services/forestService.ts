@@ -1,4 +1,6 @@
 import api from './api';
+import { isDemoActive } from '../demo/demoMode';
+import { demoPhotoUrl } from '../demo/demoBackend';
 import type {
   Property,
   Marking,
@@ -233,22 +235,6 @@ export const propertiesService = {
   },
 };
 
-export const forestValueService = {
-  // Guest demo parcel, computed from example data on the server
-  getDemo: async (): Promise<ForestValueResponse> => {
-    const response = await api.get<ForestValueResponse>('/api/forest-value/demo');
-    return response.data;
-  },
-  // A parcel a guest added in the demo: it exists only in the browser, so send its geometry
-  getGuest: async (geometry: GeoJSONGeometry, propertyCode: string | null): Promise<ForestValueResponse> => {
-    const response = await api.post<ForestValueResponse>('/api/forest-value/guest', {
-      geometry,
-      property_code: propertyCode,
-    });
-    return response.data;
-  },
-};
-
 // Map markings API calls
 export const markingsService = {
   getAll: async (propertyId?: number): Promise<Marking[]> => {
@@ -378,7 +364,8 @@ export const workRequestsService = {
     const response = await api.delete<WorkRequest>(`/api/work-requests/${requestId}/photos/${photoId}`);
     return normalizeOwnRequest(response.data);
   },
-  photoUrl: (photoId: number): string => `${api.defaults.baseURL ?? ''}/api/work-request-photos/${photoId}`,
+  photoUrl: (photoId: number): string =>
+    (isDemoActive() ? demoPhotoUrl(photoId) : null) ?? `${api.defaults.baseURL ?? ''}/api/work-request-photos/${photoId}`,
 };
 
 export const cadastreService = {

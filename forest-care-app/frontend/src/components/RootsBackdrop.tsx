@@ -153,6 +153,8 @@ export default function RootsBackdrop() {
 
   // Fades are anchored to the bottom edge (in px), where the open soil under the cards is
   const fromBottom = (px: number) => (size ? Math.min(1, Math.max(0.05, 1 - px / size.h)).toFixed(3) : '0');
+  // The top edge meets the hero: soil and roots emerge gradually instead of starting at a line
+  const fromTop = (px: number) => (size ? Math.min(0.5, px / size.h).toFixed(3) : '0');
 
   return (
     <div className="roots-backdrop" ref={ref} aria-hidden="true">
@@ -188,7 +190,9 @@ export default function RootsBackdrop() {
             </filter>
             {/* Roots show best in the brown band and sink into darkness further down */}
             <linearGradient id="roots-fade" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#fff" stopOpacity="0.7" />
+              <stop offset="0" stopColor="#fff" stopOpacity="0" />
+              <stop offset={fromTop(90)} stopColor="#fff" stopOpacity="0.25" />
+              <stop offset={fromTop(240)} stopColor="#fff" stopOpacity="0.75" />
               <stop offset={fromBottom(420)} stopColor="#fff" stopOpacity="1" />
               <stop offset={fromBottom(200)} stopColor="#fff" stopOpacity="0.75" />
               <stop offset={fromBottom(70)} stopColor="#fff" stopOpacity="0.15" />
@@ -199,7 +203,8 @@ export default function RootsBackdrop() {
             </mask>
             {/* The soil texture fades out too, so the bottom is plain black */}
             <linearGradient id="soil-fade" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#fff" stopOpacity="0.5" />
+              <stop offset="0" stopColor="#fff" stopOpacity="0" />
+              <stop offset={fromTop(200)} stopColor="#fff" stopOpacity="0.5" />
               <stop offset={fromBottom(380)} stopColor="#fff" stopOpacity="0.75" />
               <stop offset={fromBottom(120)} stopColor="#fff" stopOpacity="0.2" />
               <stop offset="1" stopColor="#fff" stopOpacity="0" />

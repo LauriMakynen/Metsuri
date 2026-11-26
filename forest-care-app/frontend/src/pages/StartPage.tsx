@@ -48,7 +48,7 @@ export default function StartPage() {
   const [workRequestSummary, setWorkRequestSummary] = useState<{ requestCount: number; bidCount: number } | null>(null);
 
   useEffect(() => {
-    if (isGuest || !user) return;
+    if (!user) return;
 
     let active = true;
     workRequestsService
@@ -72,23 +72,14 @@ export default function StartPage() {
     return () => {
       active = false;
     };
-  }, [isGuest, user]);
+  }, [user]);
 
-  const goToLogin = () => {
-    logout();
-    navigate('/login');
-  };
-
-  const openOwnForest = isGuest ? goToLogin : () => navigate('/omat-metsat');
+  const openOwnForest = () => navigate('/omat-metsat');
 
   const openCare = (property: Property) => navigate(`/map?hoida=${property.id}`);
 
   // With one parcel go straight to it; with several ask which forest to care for
   const startForestCare = async () => {
-    if (isGuest) {
-      navigate('/map?hoida');
-      return;
-    }
     setCareLoading(true);
     setCareError('');
     try {
@@ -102,7 +93,7 @@ export default function StartPage() {
       setCareLoading(false);
     }
   };
-  const greeting = isGuest ? 'Tervetuloa Metsuriin' : `Tervetuloa${firstName(user?.email) ? `, ${firstName(user?.email)}` : ''}`;
+  const greeting = isGuest ? 'Tervetuloa Metsurin demoon' : `Tervetuloa${firstName(user?.email) ? `, ${firstName(user?.email)}` : ''}`;
   const workRequestSummaryText = workRequestSummary
     ? `${workRequestSummary.requestCount} ${
         workRequestSummary.requestCount === 1 ? 'aktiivinen työpyyntö' : 'aktiivista työpyyntöä'
@@ -133,7 +124,7 @@ export default function StartPage() {
               {careLoading ? 'Haetaan metsiä...' : 'Hoida omaa metsää'}
             </button>
             <button className="hero-btn hero-btn-primary" onClick={openOwnForest}>
-              {isGuest ? 'Kirjaudu omalle palstalle' : 'Minun metsäni'}
+              Minun metsäni
             </button>
             <button className="hero-btn hero-btn-secondary" onClick={() => navigate('/tyontarjoajat')}>
               Selaa työpyyntöjä
@@ -155,9 +146,12 @@ export default function StartPage() {
           {careError && <p className="hero-error" role="alert">{careError}</p>}
 
           {isGuest && (
-            <button className="hero-demo-link" onClick={() => navigate('/map')}>
-              tai kokeile demoa ilman kirjautumista →
-            </button>
+            <p className="hero-demo-note">
+              Katselet demoa esimerkkidatalla. Kokeile vapaasti, mitään ei tallenneta.{' '}
+              <button className="hero-demo-link" onClick={() => { logout(); navigate('/register'); }}>
+                Luo oma tili →
+              </button>
+            </p>
           )}
 
         </div>
@@ -181,13 +175,8 @@ export default function StartPage() {
                 Hoida omaa metsää
               </button>
               <button className="btn btn-primary" onClick={openOwnForest}>
-                {isGuest ? 'Kirjaudu omalle palstalle' : 'Minun metsäni'}
+                Minun metsäni
               </button>
-              {isGuest && (
-                <button className="btn-link choice-demo-link" onClick={() => navigate('/map')}>
-                  Kokeile demoa – merkinnät eivät tallennu
-                </button>
-              )}
             </div>
           </section>
 

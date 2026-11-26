@@ -32,14 +32,14 @@ export default function TopNav() {
         </Link>
       </div>
       <div className="map-nav-right">
-        {!isGuest && <NotificationsBell />}
-        {!isGuest && !pathname.startsWith('/chat') && <ChatsIcon />}
+        <NotificationsBell />
+        {!pathname.startsWith('/chat') && <ChatsIcon />}
         <HelpMenu />
         {isGuest ? (
           <>
-            <span className="user-email guest-label">Vierailija</span>
+            <span className="user-email guest-label">Demotila</span>
             <button className="btn btn-small btn-primary" onClick={handleLogout}>
-              Kirjaudu sisään
+              Kirjaudu
             </button>
           </>
         ) : (
