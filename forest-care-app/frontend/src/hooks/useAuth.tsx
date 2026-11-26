@@ -1,13 +1,17 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../types';
+import { DEMO_USER, setDemoActive } from '../demo/demoMode';
+import { resetDemoState } from '../demo/demoStore';
 
 interface AuthContextType {
   token: string | null;
   user: User | null;
   login: (token: string, user: User) => void;
   logout: () => void;
+  /** Logged in, or using the demo (which works like a logged-in forest owner) */
   isAuthenticated: boolean;
+  /** Using the demo: example data in this browser tab, nothing is saved on the server */
   isGuest: boolean;
   loginAsGuest: () => void;
 }
@@ -31,21 +35,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (newToken: string, newUser: User) => {
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
-    sessionStorage.removeItem('guest');
+    setDemoActive(false);
     setToken(newToken);
     setUser(newUser);
     setIsGuest(false);
   };
 
+  // Every new demo starts from the example data
   const loginAsGuest = () => {
-    sessionStorage.setItem('guest', 'true');
+    resetDemoState();
+    setDemoActive(true);
     setIsGuest(true);
   };
 
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    sessionStorage.removeItem('guest');
+    setDemoActive(false);
+    resetDemoState();
     setToken(null);
     setUser(null);
     setIsGuest(false);
@@ -53,7 +60,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ token, user, login, logout, isAuthenticated: !!token, isGuest, loginAsGuest }}
+      value={{
+        token,
+        user: token ? user : isGuest ? DEMO_USER : null,
+        login,
+        logout,
+        isAuthenticated: !!token || isGuest,
+        isGuest,
+        loginAsGuest,
+      }}
     >
       {children}
     </AuthContext.Provider>

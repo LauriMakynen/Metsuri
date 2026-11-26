@@ -15,9 +15,7 @@ import {
 } from '../services/forestService';
 import { calculateAreaHa, formatArea, calculateDistance, formatDistance } from '../utils/measurement';
 import { formatDate, formatDateRange } from '../utils/dateFormatting';
-import { getFollowUpRecommendation } from '../utils/followUpRecommendation';
 import { isNote, MARKING_COLORS, MARKING_TYPE_LABELS, NOTE_COLOR, NOTE_LABEL } from '../utils/markingTypes';
-import { DEMO_MARKINGS, DEMO_PROPERTY } from '../utils/demoData';
 import HelpMenu from '../components/HelpMenu';
 import type {
   Property,
@@ -209,21 +207,16 @@ export default function MapPage() {
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
   const [layerMenuOpen, setLayerMenuOpen] = useState(true);
   const [drawMenuOpen, setDrawMenuOpen] = useState(true);
-  // Guests start on an example parcel so the demo has something to try right away
-  const [properties, setProperties] = useState<Property[]>(() => (isGuest ? [DEMO_PROPERTY] : []));
-  const [markings, setMarkings] = useState<Marking[]>(() => (isGuest ? DEMO_MARKINGS : []));
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [markings, setMarkings] = useState<Marking[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [pendingGeometry, setPendingGeometry] = useState<GeoJSONGeometry>(null);
   const [pendingGeometryType, setPendingGeometryType] = useState<GeometryType>('point');
   const [error, setError] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(() =>
-    isGuest ? DEMO_PROPERTY.id : null
-  );
-  const [selectedPropertyGeometry, setSelectedPropertyGeometry] = useState<GeoJSONGeometry>(() =>
-    isGuest ? DEMO_PROPERTY.geometry : null
-  );
+  const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(null);
+  const [selectedPropertyGeometry, setSelectedPropertyGeometry] = useState<GeoJSONGeometry>(null);
 
   const [savingClickedCadastre, setSavingClickedCadastre] = useState(false);
 
@@ -308,7 +301,6 @@ export default function MapPage() {
   const standsLayerRef = useRef<L.FeatureGroup | null>(null);
 
   const loadProperties = useCallback(async () => {
-    if (isGuest) return;
     const props = await propertiesService.getAll();
     setProperties(props);
     setPropertiesLoaded(true);
@@ -351,15 +343,14 @@ export default function MapPage() {
     if (bounds.isValid() && mapRef.current) {
       mapRef.current.fitBounds(bounds, { ...fitPadding(), maxZoom: FIT_MAX_ZOOM });
     }
-  }, [isGuest, careMode, carePropertyId, hasPropertyParameter, hasRequestedProperty, requestedPropertyId]);
+  }, [careMode, carePropertyId, hasPropertyParameter, hasRequestedProperty, requestedPropertyId]);
 
   const loadMarkings = useCallback(async (propertyId?: number | null) => {
-    if (isGuest) return;
     const marks = propertyId
       ? await propertiesService.getMarkings(propertyId)
       : await markingsService.getAll();
     setMarkings(marks);
-  }, [isGuest]);
+  }, []);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -471,15 +462,11 @@ export default function MapPage() {
     let cancelled = false;
     const applyConfig = async () => {
       let config: MapLayerConfig;
-      // The layer config endpoint requires auth, so guests use the env/fallback config directly.
-      if (isGuest) {
+      // The layer config needs a login; the demo (and a failed request) uses the env/fallback config
+      try {
+        config = await mapService.getLayerConfig();
+      } catch {
         config = getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG;
-      } else {
-        try {
-          config = await mapService.getLayerConfig();
-        } catch {
-          config = getMapLayerConfigFromEnv() ?? FALLBACK_LAYER_CONFIG;
-        }
       }
       if (cancelled) return;
       setLayerConfig(config);
@@ -499,7 +486,7 @@ export default function MapPage() {
     return () => {
       cancelled = true;
     };
-  }, [isGuest]);
+  }, []);
 
   // While on the OpenStreetMap fallback, retry MML now and then and switch back when it answers
   useEffect(() => {
@@ -661,17 +648,16 @@ export default function MapPage() {
     loadMarkings(selectedPropertyId).catch(() => setError('Tietojen lataaminen epäonnistui'));
   }, [selectedPropertyId, loadMarkings]);
 
-  // Own work requests = planned work (not available in guest mode)
+  // Own work requests = planned work
   useEffect(() => {
-    if (isGuest) return;
     workRequestsService
       .getMine()
       .then(setWorkRequests)
       .catch(() => setError('Työpyyntöjen lataaminen epäonnistui'));
-  }, [isGuest]);
+  }, []);
 
   useEffect(() => {
-    if (isGuest || !Number.isSafeInteger(requestedWorkRequestId) || requestedWorkRequestId <= 0) return;
+    if (!Number.isSafeInteger(requestedWorkRequestId) || requestedWorkRequestId <= 0) return;
     const request = workRequests.find((item) => item.id === requestedWorkRequestId);
     if (!request) return;
     const selection = window.setTimeout(() => {
@@ -682,7 +668,7 @@ export default function MapPage() {
       setSidebarOpen(true);
     }, 0);
     return () => window.clearTimeout(selection);
-  }, [isGuest, requestedWorkRequestId, workRequests, properties]);
+  }, [requestedWorkRequestId, workRequests, properties]);
 
   // Publish the area just drawn with the "Työpyyntö" tool
   const handleCreateWorkRequest = async (data: WorkRequestFormData): Promise<WorkRequest> => {
@@ -882,10 +868,6 @@ export default function MapPage() {
       setError('Valitse ensin kiinteistö ennen merkinnän tallentamista');
       return;
     }
-    if (tool === 'request' && isGuest) {
-      setError('Kirjaudu sisään julkaistaksesi työpyynnön');
-      return;
-    }
 
     if (drawControlRef.current) {
       mapRef.current.removeControl(drawControlRef.current);
@@ -957,7 +939,7 @@ export default function MapPage() {
         modes?.[handlerName]?.handler.enable();
       }, 100);
     }
-  }, [selectedPropertyId, isGuest]);
+  }, [selectedPropertyId]);
 
   const handleMeasurementClick = useCallback((e: L.LeafletMouseEvent) => {
     if (!mapRef.current || !measurementLayerRef.current) return;
@@ -1114,47 +1096,19 @@ export default function MapPage() {
       areaHa = calculateAreaHa(pendingGeometry);
     }
 
-    // Notes are reminders, not done work: no follow-up check
-    const followUp =
-      pendingGeometryType === 'note'
-        ? { followUpDateStart: null, followUpDateEnd: null, followUpNote: null }
-        : getFollowUpRecommendation(data.type, data.operation_date);
-
     try {
-      let marking: Marking;
-      if (isGuest) {
-        marking = {
-          id: -Date.now(),
-          property_id: selectedPropertyId,
-          type: data.type,
-          geometry_type: pendingGeometryType,
-          title: data.title,
-          description: data.description || null,
-          geometry: pendingGeometry,
-          area_ha: areaHa,
-          operation_date: data.operation_date,
-          follow_up_date_start: followUp.followUpDateStart,
-          follow_up_date_end: followUp.followUpDateEnd,
-          follow_up_note: followUp.followUpNote,
-          income_eur: data.income_eur ?? null,
-          cost_eur: data.cost_eur ?? null,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-      } else {
-        marking = await markingsService.create({
-          property_id: selectedPropertyId,
-          type: data.type,
-          geometry_type: pendingGeometryType,
-          title: data.title,
-          description: data.description,
-          geometry: pendingGeometry,
-          area_ha: areaHa,
-          operation_date: data.operation_date,
-          income_eur: data.income_eur ?? null,
-          cost_eur: data.cost_eur ?? null,
-        });
-      }
+      const marking = await markingsService.create({
+        property_id: selectedPropertyId,
+        type: data.type,
+        geometry_type: pendingGeometryType,
+        title: data.title,
+        description: data.description,
+        geometry: pendingGeometry,
+        area_ha: areaHa,
+        operation_date: data.operation_date,
+        income_eur: data.income_eur ?? null,
+        cost_eur: data.cost_eur ?? null,
+      });
       setMarkings((prev) => [marking, ...prev]);
       drawnLayersRef.current?.clearLayers();
       setShowForm(false);
@@ -1175,10 +1129,10 @@ export default function MapPage() {
 
   // Care mode: keep ?hoida= on the selected parcel, so a reload or shared link opens the same forest
   useEffect(() => {
-    if (!careMode || isGuest || selectedPropertyId === null) return;
+    if (!careMode || selectedPropertyId === null) return;
     if (searchParams.get('hoida') === String(selectedPropertyId)) return;
     setSearchParams({ hoida: String(selectedPropertyId) }, { replace: true });
-  }, [careMode, isGuest, selectedPropertyId, searchParams, setSearchParams]);
+  }, [careMode, selectedPropertyId, searchParams, setSearchParams]);
 
   // Care mode: follow the user's GPS position on the map (the activity tracker has its own while open)
   useEffect(() => {
@@ -1259,37 +1213,16 @@ export default function MapPage() {
     const areaHa = Math.round(result.areaHa * 100) / 100;
 
     try {
-      let marking: Marking;
-      if (isGuest) {
-        const followUp = getFollowUpRecommendation(result.type, operationDate);
-        marking = {
-          id: -Date.now(),
-          property_id: selectedPropertyId,
-          type: result.type,
-          geometry_type: 'area',
-          title,
-          description,
-          geometry,
-          area_ha: areaHa,
-          operation_date: operationDate,
-          follow_up_date_start: followUp.followUpDateStart,
-          follow_up_date_end: followUp.followUpDateEnd,
-          follow_up_note: followUp.followUpNote,
-          created_at: today.toISOString(),
-          updated_at: today.toISOString(),
-        };
-      } else {
-        marking = await markingsService.create({
-          property_id: selectedPropertyId,
-          type: result.type,
-          geometry_type: 'area',
-          title,
-          description,
-          geometry,
-          area_ha: areaHa,
-          operation_date: operationDate,
-        });
-      }
+      const marking = await markingsService.create({
+        property_id: selectedPropertyId,
+        type: result.type,
+        geometry_type: 'area',
+        title,
+        description,
+        geometry,
+        area_ha: areaHa,
+        operation_date: operationDate,
+      });
       setMarkings((prev) => [marking, ...prev]);
     } catch {
       setError('Aktiviteetin tallennus epäonnistui');
@@ -1321,17 +1254,7 @@ export default function MapPage() {
   const executeDelete = async () => {
     if (!confirmDelete) return;
     try {
-      if (isGuest) {
-        if (confirmDelete.type === 'marking') {
-          setMarkings((prev) => prev.filter((m) => m.id !== confirmDelete.id));
-        } else {
-          setProperties((prev) => prev.filter((p) => p.id !== confirmDelete.id));
-          if (selectedPropertyId === confirmDelete.id) {
-            setSelectedPropertyId(null);
-            setSelectedPropertyGeometry(null);
-          }
-        }
-      } else if (confirmDelete.type === 'marking') {
+      if (confirmDelete.type === 'marking') {
         await markingsService.delete(confirmDelete.id);
         setMarkings((prev) => prev.filter((m) => m.id !== confirmDelete.id));
       } else {
@@ -1359,24 +1282,12 @@ export default function MapPage() {
     setError('');
     const saveName = clickedCadastreCustomName.trim() || clickedCadastre.properties.propertyCode;
     try {
-      let created: Property;
-      if (isGuest) {
-        created = {
-          id: -Date.now(),
-          name: saveName,
-          property_code: clickedCadastre.properties.propertyCode,
-          area_ha: clickedCadastre.properties.areaHa,
-          geometry: clickedCadastre.geometry,
-          created_at: new Date().toISOString(),
-        };
-      } else {
-        created = await propertiesService.importFromCadastre({
-          name: saveName,
-          property_code: clickedCadastre.properties.propertyCode,
-          geometry: clickedCadastre.geometry,
-          area_ha: clickedCadastre.properties.areaHa,
-        });
-      }
+      const created = await propertiesService.importFromCadastre({
+        name: saveName,
+        property_code: clickedCadastre.properties.propertyCode,
+        geometry: clickedCadastre.geometry,
+        area_ha: clickedCadastre.properties.areaHa,
+      });
       setProperties((prev) => [created, ...prev]);
       setSelectedPropertyId(created.id);
       setSelectedPropertyGeometry(created.geometry);
@@ -1558,14 +1469,14 @@ export default function MapPage() {
           </Link>
         </div>
         <div className="map-nav-right">
-        {!isGuest && <NotificationsBell />}
-        {!isGuest && <ChatsIcon />}
+        <NotificationsBell />
+        <ChatsIcon />
         <HelpMenu />
         {isGuest ? (
             <>
-              <span className="user-email guest-label">Vierailija</span>
+              <span className="user-email guest-label">Demotila</span>
               <button className="btn btn-small btn-primary" onClick={() => { logout(); navigate('/login'); }}>
-                Kirjaudu sisään
+                Kirjaudu
               </button>
             </>
           ) : (
@@ -1607,17 +1518,15 @@ export default function MapPage() {
           onDeleteProperty={handleDeleteProperty}
           onDeleteMarking={handleDeleteMarking}
           workRequests={workRequests}
-          canPublishRequests={!isGuest}
+          canPublishRequests
           onNewWorkRequest={openNewWorkRequest}
           onWithdrawWorkRequest={handleWithdrawWorkRequest}
           onWorkRequestUpdated={handleWorkRequestUpdated}
           focusWorkRequests={
             showAllWorkRequests ||
-            (!isGuest &&
-              Number.isSafeInteger(requestedWorkRequestId) &&
-              requestedWorkRequestId > 0)
+            (Number.isSafeInteger(requestedWorkRequestId) && requestedWorkRequestId > 0)
           }
-          showAllWorkRequests={showAllWorkRequests && !isGuest}
+          showAllWorkRequests={showAllWorkRequests}
         />}
 
         <div className="map-wrapper">
@@ -1740,7 +1649,7 @@ export default function MapPage() {
             </div>
           )}
 
-          {!isGuest && propertiesLoaded && properties.length === 0 && !emptyNoticeDismissed
+          {propertiesLoaded && properties.length === 0 && !emptyNoticeDismissed
             && !activeTool && !showForm && !activityOpen && (
             <div className="empty-parcel-notice" role="status">
               <button
@@ -1898,8 +1807,8 @@ export default function MapPage() {
               onClose={closeForestValue}
               selectedStandId={highlightedStandId}
               onSelectStand={handleSelectStand}
-              onRequestOffers={isGuest ? undefined : handleRequestOffers}
-              onSubmitManual={isGuest ? undefined : forestValue.submitManual}
+              onRequestOffers={handleRequestOffers}
+              onSubmitManual={forestValue.submitManual}
             />
           )}
 

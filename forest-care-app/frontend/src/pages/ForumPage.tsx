@@ -608,14 +608,14 @@ function ThreadView({
 export default function ForumPage() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
-  const { isAuthenticated, isGuest } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [account, setAccount] = useState<ForumMe | null>(null);
   const [accountError, setAccountError] = useState('');
   const [rulesOpen, setRulesOpen] = useState(false);
   const [stats, setStats] = useState<ForumStats | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated || isGuest) return;
+    if (!isAuthenticated) return;
     let active = true;
     forumService.getMe()
       .then((me) => {
@@ -629,7 +629,7 @@ export default function ForumPage() {
     return () => {
       active = false;
     };
-  }, [isAuthenticated, isGuest]);
+  }, [isAuthenticated]);
 
   // Category counts and top writers; refreshed when moving between discussions
   useEffect(() => {
@@ -640,12 +640,12 @@ export default function ForumPage() {
     };
   }, [id]);
 
-  const currentAccount = isAuthenticated && !isGuest ? account : null;
-  const canWrite = isAuthenticated && !isGuest && currentAccount?.forum_banned !== true;
-  const canReport = isAuthenticated && !isGuest;
+  const currentAccount = isAuthenticated ? account : null;
+  const canWrite = isAuthenticated && currentAccount?.forum_banned !== true;
+  const canReport = isAuthenticated;
   const isModerationPage = id === 'moderointi';
   const threadId = id && /^\d+$/.test(id) ? Number(id) : null;
-  const accountPending = isAuthenticated && !isGuest && currentAccount === null && !accountError;
+  const accountPending = isAuthenticated && currentAccount === null && !accountError;
 
   return (
     <div className="start-page forest-page">

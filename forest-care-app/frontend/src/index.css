@@ -801,6 +801,8 @@ svg.lucide { flex-shrink: 0; vertical-align: -0.18em; }
   font-family: inherit; font-size: 0.92rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
 }
 .hero-demo-link:hover { color: var(--white); }
+.hero-demo-note { margin-top: 1rem; color: rgba(255,255,255,0.85); font-size: 0.92rem; line-height: 1.5; }
+.hero-demo-note .hero-demo-link { margin-top: 0; padding: 0; font-weight: 600; }
 .start-cards { margin-top: -1.5rem; position: relative; z-index: 1; }
 
 /* Start page with a real photo: worker in a young stand (media-src/start-forest-original.jpg).
